@@ -1,6 +1,8 @@
 package com.itqianchen.agentdesign.common;
 
 import com.itqianchen.agentdesign.ingestion.DocumentParseException;
+import com.itqianchen.agentdesign.search.EmbeddingUnavailableException;
+import com.itqianchen.agentdesign.search.SearchIndexException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -18,6 +20,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DocumentParseException.class)
     public ResponseEntity<ApiErrorResponse> handleDocumentParseException(DocumentParseException ex) {
         return ResponseEntity.badRequest().body(new ApiErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(EmbeddingUnavailableException.class)
+    public ResponseEntity<ApiErrorResponse> handleEmbeddingUnavailable(EmbeddingUnavailableException ex) {
+        return ResponseEntity.badRequest().body(new ApiErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(SearchIndexException.class)
+    public ResponseEntity<ApiErrorResponse> handleSearchIndexException(SearchIndexException ex) {
+        log.error("search_index_error", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiErrorResponse(ex.getMessage()));
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)

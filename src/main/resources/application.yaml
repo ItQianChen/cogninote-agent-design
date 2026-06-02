@@ -1,6 +1,29 @@
 spring:
   application:
     name: cogninote-agent-design
+  ai:
+    model:
+      chat: none
+      image: none
+      video: none
+      rerank: none
+      audio:
+        speech: none
+        transcription: none
+      embedding: ${COGNINOTE_AI_EMBEDDING_PROVIDER:none}
+      embedding.text: ${COGNINOTE_AI_EMBEDDING_PROVIDER:none}
+      embedding.multimodal: none
+    dashscope:
+      api-key: ${COGNINOTE_DASHSCOPE_API_KEY:}
+      agent:
+        enabled: false
+      chat:
+        enabled: false
+      image:
+        enabled: false
+      embedding:
+        options:
+          model: ${COGNINOTE_EMBEDDING_MODEL:text-embedding-v4}
 
 server:
   address: 127.0.0.1
@@ -10,3 +33,10 @@ app:
   storage:
     base-dir: ${COGNINOTE_DATA_DIR:}
     database-path: ${COGNINOTE_DATABASE_PATH:}
+  search:
+    top-k: ${COGNINOTE_SEARCH_TOP_K:8}
+    bm25-weight: ${COGNINOTE_BM25_WEIGHT:0.6}
+    vector-weight: ${COGNINOTE_VECTOR_WEIGHT:0.4}
+  embedding:
+    dimensions: ${COGNINOTE_EMBEDDING_DIMENSIONS:1024}
+    batch-size: ${COGNINOTE_EMBEDDING_BATCH_SIZE:32}

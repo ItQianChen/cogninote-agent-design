@@ -17,10 +17,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class DocumentController {
 
     private final DocumentIngestionService ingestionService;
+    private final DocumentManagementService documentManagementService;
     private final DocumentRepository documentRepository;
 
-    public DocumentController(DocumentIngestionService ingestionService, DocumentRepository documentRepository) {
+    public DocumentController(
+            DocumentIngestionService ingestionService,
+            DocumentManagementService documentManagementService,
+            DocumentRepository documentRepository
+    ) {
         this.ingestionService = ingestionService;
+        this.documentManagementService = documentManagementService;
         this.documentRepository = documentRepository;
     }
 
@@ -39,7 +45,7 @@ public class DocumentController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteDocument(@PathVariable String id) {
-        if (!documentRepository.deleteById(id)) {
+        if (!documentManagementService.deleteDocument(id)) {
             throw new ResourceNotFoundException("Document not found: " + id);
         }
         return ResponseEntity.noContent().build();

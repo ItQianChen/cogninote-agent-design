@@ -2,6 +2,8 @@ package com.itqianchen.agentdesign.document;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,5 +73,50 @@ class DocumentIngestionServiceTests {
 
         assertThat(documentRepository.findById(document.id())).isEmpty();
         assertThat(note).exists();
+    }
+
+    @Test
+    void storedChunkLookupCapsLargeInClauseAndKeepsInputOrder() {
+        long now = System.currentTimeMillis();
+        String documentId = "bulk-document";
+        KnowledgeDocument document = new KnowledgeDocument(
+                documentId,
+                tempDir.resolve("bulk.txt").toString(),
+                "bulk.txt",
+                FileType.TEXT,
+                0,
+                now,
+                "hash",
+                DocumentStatus.PARSED,
+                now,
+                now,
+                now,
+                501
+        );
+        List<KnowledgeChunk> chunks = new ArrayList<>();
+        List<String> chunkIds = new ArrayList<>();
+        for (int index = 0; index < 501; index++) {
+            String chunkId = "chunk-" + index;
+            chunkIds.add(chunkId);
+            chunks.add(new KnowledgeChunk(
+                    chunkId,
+                    documentId,
+                    index,
+                    "content " + index,
+                    "hash-" + index,
+                    null,
+                    null,
+                    1,
+                    now
+            ));
+        }
+
+        documentRepository.upsertDocument(document);
+        documentRepository.replaceChunks(documentId, chunks);
+
+        assertThat(documentRepository.findStoredChunksByIds(chunkIds))
+                .hasSize(500)
+                .extracting(chunk -> chunk.chunkId())
+                .containsExactlyElementsOf(chunkIds.subList(0, 500));
     }
 }
