@@ -34,15 +34,22 @@ class OfficeDocumentParserTests {
     @Test
     void pdfParserExtractsTextByPage() throws Exception {
         Path pdf = tempDir.resolve("note.pdf");
-        writePdf(pdf, "PDF paragraph");
+        writePdf(pdf, "PDF paragraph", "Second page");
 
         ParsedDocument parsedDocument = new PdfDocumentParser().parse(pdf);
 
-        assertThat(parsedDocument.sections()).singleElement()
-                .satisfies(section -> {
-                    assertThat(section.pageNumber()).isEqualTo(1);
-                    assertThat(section.content()).contains("PDF paragraph");
-                });
+        assertThat(parsedDocument.sections())
+                .hasSize(2)
+                .satisfiesExactly(
+                        section -> {
+                            assertThat(section.pageNumber()).isEqualTo(1);
+                            assertThat(section.content()).contains("PDF paragraph");
+                        },
+                        section -> {
+                            assertThat(section.pageNumber()).isEqualTo(2);
+                            assertThat(section.content()).contains("Second page");
+                        }
+                );
     }
 
     @Test
@@ -67,16 +74,18 @@ class OfficeDocumentParserTests {
         }
     }
 
-    private void writePdf(Path path, String text) throws IOException {
+    private void writePdf(Path path, String... pageTexts) throws IOException {
         try (PDDocument document = new PDDocument()) {
-            PDPage page = new PDPage();
-            document.addPage(page);
-            try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
-                contentStream.beginText();
-                contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
-                contentStream.newLineAtOffset(64, 700);
-                contentStream.showText(text);
-                contentStream.endText();
+            for (String pageText : pageTexts) {
+                PDPage page = new PDPage();
+                document.addPage(page);
+                try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+                    contentStream.beginText();
+                    contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                    contentStream.newLineAtOffset(64, 700);
+                    contentStream.showText(pageText);
+                    contentStream.endText();
+                }
             }
             document.save(path.toFile());
         }

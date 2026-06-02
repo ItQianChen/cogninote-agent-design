@@ -19,6 +19,7 @@ public class SQLiteDataSourceConfig {
 
     @Bean
     public DataSource dataSource() {
+        // Hikari may open the SQLite file while creating the DataSource, before ApplicationReadyEvent fires.
         storageInitializer.ensureInitialized();
 
         HikariDataSource dataSource = new HikariDataSource();

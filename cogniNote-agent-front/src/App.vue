@@ -132,11 +132,7 @@ async function deleteDocument(id) {
   documentError.value = ''
 
   try {
-    await fetch(`/api/documents/${id}`, { method: 'DELETE' }).then((response) => {
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-    })
+    await fetchJson(`/api/documents/${id}`, { method: 'DELETE' })
     await fetchDocuments()
   } catch (error) {
     documentError.value = `删除索引记录失败：${error.message}`

@@ -22,14 +22,17 @@ public class PdfDocumentParser implements DocumentParser {
     public ParsedDocument parse(Path path) {
         try (PDDocument document = Loader.loadPDF(path.toFile())) {
             PDFTextStripper stripper = new PDFTextStripper();
+            stripper.setSortByPosition(true);
+            stripper.setPageEnd("\f");
+
+            String fullText = stripper.getText(document);
+            String[] pageTexts = fullText.split("\f", -1);
             List<ParsedSection> sections = new ArrayList<>();
 
-            for (int page = 1; page <= document.getNumberOfPages(); page++) {
-                stripper.setStartPage(page);
-                stripper.setEndPage(page);
-                String pageText = stripper.getText(document);
+            for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); pageIndex++) {
+                String pageText = pageIndex < pageTexts.length ? pageTexts[pageIndex] : "";
                 if (pageText != null && !pageText.isBlank()) {
-                    sections.add(new ParsedSection(pageText, null, page));
+                    sections.add(new ParsedSection(pageText, null, pageIndex + 1));
                 }
             }
 

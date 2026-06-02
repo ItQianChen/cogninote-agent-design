@@ -15,29 +15,30 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DocumentIngestionService {
 
     private final DocumentRepository documentRepository;
+    private final DocumentIngestionPersistence ingestionPersistence;
     private final DocumentParserRegistry parserRegistry;
     private final TextChunker textChunker;
     private final DocumentIdentity documentIdentity;
 
     public DocumentIngestionService(
             DocumentRepository documentRepository,
+            DocumentIngestionPersistence ingestionPersistence,
             DocumentParserRegistry parserRegistry,
             TextChunker textChunker,
             DocumentIdentity documentIdentity
     ) {
         this.documentRepository = documentRepository;
+        this.ingestionPersistence = ingestionPersistence;
         this.parserRegistry = parserRegistry;
         this.textChunker = textChunker;
         this.documentIdentity = documentIdentity;
     }
 
-    @Transactional
     public IngestDocumentsResponse ingestFolder(String folderPath, boolean recursive) {
         Path folder = Path.of(folderPath).toAbsolutePath().normalize();
         if (!Files.isDirectory(folder)) {
@@ -105,8 +106,7 @@ public class DocumentIngestionService {
                     now,
                     documentChunks.size()
             );
-            documentRepository.upsertDocument(document);
-            documentRepository.replaceChunks(documentId, toKnowledgeChunks(documentId, documentChunks, now));
+            ingestionPersistence.replaceParsedDocument(document, toKnowledgeChunks(documentId, documentChunks, now));
             accumulator.parsedCount++;
         } catch (RuntimeException ex) {
             recordFailure(normalizedFile, fileType, now, ex, accumulator);
@@ -115,12 +115,12 @@ public class DocumentIngestionService {
 
     private FileMetadata readMetadata(Path path) {
         try {
-            byte[] bytes = Files.readAllBytes(path);
+            long fileSize = Files.size(path);
             FileTime lastModifiedTime = Files.getLastModifiedTime(path);
             return new FileMetadata(
-                    bytes.length,
+                    fileSize,
                     lastModifiedTime.toMillis(),
-                    documentIdentity.hashBytes(bytes)
+                    documentIdentity.hashFile(path)
             );
         } catch (IOException ex) {
             throw new DocumentParseException("Failed to read file metadata: " + path, ex);
@@ -162,7 +162,7 @@ public class DocumentIngestionService {
         long lastModified = safeLastModified(normalizedFile);
         String contentHash = safeContentHash(normalizedFile);
 
-        documentRepository.upsertDocument(new KnowledgeDocument(
+        ingestionPersistence.replaceFailedDocument(new KnowledgeDocument(
                 documentId,
                 normalizedFile.toString(),
                 normalizedFile.getFileName().toString(),
@@ -176,7 +176,6 @@ public class DocumentIngestionService {
                 now,
                 0
         ));
-        documentRepository.replaceChunks(documentId, List.of());
         accumulator.failedCount++;
         accumulator.failures.add(new IngestFailureResponse(normalizedFile.toString(), ex.getMessage()));
     }
@@ -199,7 +198,7 @@ public class DocumentIngestionService {
 
     private String safeContentHash(Path path) {
         try {
-            return documentIdentity.hashBytes(Files.readAllBytes(path));
+            return documentIdentity.hashFile(path);
         } catch (IOException ex) {
             return "";
         }

@@ -10,6 +10,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class DocumentRepository {
 
+    private static final int CHUNK_INSERT_BATCH_SIZE = 200;
+
     private final JdbcTemplate jdbcTemplate;
 
     public DocumentRepository(JdbcTemplate jdbcTemplate) {
@@ -76,30 +78,37 @@ public class DocumentRepository {
 
     public void replaceChunks(String documentId, List<KnowledgeChunk> chunks) {
         jdbcTemplate.update("DELETE FROM chunks WHERE document_id = ?", documentId);
-        for (KnowledgeChunk chunk : chunks) {
-            jdbcTemplate.update("""
-                            INSERT INTO chunks (
-                                id, document_id, chunk_index, content, content_hash,
-                                page_number, heading, token_count, created_at
-                            )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
-                    chunk.id(),
-                    chunk.documentId(),
-                    chunk.chunkIndex(),
-                    chunk.content(),
-                    chunk.contentHash(),
-                    chunk.pageNumber(),
-                    chunk.heading(),
-                    chunk.tokenCount(),
-                    chunk.createdAt()
-            );
+
+        if (chunks.isEmpty()) {
+            return;
         }
+
+        jdbcTemplate.batchUpdate("""
+                        INSERT INTO chunks (
+                            id, document_id, chunk_index, content, content_hash,
+                            page_number, heading, token_count, created_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                chunks,
+                CHUNK_INSERT_BATCH_SIZE,
+                (preparedStatement, chunk) -> {
+                    preparedStatement.setString(1, chunk.id());
+                    preparedStatement.setString(2, chunk.documentId());
+                    preparedStatement.setInt(3, chunk.chunkIndex());
+                    preparedStatement.setString(4, chunk.content());
+                    preparedStatement.setString(5, chunk.contentHash());
+                    preparedStatement.setObject(6, chunk.pageNumber());
+                    preparedStatement.setString(7, chunk.heading());
+                    preparedStatement.setInt(8, chunk.tokenCount());
+                    preparedStatement.setLong(9, chunk.createdAt());
+                }
+        );
     }
 
-    public void deleteById(String id) {
+    public boolean deleteById(String id) {
         jdbcTemplate.update("DELETE FROM chunks WHERE document_id = ?", id);
-        jdbcTemplate.update("DELETE FROM documents WHERE id = ?", id);
+        return jdbcTemplate.update("DELETE FROM documents WHERE id = ?", id) > 0;
     }
 
     private KnowledgeDocument mapDocument(ResultSet rs) throws SQLException {
