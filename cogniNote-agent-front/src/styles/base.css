@@ -482,6 +482,12 @@ textarea:focus-visible {
   font-weight: 800;
 }
 
+@property --stat-columns {
+  syntax: "<integer>";
+  initial-value: 4;
+  inherits: false;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(var(--stat-columns, 4), minmax(0, 1fr));
