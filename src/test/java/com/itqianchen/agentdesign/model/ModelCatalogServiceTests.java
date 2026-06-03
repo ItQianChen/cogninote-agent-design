@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.itqianchen.agentdesign.domain.model.ModelCapability;
+import com.itqianchen.agentdesign.domain.model.ModelConfigRole;
 import com.itqianchen.agentdesign.dto.model.ModelConfigRequest;
 import com.itqianchen.agentdesign.dto.model.ModelOptionsResponse;
 import com.itqianchen.agentdesign.repository.model.ModelConfigRepository;
@@ -41,15 +42,18 @@ class ModelCatalogServiceTests {
                         """, MediaType.APPLICATION_JSON));
 
         ModelOptionsResponse response = service.fetchModels(new ModelConfigRequest(
+                ModelConfigRole.CHAT.name(),
                 "DASHSCOPE",
                 "DashScope",
                 // DashScope provider 固定使用百炼默认地址，这里传入自定义 host 是为了防止旧逻辑回退。
                 "https://example.test/compatible-mode/v1",
                 "sk-test",
                 "qwen-plus",
+                "qwen-plus",
                 "text-embedding-v4",
                 1024,
                 0.7,
+                8,
                 8
         ));
 
@@ -83,14 +87,17 @@ class ModelCatalogServiceTests {
                         """, MediaType.APPLICATION_JSON));
 
         ModelOptionsResponse response = service.fetchModels(new ModelConfigRequest(
+                ModelConfigRole.CHAT.name(),
                 "OPENAI_COMPATIBLE",
                 "OpenAI-compatible",
                 "https://api.example.test/v1/chat/completions",
                 "sk-test",
                 "gpt-4.1-mini",
+                "gpt-4.1-mini",
                 "text-embedding-3-small",
                 1536,
                 0.7,
+                8,
                 8
         ));
 
@@ -106,7 +113,7 @@ class ModelCatalogServiceTests {
     private static ModelConfigRepository emptyRepository() {
         return new ModelConfigRepository(null) {
             @Override
-            public java.util.Optional<com.itqianchen.agentdesign.domain.model.ModelConfig> findActive() {
+            public java.util.Optional<com.itqianchen.agentdesign.domain.model.ModelConfig> findActive(ModelConfigRole role) {
                 return Optional.empty();
             }
         };

@@ -8,6 +8,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.itqianchen.agentdesign.domain.model.ModelConfig;
+import com.itqianchen.agentdesign.domain.model.ModelConfigRole;
 import com.itqianchen.agentdesign.domain.model.ModelProvider;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -48,15 +49,16 @@ class OpenAiCompatibleEmbeddingClientTests {
     private static ModelConfig config() {
         return new ModelConfig(
                 "active",
+                ModelConfigRole.EMBEDDING,
                 ModelProvider.OPENAI_COMPATIBLE,
                 "OpenAI-compatible",
                 "https://api.example.test/v1/models",
                 "sk-test",
-                "gpt-4.1-mini",
                 "text-embedding-3-small",
                 1536,
-                0.7,
-                8,
+                null,
+                null,
+                true,
                 1L,
                 2L
         );

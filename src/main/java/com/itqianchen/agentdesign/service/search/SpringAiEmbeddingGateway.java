@@ -1,6 +1,7 @@
 package com.itqianchen.agentdesign.service.search;
 
 import com.itqianchen.agentdesign.domain.model.ModelConfig;
+import com.itqianchen.agentdesign.domain.model.ModelConfigRole;
 import com.itqianchen.agentdesign.domain.model.ModelProvider;
 import com.itqianchen.agentdesign.domain.search.EmbeddingGateway;
 import com.itqianchen.agentdesign.domain.search.EmbeddingProperties;
@@ -46,7 +47,7 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
 
     @Override
     public boolean isAvailable() {
-        Optional<ModelConfig> configuredModel = modelConfigRepository.findActive()
+        Optional<ModelConfig> configuredModel = modelConfigRepository.findActive(ModelConfigRole.EMBEDDING)
                 .filter(ModelConfig::hasApiKey);
         if (configuredModel.isPresent()) {
             return true;
@@ -63,9 +64,9 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
 
     @Override
     public int dimensions() {
-        return modelConfigRepository.findActive()
+        return modelConfigRepository.findActive(ModelConfigRole.EMBEDDING)
                 .filter(ModelConfig::hasApiKey)
-                .map(ModelConfig::embeddingDimensions)
+                .map(ModelConfig::resolvedEmbeddingDimensions)
                 .orElse(embeddingProperties.dimensions());
     }
 
@@ -99,7 +100,7 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
     }
 
     private EmbeddingModel activeEmbeddingModel() {
-        return modelConfigRepository.findActive()
+        return modelConfigRepository.findActive(ModelConfigRole.EMBEDDING)
                 .filter(ModelConfig::hasApiKey)
                 .map(dashScopeModelFactory::embeddingModel)
                 .orElseGet(() -> embeddingModel.orElseThrow(() ->
@@ -107,7 +108,7 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
     }
 
     private List<float[]> embedSlice(List<String> texts) {
-        return modelConfigRepository.findActive()
+        return modelConfigRepository.findActive(ModelConfigRole.EMBEDDING)
                 .filter(ModelConfig::hasApiKey)
                 .map(config -> embedConfigured(config, texts))
                 .orElseGet(() -> activeEmbeddingModel().embed(texts));

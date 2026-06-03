@@ -60,6 +60,7 @@ class ChatControllerTests {
     void clearState() {
         jdbcTemplate.update("DELETE FROM chunks");
         jdbcTemplate.update("DELETE FROM documents");
+        jdbcTemplate.update("DELETE FROM model_configs");
         jdbcTemplate.update("DELETE FROM model_config");
     }
 
@@ -75,15 +76,18 @@ class ChatControllerTests {
     void chatStreamReturnsMetaDeltaAndDoneEvents() throws Exception {
         Files.writeString(tempDir.resolve("packaging.md"), "CogniNote uses Launch4j for Windows EXE packaging.");
         modelConfigService.save(new ModelConfigRequest(
+                null,
                 "DASHSCOPE",
                 "DashScope",
                 ModelConfigDefaults.BASE_URL,
                 "sk-test",
+                null,
                 "qwen-plus",
                 "text-embedding-v4",
                 1024,
                 0.7,
-                8
+                8,
+                null
         ));
         insertParsedDocument();
         knowledgeStore.rebuildAll();

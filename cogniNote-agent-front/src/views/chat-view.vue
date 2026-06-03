@@ -13,6 +13,11 @@ const modelConfigStore = useModelConfigStore()
 const isComposerSettingsOpen = ref(false)
 const activeModeLabel = computed(() => SEARCH_MODES.find((item) => item.value === chatStore.mode)?.label || chatStore.mode)
 const composerActionTitle = computed(() => (chatStore.isStreaming ? '停止对话' : '发送信息'))
+const activeModelSummary = computed(() => {
+  const chat = modelConfigStore.activeChatConfig?.modelName || '未配置对话模型'
+  const embedding = modelConfigStore.activeEmbeddingConfig?.modelName || '未配置 Embedding'
+  return `${chat} / ${embedding}`
+})
 
 function handleComposerAction() {
   if (chatStore.isStreaming) {
@@ -31,6 +36,7 @@ function handleComposerAction() {
       <div class="conversation-meta">
         <span>{{ chatStore.useKnowledgeBase ? '知识库已启用' : '纯对话待接入' }}</span>
         <span>{{ chatStore.mode }}</span>
+        <span>{{ activeModelSummary }}</span>
       </div>
     </header>
 
@@ -128,8 +134,11 @@ function handleComposerAction() {
       <div class="composer-feedback">
         <p v-if="chatStore.error" class="error-message">{{ chatStore.error }}</p>
         <p v-else-if="chatStore.knowledgeDisabledHint" class="hint-message">{{ chatStore.knowledgeDisabledHint }}</p>
-        <p v-else-if="!modelConfigStore.modelConfig?.apiKeyConfigured" class="hint-message">
-          尚未保存模型 API Key。请先到设置中的模型配置保存后再对话。
+        <p v-else-if="!modelConfigStore.activeChatConfig?.apiKeyConfigured" class="hint-message">
+          尚未保存对话模型 API Key。请先到设置中的模型配置保存后再对话。
+        </p>
+        <p v-else-if="chatStore.useKnowledgeBase && !modelConfigStore.activeEmbeddingConfig?.apiKeyConfigured" class="hint-message">
+          尚未保存 Embedding 模型 API Key。向量检索不可用时会降级到关键词检索。
         </p>
       </div>
     </form>

@@ -269,18 +269,25 @@ app:
 - Provider 类型
 - Base URL（仅 OpenAI-compatible 可自定义；DashScope 使用默认百炼地址）
 - API Key
-- 默认模型
+- 模型 ID
+- 配置类型：`CHAT` 或 `EMBEDDING`
 
 后端接口：
 
 ```text
-GET    /api/model-config
-PUT    /api/model-config
-POST   /api/model-config/test
-POST   /api/model-config/models
+GET    /api/model-configs?role=CHAT|EMBEDDING
+GET    /api/model-configs/active
+POST   /api/model-configs
+PUT    /api/model-configs/{id}
+DELETE /api/model-configs/{id}
+POST   /api/model-configs/{id}/activate
+POST   /api/model-configs/test
+POST   /api/model-configs/models
 ```
 
-第五阶段先把模型配置页做扎实：用户选择 `DASHSCOPE` 时使用默认百炼通道，配置页展示 `https://dashscope.aliyuncs.com/api/v1`；选择 `OPENAI_COMPATIBLE` 时输入自定义 Base URL，后端按 `Base URL + /models`、`Base URL + /chat/completions`、`Base URL + /embeddings` 调用通用接口。第一版仍只维护一个 active 配置，多 provider 列表管理放到后续。
+第五阶段先把模型配置页做扎实：用户选择 `DASHSCOPE` 时使用默认百炼通道，配置页展示 `https://dashscope.aliyuncs.com/api/v1`；选择 `OPENAI_COMPATIBLE` 时输入自定义 Base URL，后端按 `Base URL + /models`、`Base URL + /chat/completions`、`Base URL + /embeddings` 调用通用接口。
+
+第八阶段把单个 active 模型配置拆成多配置中心：`CHAT` 和 `EMBEDDING` 独立维护、独立激活。RAG 回答读取 active Chat 配置；文档向量化、向量检索和混合检索读取 active Embedding 配置。旧 `/api/model-config` 只作为过渡兼容接口保留。
 
 API Key 第四、五阶段仍以开发态明文保存到 SQLite；本地加密或 Windows 凭据管理放到安全加固阶段，不能在最终交付版本继续明文保存。
 
@@ -320,7 +327,7 @@ Lucene 混合检索
 - 对话设置通过右侧浮层展开，包含“使用知识库”、关键词/向量/混合检索模式和 Top K。
 - `conversationId` 只作为 SSE 协议内部字段，不在前端界面显示。
 
-第七阶段的会话是前端运行期临时状态，刷新页面后不承诺恢复。真正跨重启聊天记忆放到第八阶段，通过 SQLite 会话表和消息表实现。
+第七阶段的会话是前端运行期临时状态，刷新页面后不承诺恢复。真正跨重启聊天记忆顺延到第九阶段，通过 SQLite 会话表和消息表实现。
 
 ### 6.2 设置页
 
@@ -346,13 +353,15 @@ Lucene 混合检索
 
 核心功能：
 
+- `CHAT` 和 `EMBEDDING` 两类配置独立维护
+- 每类配置支持多条保存、编辑、删除和激活
 - 选择阿里百炼或 OpenAI-compatible Provider
 - 为 OpenAI-compatible 输入 Base URL；DashScope 使用默认地址
-- 输入 API Key
+- 输入、显示和复制 API Key
 - 测试连接
 - 自动拉取模型列表
-- 选择默认对话模型
-- 选择默认 Embedding 模型
+- 为对话模型配置 Temperature 和默认 Top K
+- 为 Embedding 模型配置维度
 
 ### 6.5 前端工程结构
 
@@ -445,19 +454,20 @@ CREATE TABLE chunks (
     FOREIGN KEY (document_id) REFERENCES documents(id)
 );
 
-CREATE TABLE model_config (
+CREATE TABLE model_configs (
     id TEXT PRIMARY KEY,
+    role TEXT NOT NULL,
     provider TEXT NOT NULL,
     display_name TEXT NOT NULL,
     base_url TEXT NOT NULL,
     api_key TEXT,
-    chat_model TEXT NOT NULL,
-    embedding_model TEXT NOT NULL,
-    embedding_dimensions INTEGER NOT NULL,
-    temperature REAL NOT NULL,
-    top_k INTEGER NOT NULL,
-    created_at INTEGER,
-    updated_at INTEGER
+    model_name TEXT NOT NULL,
+    embedding_dimensions INTEGER,
+    temperature REAL,
+    default_top_k INTEGER,
+    is_active INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
 );
 ```
 
@@ -569,10 +579,14 @@ GET    /api/index/status
 POST   /api/index/rebuild
 POST   /api/search
 
-GET    /api/model-config
-PUT    /api/model-config
-POST   /api/model-config/test
-POST   /api/model-config/models
+GET    /api/model-configs?role=CHAT|EMBEDDING
+GET    /api/model-configs/active
+POST   /api/model-configs
+PUT    /api/model-configs/{id}
+DELETE /api/model-configs/{id}
+POST   /api/model-configs/{id}/activate
+POST   /api/model-configs/test
+POST   /api/model-configs/models
 
 POST   /api/chat/stream
 ```
@@ -639,7 +653,15 @@ POST   /api/chat/stream
 - 对话设置浮层和发送/停止图标按钮
 - 深色/夜间与日间主题切换
 
-### Milestone 8：SQLite 聊天记忆
+### Milestone 8：多模型配置
+
+- 对话模型和 Embedding 模型独立维护
+- 支持每类模型新建、编辑、删除、激活和测试
+- 旧单行 `model_config` 自动迁移到 `model_configs`
+- RAG 使用 active Chat，Embedding 网关使用 active Embedding
+- 设置页展示 active Chat / active Embedding
+
+### Milestone 9：SQLite 聊天记忆
 
 - SQLite 保存会话和消息
 - 支持纯模型对话与 RAG 对话切换

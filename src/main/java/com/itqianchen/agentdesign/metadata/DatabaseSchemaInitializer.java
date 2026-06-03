@@ -2,6 +2,7 @@ package com.itqianchen.agentdesign.metadata;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -72,8 +73,28 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
         addColumnIfMissing("model_config", "display_name", "TEXT NOT NULL DEFAULT 'DashScope'");
         addColumnIfMissing("model_config", "base_url",
                 "TEXT NOT NULL DEFAULT 'https://dashscope.aliyuncs.com/api/v1'");
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS model_configs (
+                    id TEXT PRIMARY KEY,
+                    role TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    base_url TEXT NOT NULL,
+                    api_key TEXT,
+                    model_name TEXT NOT NULL,
+                    embedding_dimensions INTEGER,
+                    temperature REAL,
+                    default_top_k INTEGER,
+                    is_active INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                )
+                """);
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_documents_updated_at ON documents(updated_at DESC)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_model_configs_role ON model_configs(role)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_model_configs_role_active ON model_configs(role, is_active)");
+        migrateLegacyModelConfigIfNeeded();
     }
 
     private void addColumnIfMissing(String tableName, String columnName, String definition) {
@@ -84,6 +105,116 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
         if (!exists) {
             jdbcTemplate.execute("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + definition);
         }
+    }
+
+    private void migrateLegacyModelConfigIfNeeded() {
+        Number existingRows = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM model_configs", Number.class);
+        if (existingRows != null && existingRows.longValue() > 0) {
+            return;
+        }
+
+        List<Map<String, Object>> legacyRows = jdbcTemplate.queryForList("""
+                SELECT provider, display_name, base_url, api_key, chat_model, embedding_model,
+                       embedding_dimensions, temperature, top_k, created_at, updated_at
+                FROM model_config
+                WHERE id = 'active'
+                """);
+        Map<String, Object> legacy = legacyRows.isEmpty() ? Map.of() : legacyRows.getFirst();
+        long now = System.currentTimeMillis();
+        long createdAt = longValue(legacy.get("created_at"), now);
+        long updatedAt = longValue(legacy.get("updated_at"), now);
+        String provider = textValue(legacy.get("provider"), "DASHSCOPE");
+        String baseUrl = textValue(legacy.get("base_url"), "https://dashscope.aliyuncs.com/api/v1");
+        String apiKey = textValue(legacy.get("api_key"), "");
+
+        /*
+         * Phase 8 把“一个 active 配置同时管 Chat 和 Embedding”拆成两个 active 配置。
+         * 迁移只在新表为空时执行，避免用户后续新建的多配置被旧表覆盖。
+         */
+        insertInitialModelConfig(
+                "active-chat",
+                "CHAT",
+                provider,
+                textValue(legacy.get("display_name"), "DashScope Chat"),
+                baseUrl,
+                apiKey,
+                textValue(legacy.get("chat_model"), "qwen-plus"),
+                null,
+                doubleObjectValue(legacy.get("temperature"), 0.7),
+                intObjectValue(legacy.get("top_k"), 8),
+                createdAt,
+                updatedAt
+        );
+        insertInitialModelConfig(
+                "active-embedding",
+                "EMBEDDING",
+                provider,
+                textValue(legacy.get("display_name"), "DashScope Embedding"),
+                baseUrl,
+                apiKey,
+                textValue(legacy.get("embedding_model"), "text-embedding-v4"),
+                intObjectValue(legacy.get("embedding_dimensions"), 1024),
+                null,
+                null,
+                createdAt,
+                updatedAt
+        );
+    }
+
+    private void insertInitialModelConfig(
+            String id,
+            String role,
+            String provider,
+            String displayName,
+            String baseUrl,
+            String apiKey,
+            String modelName,
+            Integer embeddingDimensions,
+            Double temperature,
+            Integer defaultTopK,
+            long createdAt,
+            long updatedAt
+    ) {
+        jdbcTemplate.update("""
+                        INSERT INTO model_configs (
+                            id, role, provider, display_name, base_url, api_key, model_name,
+                            embedding_dimensions, temperature, default_top_k, is_active, created_at, updated_at
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                        """,
+                id == null || id.isBlank() ? UUID.randomUUID().toString() : id,
+                role,
+                provider,
+                displayName,
+                baseUrl,
+                apiKey,
+                modelName,
+                embeddingDimensions,
+                temperature,
+                defaultTopK,
+                createdAt,
+                updatedAt
+        );
+    }
+
+    private static String textValue(Object value, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isBlank() ? defaultValue : text;
+    }
+
+    private static long longValue(Object value, long defaultValue) {
+        return value instanceof Number number ? number.longValue() : defaultValue;
+    }
+
+    private static Integer intObjectValue(Object value, int defaultValue) {
+        return value instanceof Number number ? number.intValue() : defaultValue;
+    }
+
+    private static Double doubleObjectValue(Object value, double defaultValue) {
+        return value instanceof Number number ? number.doubleValue() : defaultValue;
     }
 }
 

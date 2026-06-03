@@ -51,9 +51,9 @@ public class RagChatService {
     }
 
     public RagChatStream stream(ChatStreamRequest request) {
-        ModelConfig config = modelConfigService.requireConfigured();
+        ModelConfig config = modelConfigService.requireActiveChatConfigured();
         String question = request.question().trim();
-        int topK = normalizeTopK(request.topK(), config.topK());
+        int topK = normalizeTopK(request.topK(), config.resolvedDefaultTopK());
         SearchMode requestedMode = request.mode() == null ? SearchMode.HYBRID : request.mode();
         SearchResponse searchResponse = searchWithFallback(question, requestedMode, topK);
         List<RagSourceResponse> sources = hydrateSources(toSources(searchResponse.hits()));

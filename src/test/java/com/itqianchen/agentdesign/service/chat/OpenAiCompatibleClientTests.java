@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itqianchen.agentdesign.domain.chat.ChatPromptProperties;
 import com.itqianchen.agentdesign.domain.model.ModelConfig;
+import com.itqianchen.agentdesign.domain.model.ModelConfigRole;
 import com.itqianchen.agentdesign.domain.model.ModelProvider;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -84,15 +85,16 @@ class OpenAiCompatibleClientTests {
     private static ModelConfig config() {
         return new ModelConfig(
                 "active",
+                ModelConfigRole.CHAT,
                 ModelProvider.OPENAI_COMPATIBLE,
                 "OpenAI-compatible",
                 "https://api.example.test/v1",
                 "sk-test",
                 "gpt-4.1-mini",
-                "text-embedding-3-small",
-                1536,
+                null,
                 0.7,
                 8,
+                true,
                 1L,
                 2L
         );

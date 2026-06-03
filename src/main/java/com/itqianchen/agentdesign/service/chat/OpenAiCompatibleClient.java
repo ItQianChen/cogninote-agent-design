@@ -77,9 +77,9 @@ public class OpenAiCompatibleClient {
 
     private Map<String, Object> chatRequest(ModelConfig config, Prompt prompt, boolean stream) {
         return Map.of(
-                "model", config.chatModel(),
+                "model", config.modelName(),
                 "messages", messages(prompt),
-                "temperature", config.temperature(),
+                "temperature", config.resolvedTemperature(),
                 "stream", stream
         );
     }

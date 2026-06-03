@@ -7,6 +7,7 @@ import com.itqianchen.agentdesign.domain.chat.RagChatStream;
 import com.itqianchen.agentdesign.domain.chat.ChatPromptProperties;
 import com.itqianchen.agentdesign.domain.model.ModelConfig;
 import com.itqianchen.agentdesign.domain.model.ModelConfigDefaults;
+import com.itqianchen.agentdesign.domain.model.ModelConfigRole;
 import com.itqianchen.agentdesign.domain.search.EmbeddingUnavailableException;
 import com.itqianchen.agentdesign.domain.search.IndexedDocument;
 import com.itqianchen.agentdesign.domain.search.KnowledgeStore;
@@ -90,19 +91,20 @@ class RagChatServiceTests {
     ) {
         ModelConfigRepository repository = new ModelConfigRepository(null) {
             @Override
-            public Optional<ModelConfig> findActive() {
+            public Optional<ModelConfig> findActive(ModelConfigRole role) {
                 long now = System.currentTimeMillis();
                 return Optional.of(new ModelConfig(
-                        ModelConfigDefaults.ACTIVE_CONFIG_ID,
+                        ModelConfigDefaults.ACTIVE_CHAT_CONFIG_ID,
+                        ModelConfigRole.CHAT,
                         ModelConfigDefaults.PROVIDER,
                         ModelConfigDefaults.DISPLAY_NAME,
                         ModelConfigDefaults.BASE_URL,
                         "sk-test",
                         ModelConfigDefaults.CHAT_MODEL,
-                        ModelConfigDefaults.EMBEDDING_MODEL,
-                        ModelConfigDefaults.EMBEDDING_DIMENSIONS,
+                        null,
                         ModelConfigDefaults.TEMPERATURE,
                         ModelConfigDefaults.TOP_K,
+                        true,
                         now,
                         now
                 ));

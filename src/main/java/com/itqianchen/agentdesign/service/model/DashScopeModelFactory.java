@@ -67,10 +67,10 @@ public class DashScopeModelFactory {
     }
 
     private ChatModel buildChatModel(ModelConfig config) {
-        DashScopeChatEndpoint endpoint = DashScopeChatEndpoint.fromModel(config.chatModel());
+        DashScopeChatEndpoint endpoint = DashScopeChatEndpoint.fromModel(config.modelName());
         DashScopeChatOptions options = DashScopeChatOptions.builder()
-                .model(config.chatModel())
-                .temperature(config.temperature())
+                .model(config.modelName())
+                .temperature(config.resolvedTemperature())
                 .stream(true)
                 .incrementalOutput(true)
                 .multiModel(endpoint.multiModel())
@@ -89,8 +89,8 @@ public class DashScopeModelFactory {
 
     private EmbeddingModel buildEmbeddingModel(ModelConfig config) {
         DashScopeEmbeddingOptions options = DashScopeEmbeddingOptions.builder()
-                .model(config.embeddingModel())
-                .dimensions(config.embeddingDimensions())
+                .model(config.modelName())
+                .dimensions(config.resolvedEmbeddingDimensions())
                 .build();
 
         return DashScopeEmbeddingModel.builder()
@@ -158,9 +158,9 @@ public class DashScopeModelFactory {
             return new ChatModelKey(
                     DashScopeBaseUrls.toSpringAiAlibabaBaseUrl(config.baseUrl()),
                     config.apiKey(),
-                    config.chatModel(),
-                    config.temperature(),
-                    DashScopeChatEndpoint.fromModel(config.chatModel())
+                    config.modelName(),
+                    config.resolvedTemperature(),
+                    DashScopeChatEndpoint.fromModel(config.modelName())
             );
         }
     }
@@ -175,8 +175,8 @@ public class DashScopeModelFactory {
             return new EmbeddingModelKey(
                     DashScopeBaseUrls.toSpringAiAlibabaBaseUrl(config.baseUrl()),
                     config.apiKey(),
-                    config.embeddingModel(),
-                    config.embeddingDimensions()
+                    config.modelName(),
+                    config.resolvedEmbeddingDimensions()
             );
         }
     }

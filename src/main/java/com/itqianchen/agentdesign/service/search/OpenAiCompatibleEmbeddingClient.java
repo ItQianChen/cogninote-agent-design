@@ -27,7 +27,7 @@ public class OpenAiCompatibleEmbeddingClient {
                     .uri(OpenAiCompatibleUrls.embeddingsUri(config.baseUrl()))
                     .headers(headers -> headers.setBearerAuth(config.apiKey()))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("model", config.embeddingModel(), "input", texts))
+                    .body(Map.of("model", config.modelName(), "input", texts))
                     .retrieve()
                     .body(JsonNode.class);
             return parseEmbeddings(response);

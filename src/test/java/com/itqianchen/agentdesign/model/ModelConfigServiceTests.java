@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.itqianchen.agentdesign.domain.model.ModelConfig;
 import com.itqianchen.agentdesign.domain.model.ModelConfigDefaults;
+import com.itqianchen.agentdesign.domain.model.ModelConfigRole;
 import com.itqianchen.agentdesign.domain.model.ModelConfigurationException;
 import com.itqianchen.agentdesign.domain.model.ModelProvider;
 import com.itqianchen.agentdesign.dto.model.ModelConfigRequest;
@@ -32,151 +33,200 @@ class ModelConfigServiceTests {
 
     @BeforeEach
     void clearDatabase() {
+        jdbcTemplate.update("DELETE FROM model_configs");
         jdbcTemplate.update("DELETE FROM model_config");
     }
 
     @Test
-    void activeOrDefaultReturnsDashScopeDefaults() {
-        ModelConfig config = modelConfigService.activeOrDefault();
+    void activeDefaultsAreSplitByRole() {
+        ModelConfig chat = modelConfigService.activeChatOrDefault();
+        ModelConfig embedding = modelConfigService.activeEmbeddingOrDefault();
 
-        assertThat(config.provider()).isEqualTo(ModelProvider.DASHSCOPE);
-        assertThat(config.displayName()).isEqualTo(ModelConfigDefaults.DISPLAY_NAME);
-        assertThat(config.baseUrl()).isEqualTo(ModelConfigDefaults.BASE_URL);
-        assertThat(config.chatModel()).isEqualTo("qwen-plus");
-        assertThat(config.embeddingModel()).isEqualTo("text-embedding-v4");
-        assertThat(config.embeddingDimensions()).isEqualTo(1024);
-        assertThat(config.temperature()).isEqualTo(0.7);
-        assertThat(config.topK()).isEqualTo(8);
-        assertThat(config.hasApiKey()).isFalse();
+        assertThat(chat.role()).isEqualTo(ModelConfigRole.CHAT);
+        assertThat(chat.provider()).isEqualTo(ModelProvider.DASHSCOPE);
+        assertThat(chat.baseUrl()).isEqualTo(ModelConfigDefaults.BASE_URL);
+        assertThat(chat.modelName()).isEqualTo("qwen-plus");
+        assertThat(chat.resolvedTemperature()).isEqualTo(0.7);
+        assertThat(chat.resolvedDefaultTopK()).isEqualTo(8);
+
+        assertThat(embedding.role()).isEqualTo(ModelConfigRole.EMBEDDING);
+        assertThat(embedding.modelName()).isEqualTo("text-embedding-v4");
+        assertThat(embedding.resolvedEmbeddingDimensions()).isEqualTo(1024);
     }
 
     @Test
-    void savePersistsActiveConfig() {
-        modelConfigService.save(request(
+    void createAndActivateChatDoesNotOverwriteEmbedding() {
+        ModelConfig embedding = modelConfigService.create(embeddingRequest(
                 "DASHSCOPE",
-                "sk-test",
-                "https://dashscope.aliyuncs.com/api/v1/",
-                "qwen-max",
+                "Embedding A",
+                "sk-embedding",
+                ModelConfigDefaults.BASE_URL,
                 "text-embedding-v4",
+                1024
+        ));
+
+        ModelConfig chat = modelConfigService.create(chatRequest(
+                "OPENAI_COMPATIBLE",
+                "Chat A",
+                "sk-chat",
+                "https://api.example.test/v1/chat/completions",
+                "gpt-4.1-mini",
                 0.3,
                 12
         ));
+        modelConfigService.activate(chat.id());
 
-        ModelConfig config = modelConfigService.requireConfigured();
-
-        assertThat(config.apiKey()).isEqualTo("sk-test");
-        assertThat(config.baseUrl()).isEqualTo(ModelConfigDefaults.BASE_URL);
-        assertThat(config.chatModel()).isEqualTo("qwen-max");
-        assertThat(config.temperature()).isEqualTo(0.3);
-        assertThat(config.topK()).isEqualTo(12);
+        assertThat(modelConfigService.requireActiveChatConfigured().modelName()).isEqualTo("gpt-4.1-mini");
+        assertThat(modelConfigService.requireActiveEmbeddingConfigured().modelName()).isEqualTo("text-embedding-v4");
+        assertThat(modelConfigService.requireActiveEmbeddingConfigured().apiKey()).isEqualTo(embedding.apiKey());
     }
 
     @Test
-    void dashScopeProviderIgnoresCustomBaseUrlAndKeepsOfficialDefault() {
-        modelConfigService.save(request(
-                "DASHSCOPE",
-                "sk-test",
-                "https://api.example.test/v1",
-                "qwen-plus",
-                "text-embedding-v4",
-                0.7,
-                8
-        ));
-
-        ModelConfig config = modelConfigService.requireConfigured();
-
-        assertThat(config.provider()).isEqualTo(ModelProvider.DASHSCOPE);
-        assertThat(config.baseUrl()).isEqualTo(ModelConfigDefaults.BASE_URL);
-    }
-
-    @Test
-    void dashScopeProviderUsesDefaultWhenBaseUrlIsBlank() {
-        modelConfigService.save(request(
-                "DASHSCOPE",
-                "sk-test",
-                "",
-                "qwen-plus",
-                "text-embedding-v4",
-                0.7,
-                8
-        ));
-
-        ModelConfig config = modelConfigService.requireConfigured();
-
-        assertThat(config.provider()).isEqualTo(ModelProvider.DASHSCOPE);
-        assertThat(config.baseUrl()).isEqualTo(ModelConfigDefaults.BASE_URL);
-    }
-
-    @Test
-    void openAiCompatibleProviderPersistsCustomBaseUrl() {
-        modelConfigService.save(request(
+    void openAiCompatibleProviderPersistsCustomBaseUrlPerRole() {
+        ModelConfig chat = modelConfigService.create(chatRequest(
                 "OPENAI_COMPATIBLE",
-                "sk-test",
+                "Chat A",
+                "sk-chat",
                 "https://api.example.test/v1/chat/completions",
                 "gpt-4.1-mini",
-                "text-embedding-3-small",
                 0.4,
                 10
         ));
 
-        ModelConfig config = modelConfigService.requireConfigured();
-
-        assertThat(config.provider()).isEqualTo(ModelProvider.OPENAI_COMPATIBLE);
-        assertThat(config.baseUrl()).isEqualTo("https://api.example.test/v1");
-        assertThat(config.chatModel()).isEqualTo("gpt-4.1-mini");
-        assertThat(config.embeddingModel()).isEqualTo("text-embedding-3-small");
+        assertThat(chat.provider()).isEqualTo(ModelProvider.OPENAI_COMPATIBLE);
+        assertThat(chat.baseUrl()).isEqualTo("https://api.example.test/v1");
+        assertThat(chat.modelName()).isEqualTo("gpt-4.1-mini");
     }
 
     @Test
-    void saveWithBlankApiKeyKeepsExistingSecret() {
-        modelConfigService.save(request("DASHSCOPE", "sk-test", ModelConfigDefaults.BASE_URL, "qwen-plus",
-                "text-embedding-v4", 0.7, 8));
+    void updateWithBlankApiKeyKeepsExistingSecret() {
+        ModelConfig saved = modelConfigService.create(chatRequest(
+                "DASHSCOPE",
+                "Chat A",
+                "sk-test",
+                ModelConfigDefaults.BASE_URL,
+                "qwen-plus",
+                0.7,
+                8
+        ));
 
-        modelConfigService.save(request("DASHSCOPE", "", ModelConfigDefaults.BASE_URL, "qwen-max",
-                "text-embedding-v4", 0.2, 6));
+        modelConfigService.update(saved.id(), chatRequest(
+                "DASHSCOPE",
+                "Chat A",
+                "",
+                ModelConfigDefaults.BASE_URL,
+                "qwen-max",
+                0.2,
+                6
+        ));
 
-        ModelConfig config = modelConfigService.requireConfigured();
+        ModelConfig config = modelConfigService.requireActiveChatConfigured();
 
         assertThat(config.apiKey()).isEqualTo("sk-test");
-        assertThat(config.chatModel()).isEqualTo("qwen-max");
-        assertThat(config.temperature()).isEqualTo(0.2);
-        assertThat(config.topK()).isEqualTo(6);
+        assertThat(config.modelName()).isEqualTo("qwen-max");
+        assertThat(config.resolvedTemperature()).isEqualTo(0.2);
+        assertThat(config.resolvedDefaultTopK()).isEqualTo(6);
+    }
+
+    @Test
+    void deleteRejectsOnlyActiveConfig() {
+        ModelConfig chat = modelConfigService.create(chatRequest(
+                "DASHSCOPE",
+                "Chat A",
+                "sk-test",
+                ModelConfigDefaults.BASE_URL,
+                "qwen-plus",
+                0.7,
+                8
+        ));
+
+        assertThatThrownBy(() -> modelConfigService.delete(chat.id()))
+                .isInstanceOf(ModelConfigurationException.class)
+                .hasMessageContaining("Cannot delete");
+    }
+
+    @Test
+    void saveLegacyRequestSplitsChatAndEmbedding() {
+        modelConfigService.save(new ModelConfigRequest(
+                null,
+                "DASHSCOPE",
+                "DashScope",
+                ModelConfigDefaults.BASE_URL,
+                "sk-test",
+                null,
+                "qwen-max",
+                "text-embedding-v4",
+                1024,
+                0.3,
+                12,
+                null
+        ));
+
+        assertThat(modelConfigService.requireActiveChatConfigured().modelName()).isEqualTo("qwen-max");
+        assertThat(modelConfigService.requireActiveEmbeddingConfigured().modelName()).isEqualTo("text-embedding-v4");
     }
 
     @Test
     void saveRejectsInvalidBaseUrl() {
-        assertThatThrownBy(() -> modelConfigService.save(request("OPENAI_COMPATIBLE", "sk-test", "ftp://example.com",
-                "qwen-plus", "text-embedding-v4", 0.7, 8)))
+        assertThatThrownBy(() -> modelConfigService.create(chatRequest("OPENAI_COMPATIBLE", "Chat A", "sk-test",
+                "ftp://example.com", "qwen-plus", 0.7, 8)))
                 .isInstanceOf(ModelConfigurationException.class)
                 .hasMessageContaining("Base URL");
     }
 
     @Test
     void requireConfiguredFailsWithoutApiKey() {
-        assertThatThrownBy(() -> modelConfigService.requireConfigured())
+        assertThatThrownBy(() -> modelConfigService.requireActiveChatConfigured())
                 .isInstanceOf(ModelConfigurationException.class)
                 .hasMessageContaining("API Key");
     }
 
-    private static ModelConfigRequest request(
+    private static ModelConfigRequest chatRequest(
             String provider,
+            String displayName,
             String apiKey,
             String baseUrl,
-            String chatModel,
-            String embeddingModel,
+            String modelName,
             double temperature,
             int topK
     ) {
         return new ModelConfigRequest(
+                ModelConfigRole.CHAT.name(),
                 provider,
-                "DashScope",
+                displayName,
                 baseUrl,
                 apiKey,
-                chatModel,
-                embeddingModel,
-                1024,
+                modelName,
+                modelName,
+                null,
+                null,
                 temperature,
+                topK,
                 topK
+        );
+    }
+
+    private static ModelConfigRequest embeddingRequest(
+            String provider,
+            String displayName,
+            String apiKey,
+            String baseUrl,
+            String modelName,
+            int dimensions
+    ) {
+        return new ModelConfigRequest(
+                ModelConfigRole.EMBEDDING.name(),
+                provider,
+                displayName,
+                baseUrl,
+                apiKey,
+                modelName,
+                null,
+                modelName,
+                dimensions,
+                null,
+                null,
+                null
         );
     }
 }

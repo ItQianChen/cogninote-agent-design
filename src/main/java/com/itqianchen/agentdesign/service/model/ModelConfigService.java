@@ -2,10 +2,13 @@ package com.itqianchen.agentdesign.service.model;
 
 import com.itqianchen.agentdesign.domain.model.ModelConfig;
 import com.itqianchen.agentdesign.domain.model.ModelConfigDefaults;
+import com.itqianchen.agentdesign.domain.model.ModelConfigRole;
 import com.itqianchen.agentdesign.domain.model.ModelConfigurationException;
 import com.itqianchen.agentdesign.domain.model.ModelProvider;
 import com.itqianchen.agentdesign.dto.model.ModelConfigRequest;
 import com.itqianchen.agentdesign.repository.model.ModelConfigRepository;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,80 +21,270 @@ public class ModelConfigService {
         this.modelConfigRepository = modelConfigRepository;
     }
 
-    public ModelConfig activeOrDefault() {
-        long now = System.currentTimeMillis();
-        return modelConfigRepository.findActive()
+    public List<ModelConfig> list(ModelConfigRole role) {
+        return modelConfigRepository.findAll(role).stream()
                 .map(ModelConfigService::normalizeLoadedConfig)
-                .orElseGet(() -> new ModelConfig(
-                        ModelConfigDefaults.ACTIVE_CONFIG_ID,
-                        ModelConfigDefaults.PROVIDER,
-                        ModelConfigDefaults.DISPLAY_NAME,
-                        ModelConfigDefaults.BASE_URL,
-                        "",
-                        ModelConfigDefaults.CHAT_MODEL,
-                        ModelConfigDefaults.EMBEDDING_MODEL,
-                        ModelConfigDefaults.EMBEDDING_DIMENSIONS,
-                        ModelConfigDefaults.TEMPERATURE,
-                        ModelConfigDefaults.TOP_K,
-                        now,
-                        now
-                ));
+                .toList();
     }
 
+    public ModelConfig activeChatOrDefault() {
+        return activeOrDefault(ModelConfigRole.CHAT);
+    }
+
+    public ModelConfig activeEmbeddingOrDefault() {
+        return activeOrDefault(ModelConfigRole.EMBEDDING);
+    }
+
+    public ModelConfig activeOrDefault(ModelConfigRole role) {
+        return modelConfigRepository.findActive(role)
+                .map(ModelConfigService::normalizeLoadedConfig)
+                .orElseGet(() -> defaultConfig(role, true));
+    }
+
+    @Deprecated
+    public ModelConfig activeOrDefault() {
+        return activeChatOrDefault();
+    }
+
+    public ModelConfig requireActiveChatConfigured() {
+        return requireConfigured(ModelConfigRole.CHAT);
+    }
+
+    public ModelConfig requireActiveEmbeddingConfigured() {
+        return requireConfigured(ModelConfigRole.EMBEDDING);
+    }
+
+    @Deprecated
     public ModelConfig requireConfigured() {
-        ModelConfig config = activeOrDefault();
+        return requireActiveChatConfigured();
+    }
+
+    public ModelConfig requireConfigured(ModelConfigRole role) {
+        ModelConfig config = activeOrDefault(role);
         if (!config.hasApiKey()) {
-            throw new ModelConfigurationException("API Key is not configured");
+            throw new ModelConfigurationException(roleLabel(role) + " API Key is not configured");
         }
         return config;
     }
 
     @Transactional
-    public ModelConfig save(ModelConfigRequest request) {
-        ModelConfig existing = activeOrDefault();
+    public ModelConfig create(ModelConfigRequest request) {
+        ModelConfigRole role = normalizeRole(request.role());
         long now = System.currentTimeMillis();
-        ModelConfig config = mergeRequest(request, existing, now);
-        return modelConfigRepository.saveActive(config);
+        boolean active = modelConfigRepository.countByRole(role) == 0;
+        return modelConfigRepository.save(mergeRequest(
+                request,
+                defaultConfig(role, active),
+                UUID.randomUUID().toString(),
+                role,
+                active,
+                now
+        ));
+    }
+
+    @Transactional
+    public ModelConfig update(String id, ModelConfigRequest request) {
+        ModelConfig existing = modelConfigRepository.findById(id)
+                .orElseThrow(() -> new ModelConfigurationException("Model config not found: " + id));
+        ModelConfigRole requestedRole = request.role() == null || request.role().isBlank()
+                ? existing.role()
+                : normalizeRole(request.role());
+        if (requestedRole != existing.role()) {
+            throw new ModelConfigurationException("Model config role cannot be changed");
+        }
+        return modelConfigRepository.save(mergeRequest(
+                request,
+                existing,
+                existing.id(),
+                existing.role(),
+                existing.active(),
+                System.currentTimeMillis()
+        ));
+    }
+
+    @Transactional
+    public ModelConfig activate(String id) {
+        return modelConfigRepository.activate(id, System.currentTimeMillis());
+    }
+
+    @Transactional
+    public void delete(String id) {
+        ModelConfig config = modelConfigRepository.findById(id)
+                .orElseThrow(() -> new ModelConfigurationException("Model config not found: " + id));
+        if (config.active() && modelConfigRepository.countByRole(config.role()) <= 1) {
+            throw new ModelConfigurationException("Cannot delete the only active " + roleLabel(config.role()) + " config");
+        }
+        modelConfigRepository.delete(id);
+        if (config.active()) {
+            List<ModelConfig> remaining = modelConfigRepository.findAll(config.role());
+            if (!remaining.isEmpty() && remaining.stream().noneMatch(ModelConfig::active)) {
+                modelConfigRepository.activate(remaining.getFirst().id(), System.currentTimeMillis());
+            }
+        }
     }
 
     public ModelConfig connectionTestConfig(ModelConfigRequest request) {
-        ModelConfig config = mergeRequest(request, activeOrDefault(), System.currentTimeMillis());
+        ModelConfigRole role = normalizeRole(request.role());
+        ModelConfig config = mergeRequest(
+                request,
+                activeOrDefault(role),
+                activeOrDefault(role).id(),
+                role,
+                true,
+                System.currentTimeMillis()
+        );
         if (!config.hasApiKey()) {
-            throw new ModelConfigurationException("API Key is required for connection test");
+            throw new ModelConfigurationException(roleLabel(role) + " API Key is required for connection test");
         }
         return config;
     }
 
-    private static String normalizeApiKey(String apiKey) {
-        return apiKey == null ? "" : apiKey.trim();
+    @Transactional
+    @Deprecated
+    public ModelConfig save(ModelConfigRequest request) {
+        long now = System.currentTimeMillis();
+        ModelConfig chat = modelConfigRepository.save(mergeLegacyChatRequest(request, activeChatOrDefault(), now));
+        modelConfigRepository.save(mergeLegacyEmbeddingRequest(request, activeEmbeddingOrDefault(), now));
+        return chat;
     }
 
-    private static ModelConfig mergeRequest(ModelConfigRequest request, ModelConfig existing, long now) {
+    private static ModelConfig mergeRequest(
+            ModelConfigRequest request,
+            ModelConfig existing,
+            String id,
+            ModelConfigRole role,
+            boolean active,
+            long now
+    ) {
         ModelProvider provider = normalizeProvider(request.provider());
         String requestedApiKey = normalizeApiKey(request.apiKey());
-        // 前端默认用 password 隐藏已保存的 Key，但保存时仍允许留空复用旧 Key。
-        // 这让用户可以只改模型参数，不必每次重新粘贴密钥。
+        // API Key 允许留空复用旧值。否则用户只改模型 ID 时会被迫重复粘贴密钥。
         String apiKey = requestedApiKey.isBlank() ? existing.apiKey() : requestedApiKey;
+        String modelName = normalizeModelName(role, request, existing.modelName());
         return new ModelConfig(
-                ModelConfigDefaults.ACTIVE_CONFIG_ID,
+                id,
+                role,
                 provider,
-                normalizeDisplayName(request.displayName()),
+                normalizeDisplayName(role, request.displayName()),
                 normalizeBaseUrl(provider, request.baseUrl()),
                 apiKey,
-                request.chatModel().trim(),
-                request.embeddingModel().trim(),
-                request.embeddingDimensions() == null
-                        ? ModelConfigDefaults.EMBEDDING_DIMENSIONS
-                        : request.embeddingDimensions(),
-                request.temperature() == null
-                        ? ModelConfigDefaults.TEMPERATURE
-                        : request.temperature(),
-                request.topK() == null
-                        ? ModelConfigDefaults.TOP_K
-                        : request.topK(),
+                modelName,
+                role == ModelConfigRole.EMBEDDING ? normalizeEmbeddingDimensions(request.embeddingDimensions(), existing) : null,
+                role == ModelConfigRole.CHAT ? normalizeTemperature(request.temperature(), existing) : null,
+                role == ModelConfigRole.CHAT ? normalizeTopK(request.defaultTopK(), request.topK(), existing) : null,
+                active,
                 existing.createdAt(),
                 now
         );
+    }
+
+    private static ModelConfig mergeLegacyChatRequest(ModelConfigRequest request, ModelConfig existing, long now) {
+        return mergeRequest(
+                new ModelConfigRequest(
+                        ModelConfigRole.CHAT.name(),
+                        request.provider(),
+                        request.displayName(),
+                        request.baseUrl(),
+                        request.apiKey(),
+                        request.chatModel(),
+                        request.chatModel(),
+                        request.embeddingModel(),
+                        null,
+                        request.temperature(),
+                        request.topK(),
+                        request.defaultTopK()
+                ),
+                existing,
+                existing.id(),
+                ModelConfigRole.CHAT,
+                true,
+                now
+        );
+    }
+
+    private static ModelConfig mergeLegacyEmbeddingRequest(ModelConfigRequest request, ModelConfig existing, long now) {
+        return mergeRequest(
+                new ModelConfigRequest(
+                        ModelConfigRole.EMBEDDING.name(),
+                        request.provider(),
+                        request.displayName(),
+                        request.baseUrl(),
+                        request.apiKey(),
+                        request.embeddingModel(),
+                        request.chatModel(),
+                        request.embeddingModel(),
+                        request.embeddingDimensions(),
+                        null,
+                        null,
+                        null
+                ),
+                existing,
+                existing.id(),
+                ModelConfigRole.EMBEDDING,
+                true,
+                now
+        );
+    }
+
+    private static ModelConfig defaultConfig(ModelConfigRole role, boolean active) {
+        long now = System.currentTimeMillis();
+        return new ModelConfig(
+                role == ModelConfigRole.CHAT
+                        ? ModelConfigDefaults.ACTIVE_CHAT_CONFIG_ID
+                        : ModelConfigDefaults.ACTIVE_EMBEDDING_CONFIG_ID,
+                role,
+                ModelConfigDefaults.PROVIDER,
+                role == ModelConfigRole.CHAT
+                        ? ModelConfigDefaults.CHAT_DISPLAY_NAME
+                        : ModelConfigDefaults.EMBEDDING_DISPLAY_NAME,
+                ModelConfigDefaults.BASE_URL,
+                "",
+                role == ModelConfigRole.CHAT
+                        ? ModelConfigDefaults.CHAT_MODEL
+                        : ModelConfigDefaults.EMBEDDING_MODEL,
+                role == ModelConfigRole.EMBEDDING ? ModelConfigDefaults.EMBEDDING_DIMENSIONS : null,
+                role == ModelConfigRole.CHAT ? ModelConfigDefaults.TEMPERATURE : null,
+                role == ModelConfigRole.CHAT ? ModelConfigDefaults.TOP_K : null,
+                active,
+                now,
+                now
+        );
+    }
+
+    private static ModelConfig normalizeLoadedConfig(ModelConfig config) {
+        if (config.provider() != ModelProvider.DASHSCOPE) {
+            return config;
+        }
+        String normalizedBaseUrl = DashScopeBaseUrls.normalizeConfigBaseUrl(config.baseUrl());
+        if (normalizedBaseUrl.equals(config.baseUrl())) {
+            return config;
+        }
+        return new ModelConfig(
+                config.id(),
+                config.role(),
+                config.provider(),
+                config.displayName(),
+                normalizedBaseUrl,
+                config.apiKey(),
+                config.modelName(),
+                config.embeddingDimensions(),
+                config.temperature(),
+                config.defaultTopK(),
+                config.active(),
+                config.createdAt(),
+                config.updatedAt()
+        );
+    }
+
+    private static ModelConfigRole normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return ModelConfigRole.CHAT;
+        }
+        try {
+            return ModelConfigRole.valueOf(role.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new ModelConfigurationException("Unsupported model config role: " + role);
+        }
     }
 
     private static ModelProvider normalizeProvider(String provider) {
@@ -105,33 +298,11 @@ public class ModelConfigService {
         }
     }
 
-    private static ModelConfig normalizeLoadedConfig(ModelConfig config) {
-        if (config.provider() != ModelProvider.DASHSCOPE) {
-            return config;
-        }
-        String normalizedBaseUrl = DashScopeBaseUrls.normalizeConfigBaseUrl(config.baseUrl());
-        if (normalizedBaseUrl.equals(config.baseUrl())) {
-            return config;
-        }
-        return new ModelConfig(
-                config.id(),
-                config.provider(),
-                config.displayName(),
-                normalizedBaseUrl,
-                config.apiKey(),
-                config.chatModel(),
-                config.embeddingModel(),
-                config.embeddingDimensions(),
-                config.temperature(),
-                config.topK(),
-                config.createdAt(),
-                config.updatedAt()
-        );
-    }
-
-    private static String normalizeDisplayName(String displayName) {
+    private static String normalizeDisplayName(ModelConfigRole role, String displayName) {
         if (displayName == null || displayName.isBlank()) {
-            return ModelConfigDefaults.DISPLAY_NAME;
+            return role == ModelConfigRole.CHAT
+                    ? ModelConfigDefaults.CHAT_DISPLAY_NAME
+                    : ModelConfigDefaults.EMBEDDING_DISPLAY_NAME;
         }
         return displayName.trim();
     }
@@ -142,6 +313,47 @@ public class ModelConfigService {
             case OPENAI_COMPATIBLE -> OpenAiCompatibleUrls.normalizeBaseUrl(baseUrl);
         };
     }
+
+    private static String normalizeApiKey(String apiKey) {
+        return apiKey == null ? "" : apiKey.trim();
+    }
+
+    private static String normalizeModelName(ModelConfigRole role, ModelConfigRequest request, String fallback) {
+        String value = request.modelName();
+        if ((value == null || value.isBlank()) && role == ModelConfigRole.CHAT) {
+            value = request.chatModel();
+        }
+        if ((value == null || value.isBlank()) && role == ModelConfigRole.EMBEDDING) {
+            value = request.embeddingModel();
+        }
+        if (value == null || value.isBlank()) {
+            value = fallback;
+        }
+        if (value == null || value.isBlank()) {
+            throw new ModelConfigurationException(roleLabel(role) + " model name is required");
+        }
+        return value.trim();
+    }
+
+    private static Integer normalizeEmbeddingDimensions(Integer requested, ModelConfig existing) {
+        return requested == null ? existing.resolvedEmbeddingDimensions() : requested;
+    }
+
+    private static Double normalizeTemperature(Double requested, ModelConfig existing) {
+        return requested == null ? existing.resolvedTemperature() : requested;
+    }
+
+    private static Integer normalizeTopK(Integer defaultTopK, Integer topK, ModelConfig existing) {
+        if (defaultTopK != null) {
+            return defaultTopK;
+        }
+        if (topK != null) {
+            return topK;
+        }
+        return existing.resolvedDefaultTopK();
+    }
+
+    private static String roleLabel(ModelConfigRole role) {
+        return role == ModelConfigRole.CHAT ? "Chat" : "Embedding";
+    }
 }
-
-

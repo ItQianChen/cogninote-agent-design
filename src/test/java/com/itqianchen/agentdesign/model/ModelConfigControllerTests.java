@@ -30,20 +30,32 @@ class ModelConfigControllerTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
+                                  "role": "CHAT",
                                   "provider": "DASHSCOPE",
                                   "displayName": "DashScope",
                                   "baseUrl": "https://dashscope.aliyuncs.com/api/v1",
                                   "apiKey": "",
+                                  "modelName": "qwen-plus",
                                   "chatModel": "qwen-plus",
                                   "embeddingModel": "text-embedding-v4",
                                   "embeddingDimensions": 1024,
                                   "temperature": 0.7,
-                                  "topK": 8
+                                  "topK": 8,
+                                  "defaultTopK": 8
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("MODEL_CONFIGURATION"))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("API Key")));
+    }
+
+    @Test
+    void activeConfigsReturnsSplitModelConfigs() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/model-configs/active"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.chat.role").value("CHAT"))
+                .andExpect(jsonPath("$.data.embedding.role").value("EMBEDDING"));
     }
 }
