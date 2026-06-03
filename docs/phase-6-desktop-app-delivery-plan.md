@@ -35,7 +35,7 @@ Tauri 2 桌面壳 + Spring Boot 后端 app-image + Spring Boot 托管 Vue dist
   - `frontendDist` 指向 Vue `dist`，但第一版运行窗口加载 Spring Boot URL。
 - 后端打包：
   - 继续执行 `mvn -Pwith-frontend package`，让 Spring Boot jar 内包含 Vue dist。
-  - 执行 `jpackage --type app-image --name CogniNoteBackend --input target --main-jar cogninote-agent-design-0.0.1-SNAPSHOT.jar --dest target/desktop/backend`。
+  - 先把最终 Spring Boot fat jar 复制到 `target/desktop/jpackage-input/`，再执行 `jpackage --type app-image --name CogniNoteBackend --input target/desktop/jpackage-input --main-jar cogninote-agent-design-0.0.1-SNAPSHOT.jar --dest target/desktop/backend`。
   - Tauri 打包时携带 `target/desktop/backend/CogniNoteBackend/` 整个目录。
 - Tauri 主进程：
   - 用 Rust 管理一个 `BackendProcess` 状态，保存 child handle、端口、日志路径。
@@ -83,4 +83,3 @@ npm --prefix cogniNote-agent-front run desktop:build
 - Vue 页面继续由 Spring Boot 托管，前端 `/api` 相对路径不改。
 - SQLite、Lucene、模型配置、RAG 业务逻辑继续全部留在 Java 后端。
 - API Key 加密存储不是 Phase 6 主任务，但公开安装包验收前必须至少完成桌面会话令牌保护。
-

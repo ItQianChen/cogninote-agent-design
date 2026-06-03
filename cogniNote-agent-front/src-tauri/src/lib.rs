@@ -9,6 +9,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use tauri::{
     path::BaseDirectory,
     App, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder,
@@ -22,6 +25,8 @@ const MIN_PORT: u16 = 18080;
 const MAX_PORT: u16 = 18120;
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(45);
 const HEALTH_CHECK_INTERVAL: Duration = Duration::from_millis(500);
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 struct BackendProcess {
     child: Mutex<Option<Child>>,
@@ -151,14 +156,25 @@ fn spawn_backend(backend_exe: &Path, port: u16, log_path: &Path) -> Result<Child
         ),
     );
 
-    Command::new(backend_exe)
+    let mut command = Command::new(backend_exe);
+    command
         .env("COGNINOTE_PORT", port.to_string())
         .env("COGNINOTE_DESKTOP", "true")
         .current_dir(backend_exe.parent().unwrap_or_else(|| Path::new(".")))
         .stdout(Stdio::from(stdout))
-        .stderr(Stdio::from(stderr))
+        .stderr(Stdio::from(stderr));
+    configure_backend_process_window(&mut command);
+
+    command
         .spawn()
         .map_err(|error| format!("无法启动后端进程：{error}"))
+}
+
+fn configure_backend_process_window(command: &mut Command) {
+    // jpackage 生成的后端启动器在 Windows 下可能按控制台程序启动。
+    // 桌面壳已经把输出重定向到日志文件，这里显式禁止子进程创建 cmd 窗口，避免用户双击主程序后看到后台服务窗口常驻。
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
 }
 
 fn wait_until_backend_ready(port: u16) -> Result<(), String> {

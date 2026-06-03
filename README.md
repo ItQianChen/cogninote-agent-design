@@ -211,6 +211,7 @@ java -jar target/cogninote-agent-design-0.0.1-SNAPSHOT.jar
 关键约束：
 
 - 后端 app-image 位于 `target/desktop/backend/CogniNoteBackend/`，Tauri 会把整个目录作为资源打包，不能只复制 `CogniNoteBackend.exe`。
+- `jpackage` 输入目录位于 `target/desktop/jpackage-input/`，只放最终 Spring Boot fat jar，避免把 `target/` 下的测试目录和中间产物打进 app-image。
 - Tauri 启动时会选择 `18080-18120` 的可用端口，并通过 `COGNINOTE_PORT` 注入后端。
 - 桌面窗口加载 `http://127.0.0.1:{port}/`，所以前端现有 `/api` 相对路径和 SSE 流式接口不需要改。
 - 后端启动日志写入 `%APPDATA%/CogniNote/logs/desktop-backend.log`。

@@ -14,6 +14,7 @@ $jarName = 'cogninote-agent-design-0.0.1-SNAPSHOT.jar'
 $jarPath = Join-Path $projectRoot "target\$jarName"
 $desktopBackendDir = Join-Path $projectRoot 'target\desktop\backend'
 $backendImageDir = Join-Path $desktopBackendDir 'CogniNoteBackend'
+$jpackageInputDir = Join-Path $projectRoot 'target\desktop\jpackage-input'
 
 function Assert-InProject {
     param([string]$Path)
@@ -52,7 +53,14 @@ try {
         Remove-Item -LiteralPath $backendImageDir -Recurse -Force
     }
 
+    if (Test-Path -LiteralPath $jpackageInputDir) {
+        Assert-InProject $jpackageInputDir
+        Remove-Item -LiteralPath $jpackageInputDir -Recurse -Force
+    }
+
     New-Item -ItemType Directory -Force -Path $desktopBackendDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $jpackageInputDir | Out-Null
+    Copy-Item -LiteralPath $jarPath -Destination (Join-Path $jpackageInputDir $jarName) -Force
 
     # SQLite JDBC triggers a native-access warning on JDK 25. The desktop backend
     # uses a bundled runtime, so pass the flag once at package time instead of
@@ -60,7 +68,7 @@ try {
     $jpackageArgs = @(
         '--type', 'app-image',
         '--name', 'CogniNoteBackend',
-        '--input', (Join-Path $projectRoot 'target'),
+        '--input', $jpackageInputDir,
         '--main-jar', $jarName,
         '--dest', $desktopBackendDir,
         '--java-options', '--enable-native-access=ALL-UNNAMED'

@@ -10,7 +10,9 @@ $projectRoot = Split-Path -Parent $scriptDir
 
 Push-Location $projectRoot
 try {
-    .\scripts\verify-desktop-toolchain.ps1 -JdkHome $JdkHome
+    # Dot-source the verifier so the refreshed Cargo/MSVC environment remains
+    # available for the following Tauri build in this same PowerShell process.
+    . .\scripts\verify-desktop-toolchain.ps1 -JdkHome $JdkHome
 
     $env:JAVA_HOME = $JdkHome
     $env:Path = "$JdkHome\bin;$env:Path"

@@ -522,7 +522,7 @@ Tauri 打包桌面壳和后端资源目录
 5. Tauri 等待 `/api/system/status` 健康检查通过
 6. Tauri WebView 加载 `http://127.0.0.1:{port}/`
 
-注意：`jpackage --type app-image` 的产物依赖 `app/` 和 `runtime/` 目录，不能只把 `CogniNoteBackend.exe` 作为单文件复制。Tauri 需要把完整 `target/desktop/backend/CogniNoteBackend/` 目录作为资源打包。
+注意：`jpackage --type app-image` 的产物依赖 `app/` 和 `runtime/` 目录，不能只把 `CogniNoteBackend.exe` 作为单文件复制。`jpackage` 输入目录只放最终 Spring Boot fat jar，Tauri 则把完整 `target/desktop/backend/CogniNoteBackend/` 目录作为资源打包。
 
 后续可增加系统托盘能力：
 
