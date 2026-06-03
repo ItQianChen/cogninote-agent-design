@@ -419,20 +419,18 @@ CREATE TABLE chunks (
     FOREIGN KEY (document_id) REFERENCES documents(id)
 );
 
-CREATE TABLE llm_providers (
+CREATE TABLE model_config (
     id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    display_name TEXT NOT NULL,
     base_url TEXT NOT NULL,
     api_key TEXT,
-    active_model TEXT,
-    is_active INTEGER NOT NULL DEFAULT 0,
+    chat_model TEXT NOT NULL,
+    embedding_model TEXT NOT NULL,
+    embedding_dimensions INTEGER NOT NULL,
+    temperature REAL NOT NULL,
+    top_k INTEGER NOT NULL,
     created_at INTEGER,
-    updated_at INTEGER
-);
-
-CREATE TABLE app_settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
     updated_at INTEGER
 );
 ```
@@ -524,34 +522,36 @@ Tauri 打包桌面壳和后端资源目录
 
 注意：`jpackage --type app-image` 的产物依赖 `app/` 和 `runtime/` 目录，不能只把 `CogniNoteBackend.exe` 作为单文件复制。`jpackage` 输入目录只放最终 Spring Boot fat jar，Tauri 则把完整 `target/desktop/backend/CogniNoteBackend/` 目录作为资源打包。
 
+桌面构建和运行脚本统一放在项目根目录 `scripts/` 下。`.ps1` 文件应在 PowerShell 中从项目根目录运行，不建议双击；具体命令、执行策略处理、产物路径和常见故障排查见 `docs/desktop-build-guide.md`。
+
 后续可增加系统托盘能力：
 
 - 打开主界面
 - 查看服务状态
 - 退出应用
 
-## 10. API 草案
+## 10. API
 
 ```text
-POST   /api/chat
+GET    /api/system/status
+
 GET    /api/documents
 POST   /api/documents/ingest
 DELETE /api/documents/{id}
 
 GET    /api/index/status
 POST   /api/index/rebuild
+POST   /api/search
 
-GET    /api/llm-providers
-POST   /api/llm-providers
-GET    /api/llm-providers/{id}/models
-PUT    /api/llm-providers/{id}/activate
-DELETE /api/llm-providers/{id}
+GET    /api/model-config
+PUT    /api/model-config
+POST   /api/model-config/test
+POST   /api/model-config/models
 
-GET    /api/settings
-PUT    /api/settings
+POST   /api/chat/stream
 ```
 
-`/api/chat` 建议使用 SSE 流式返回。
+普通 JSON API 统一返回 `ApiResponse<T>`。`POST /api/chat/stream` 使用 SSE 流式返回，不做 JSON 响应包装；`DELETE /api/documents/{id}` 成功时返回 `204 No Content`。
 
 ## 11. 开发里程碑
 

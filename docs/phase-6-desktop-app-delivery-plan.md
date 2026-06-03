@@ -47,6 +47,7 @@ Tauri 2 桌面壳 + Spring Boot 后端 app-image + Spring Boot 托管 Vue dist
   - 不记录 API Key，不把数据写入安装目录，继续使用 `%APPDATA%/CogniNote/`。
 - 文档同步：
   - 更新 README 和主设计文档，说明桌面启动、数据目录、日志目录、工具链、打包命令和当前 API Key 明文风险。
+  - 新增 `docs/desktop-build-guide.md` 作为实际构建运行手册，避免把 PowerShell 脚本教程和故障排查全部塞进 README。
   - 保留 Phase 6 计划文件用于后续溯源。
 
 ## Test Plan
@@ -61,6 +62,15 @@ mvn -Pwith-frontend package
 .\scripts\build-desktop-backend.ps1
 npm --prefix cogniNote-agent-front run desktop:build
 ```
+
+  也可以直接使用项目根目录的完整入口脚本：
+
+```powershell
+.\scripts\build-desktop-app.ps1
+.\scripts\build-desktop-app.ps1 -SkipTests
+```
+
+  `.ps1` 脚本应在 PowerShell 中从项目根目录运行；执行策略、产物路径、图标替换和常见故障排查见 [desktop-build-guide.md](desktop-build-guide.md)。
 
 - 桌面手测：
   - 双击应用能打开桌面窗口，不打开系统浏览器。
