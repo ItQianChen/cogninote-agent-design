@@ -21,11 +21,17 @@ export const useSystemStore = defineStore('system', () => {
     try {
       status.value = await getSystemStatus()
     } catch (err) {
-      status.value = null
       error.value = `后端服务暂不可用：${err.message}`
     } finally {
       isLoading.value = false
     }
+  }
+
+  function ensureStatusLoaded() {
+    if (status.value || isLoading.value) {
+      return Promise.resolve()
+    }
+    return fetchStatus()
   }
 
   return {
@@ -33,6 +39,7 @@ export const useSystemStore = defineStore('system', () => {
     isLoading,
     error,
     connectionLabel,
-    fetchStatus
+    fetchStatus,
+    ensureStatusLoaded
   }
 })

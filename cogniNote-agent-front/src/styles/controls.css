@@ -48,6 +48,13 @@
   grid-column: 1 / -1;
 }
 
+.secret-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
 .inline-controls,
 .button-row,
 .header-actions,
@@ -148,4 +155,26 @@ textarea:focus-visible {
 .secondary-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
+}
+
+.collapse-button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #bdd2ca;
+  border-radius: 999px;
+  color: #1f6f68;
+  background: #f6fbf9;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.collapse-button:hover,
+.collapse-button:focus-visible {
+  border-color: #1f6f68;
+  background: #e7f5f1;
 }

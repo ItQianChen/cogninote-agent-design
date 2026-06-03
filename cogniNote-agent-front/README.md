@@ -1,23 +1,27 @@
-# cogniNote-agent-front
+# CogniNote Frontend
 
-CogniNote Agent 的 Vue 3 前端。当前前端使用 Vue Router + Pinia + API client 分层，包含对话、知识库、模型配置和设置四个页面；生产构建由 Spring Boot 托管，桌面版由 Tauri WebView 加载后端页面。
+CogniNote Agent 的 Vue 3 前端。当前前端是桌面对话应用形态：`/chat` 显示左侧临时会话列表和主对话流，`/settings` 使用独立全屏设置页，归拢系统状态、主题、知识库和模型配置。
 
-## Recommended IDE Setup
+前端生产构建由 Spring Boot 托管，桌面版由 Tauri WebView 加载后端页面。
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+## 工程结构
 
-## Recommended Browser Setup
+```text
+src/
+  ├─ api/          # 统一 JSON API client 和 SSE chat stream parser
+  ├─ components/   # 应用壳、来源列表、Markdown 渲染、分段控件等复用组件
+  ├─ router/       # /chat、/settings、/knowledge、/model-config
+  ├─ stores/       # Pinia 状态：system、documents、search、modelConfig、chat、theme
+  ├─ styles/       # 基础、控件、桌面对话、Markdown、主题、响应式样式
+  └─ views/        # 页面级组件
+```
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+维护约束：
 
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
+- Assistant 消息通过 `markdown-renderer.vue` 渲染 Markdown，禁用原始 HTML。
+- 引用来源由 `source-list.vue` 自己维护折叠状态，避免消息组件膨胀。
+- 主题偏好由 `theme` store 写入 `localStorage`，通过 `html.theme-dark` / `html.theme-light` 控制样式。
+- 设置页不显示左侧对话栏，避免非聊天能力继续占用聊天布局。
 
 ## Project Setup
 

@@ -69,8 +69,8 @@ public class ModelConfigService {
     private static ModelConfig mergeRequest(ModelConfigRequest request, ModelConfig existing, long now) {
         ModelProvider provider = normalizeProvider(request.provider());
         String requestedApiKey = normalizeApiKey(request.apiKey());
-        // GET 响应不会回显已保存的 API Key。
-        // 因此前端提交空 key 时表示“复用旧 key”，不是清空密钥。
+        // 前端默认用 password 隐藏已保存的 Key，但保存时仍允许留空复用旧 Key。
+        // 这让用户可以只改模型参数，不必每次重新粘贴密钥。
         String apiKey = requestedApiKey.isBlank() ? existing.apiKey() : requestedApiKey;
         return new ModelConfig(
                 ModelConfigDefaults.ACTIVE_CONFIG_ID,

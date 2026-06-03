@@ -81,14 +81,27 @@
     height: calc(100vh - 92px);
   }
 
-  .composer-bar {
-    grid-template-columns: 1fr;
+  .composer-input-row,
+  .composer-side-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .composer-controls,
-  .composer-actions {
+  .composer-side-actions {
+    flex-basis: auto;
+    align-items: flex-end;
+    flex-direction: row;
+  }
+
+  .composer-settings-popover {
+    right: 0;
+    width: min(100%, 520px);
+  }
+
+  .composer-settings__body {
     align-items: stretch;
     flex-direction: column;
+    justify-content: flex-start;
   }
 }
 
@@ -151,6 +164,11 @@
     align-items: flex-start;
     flex-direction: column;
     padding: 16px;
+  }
+
+  .settings-header__title {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .message-stream {

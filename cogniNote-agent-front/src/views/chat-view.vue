@@ -1,4 +1,7 @@
 <script setup>
+import { computed, ref } from 'vue'
+import { LoaderCircle, Send, SlidersHorizontal } from 'lucide-vue-next'
+import MarkdownRenderer from '../components/markdown-renderer.vue'
 import SegmentedControl from '../components/segmented-control.vue'
 import SourceList from '../components/source-list.vue'
 import { useChatStore } from '../stores/chat'
@@ -7,6 +10,15 @@ import { SEARCH_MODES } from '../stores/search'
 
 const chatStore = useChatStore()
 const modelConfigStore = useModelConfigStore()
+const isComposerSettingsOpen = ref(false)
+const activeModeLabel = computed(() => SEARCH_MODES.find((item) => item.value === chatStore.mode)?.label || chatStore.mode)
+const composerActionTitle = computed(() => (chatStore.isStreaming ? '停止对话' : '发送信息'))
+
+function handleComposerAction() {
+  if (chatStore.isStreaming) {
+    chatStore.stopChat()
+  }
+}
 </script>
 
 <template>
@@ -41,8 +53,13 @@ const modelConfigStore = useModelConfigStore()
           <em v-else-if="message.status === 'streaming'">生成中</em>
           <em v-else-if="message.status === 'stopped'">已停止</em>
         </div>
-        <p class="message-content">{{ message.content || '正在等待模型返回...' }}</p>
-        <p v-if="message.conversationId" class="path-text">conversationId: {{ message.conversationId }}</p>
+        <MarkdownRenderer
+          v-if="message.role === 'assistant' && message.status !== 'error'"
+          class="message-content"
+          :content="message.content"
+          empty-text="正在等待模型返回..."
+        />
+        <p v-else class="message-content">{{ message.content || '正在等待模型返回...' }}</p>
         <SourceList
           v-if="message.sources?.length"
           :sources="message.sources"
@@ -53,40 +70,67 @@ const modelConfigStore = useModelConfigStore()
     </section>
 
     <form class="composer-bar" @submit.prevent="chatStore.streamChat">
-      <label class="knowledge-toggle">
-        <input v-model="chatStore.useKnowledgeBase" type="checkbox" />
-        <span>使用知识库</span>
-      </label>
+      <div class="composer-input-row">
+        <textarea
+          v-model="chatStore.draft"
+          rows="3"
+          :placeholder="chatStore.useKnowledgeBase ? '向知识库提问...' : '纯对话将在第八阶段启用'"
+          :disabled="chatStore.isStreaming"
+        ></textarea>
 
-      <div class="composer-controls">
-        <SegmentedControl v-model="chatStore.mode" :options="SEARCH_MODES" label="RAG 检索模式" />
-        <label class="field field--small">
-          <span>Top K</span>
-          <input v-model="chatStore.topK" type="number" min="1" max="50" />
-        </label>
+        <div class="composer-side-actions">
+          <button
+            class="composer-settings-button"
+            type="button"
+            title="对话设置"
+            :aria-expanded="isComposerSettingsOpen"
+            aria-label="打开对话设置"
+            @click="isComposerSettingsOpen = !isComposerSettingsOpen"
+          >
+            <SlidersHorizontal aria-hidden="true" />
+          </button>
+          <button
+            class="composer-icon-button"
+            :class="{ 'composer-icon-button--streaming': chatStore.isStreaming }"
+            :type="chatStore.isStreaming ? 'button' : 'submit'"
+            :disabled="!chatStore.isStreaming && !chatStore.canSend"
+            :title="composerActionTitle"
+            :aria-label="composerActionTitle"
+            @click="handleComposerAction"
+          >
+            <LoaderCircle v-if="chatStore.isStreaming" aria-hidden="true" />
+            <Send v-else aria-hidden="true" />
+          </button>
+        </div>
+
+        <div v-if="isComposerSettingsOpen" class="composer-settings-popover">
+          <div class="composer-settings__summary">
+            <span>{{ chatStore.useKnowledgeBase ? '使用知识库' : '纯对话待接入' }}</span>
+            <span>{{ activeModeLabel }}</span>
+            <span>Top K {{ chatStore.topK }}</span>
+          </div>
+
+          <div class="composer-settings__body">
+            <label class="knowledge-toggle">
+              <input v-model="chatStore.useKnowledgeBase" type="checkbox" />
+              <span>使用知识库</span>
+            </label>
+
+            <SegmentedControl v-model="chatStore.mode" :options="SEARCH_MODES" label="RAG 检索模式" />
+            <label class="field field--small">
+              <span>Top K</span>
+              <input v-model="chatStore.topK" type="number" min="1" max="50" />
+            </label>
+          </div>
+        </div>
       </div>
 
-      <textarea
-        v-model="chatStore.draft"
-        rows="3"
-        :placeholder="chatStore.useKnowledgeBase ? '向知识库提问...' : '纯对话将在第八阶段启用'"
-        :disabled="chatStore.isStreaming"
-      ></textarea>
-
-      <div class="composer-actions">
+      <div class="composer-feedback">
         <p v-if="chatStore.error" class="error-message">{{ chatStore.error }}</p>
         <p v-else-if="chatStore.knowledgeDisabledHint" class="hint-message">{{ chatStore.knowledgeDisabledHint }}</p>
         <p v-else-if="!modelConfigStore.modelConfig?.apiKeyConfigured" class="hint-message">
           尚未保存模型 API Key。请先到设置中的模型配置保存后再对话。
         </p>
-        <div class="button-row">
-          <button class="secondary-button" type="button" :disabled="!chatStore.isStreaming" @click="chatStore.stopChat">
-            停止
-          </button>
-          <button class="primary-button" type="submit" :disabled="!chatStore.canSend">
-            {{ chatStore.isStreaming ? '回答中...' : '发送' }}
-          </button>
-        </div>
       </div>
     </form>
   </section>

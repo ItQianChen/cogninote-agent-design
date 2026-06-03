@@ -28,11 +28,17 @@ export const useSearchStore = defineStore('search', () => {
     try {
       indexStatus.value = await getIndexStatus()
     } catch (err) {
-      indexStatus.value = null
       indexError.value = `索引状态读取失败：${err.message}`
     } finally {
       isLoadingIndexStatus.value = false
     }
+  }
+
+  function ensureIndexStatusLoaded() {
+    if (indexStatus.value || isLoadingIndexStatus.value) {
+      return Promise.resolve()
+    }
+    return fetchIndexStatus()
   }
 
   async function rebuildIndex() {
@@ -87,6 +93,7 @@ export const useSearchStore = defineStore('search', () => {
     mode,
     topK,
     fetchIndexStatus,
+    ensureIndexStatusLoaded,
     rebuildIndex,
     searchKnowledge
   }

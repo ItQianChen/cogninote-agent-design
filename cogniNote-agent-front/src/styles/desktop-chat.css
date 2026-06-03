@@ -11,6 +11,15 @@
     linear-gradient(135deg, #111820 0%, #0d1117 54%, #121212 100%);
 }
 
+.settings-shell {
+  min-height: 100vh;
+  overflow: hidden;
+  color: #e7edf3;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(39, 112, 132, 0.22), transparent 28%),
+    linear-gradient(135deg, #111820 0%, #0d1117 54%, #121212 100%);
+}
+
 .chat-sidebar {
   display: flex;
   min-width: 0;
@@ -191,7 +200,7 @@
   gap: 18px;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 28px;
+  padding: 14px 28px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   background: rgba(19, 24, 31, 0.74);
   backdrop-filter: blur(14px);
@@ -200,7 +209,14 @@
 .conversation-header h2,
 .settings-header h2 {
   color: #f8fafc;
-  font-size: 24px;
+  font-size: 22px;
+  line-height: 1.18;
+}
+
+.conversation-header .eyebrow,
+.settings-header .eyebrow {
+  margin-bottom: 5px;
+  font-size: 12px;
 }
 
 .conversation-meta {
@@ -323,16 +339,48 @@
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: auto minmax(240px, 1fr);
-  gap: 12px 14px;
+  gap: 12px;
   padding: 16px clamp(18px, 5vw, 72px) 18px;
   border-top: 1px solid rgba(148, 163, 184, 0.16);
   background: linear-gradient(180deg, rgba(13, 17, 23, 0.72), rgba(13, 17, 23, 0.96));
   backdrop-filter: blur(16px);
 }
 
-.composer-bar textarea {
-  grid-column: 1 / -1;
+.composer-settings__body,
+.composer-input-row,
+.composer-side-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.composer-settings__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.composer-settings__summary span {
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #bff7ee;
+  background: rgba(20, 184, 166, 0.12);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.composer-settings__body {
+  justify-content: flex-end;
+}
+
+.composer-input-row {
+  position: relative;
+  align-items: stretch;
+}
+
+.composer-input-row textarea {
+  flex: 1 1 auto;
   width: 100%;
   min-height: 84px;
   max-height: 180px;
@@ -365,21 +413,91 @@
   accent-color: #14b8a6;
 }
 
-.composer-controls,
-.composer-actions {
-  display: flex;
-  gap: 12px;
-  align-items: end;
-  justify-content: flex-end;
+.composer-side-actions {
+  flex: 0 0 56px;
+  flex-direction: column;
+  justify-content: center;
 }
 
-.composer-actions {
-  grid-column: 1 / -1;
-  align-items: center;
-  justify-content: space-between;
+.composer-settings-button,
+.composer-icon-button {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 50%;
+  color: #93a4b8;
+  background: rgba(148, 163, 184, 0.14);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
 }
 
-.composer-actions p {
+.composer-settings-button svg,
+.composer-icon-button svg {
+  width: 21px;
+  height: 21px;
+}
+
+.composer-settings-button:hover,
+.composer-settings-button:focus-visible,
+.composer-settings-button[aria-expanded="true"] {
+  border-color: rgba(20, 184, 166, 0.48);
+  color: #ecfeff;
+  background: rgba(20, 184, 166, 0.16);
+}
+
+.composer-icon-button:not(:disabled) {
+  border-color: rgba(45, 212, 191, 0.44);
+  color: #ecfeff;
+  background: linear-gradient(135deg, #0f766e, #0e7490);
+  box-shadow: 0 14px 34px rgba(20, 184, 166, 0.22);
+}
+
+.composer-icon-button:hover:not(:disabled),
+.composer-icon-button:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(94, 234, 212, 0.76);
+  background: linear-gradient(135deg, #14b8a6, #0891b2);
+}
+
+.composer-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.composer-icon-button--streaming svg {
+  animation: composer-spin 900ms linear infinite;
+}
+
+@keyframes composer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.composer-settings-popover {
+  position: absolute;
+  right: 68px;
+  bottom: calc(100% + 12px);
+  z-index: 20;
+  display: grid;
+  width: min(640px, calc(100vw - 120px));
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(17, 24, 39, 0.96);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(16px);
+}
+
+.composer-feedback p {
   margin: 0;
 }
 
@@ -390,6 +508,31 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
+.sources-panel--compact .section-title-line {
+  align-items: center;
+}
+
+.sources-panel--compact h3 {
+  color: #dbe7f3;
+}
+
+.sources-panel--compact .source-panel-actions span {
+  color: #dbe7f3;
+}
+
+.desktop-shell .collapse-button {
+  border-color: rgba(148, 163, 184, 0.22);
+  color: #dbe7f3;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.desktop-shell .collapse-button:hover,
+.desktop-shell .collapse-button:focus-visible {
+  border-color: rgba(20, 184, 166, 0.48);
+  color: #ecfeff;
+  background: rgba(20, 184, 166, 0.16);
+}
+
 .sources-panel--compact .source-row {
   border-color: rgba(148, 163, 184, 0.14);
   background: rgba(15, 23, 42, 0.38);
@@ -398,6 +541,47 @@
 .settings-page {
   overflow-y: auto;
   color: #dbe7f3;
+}
+
+.settings-shell .settings-page {
+  height: 100vh;
+}
+
+.settings-header__title {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.back-link {
+  display: inline-flex;
+  min-height: 40px;
+  gap: 8px;
+  align-items: center;
+  padding: 0 13px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  color: #dbe7f3;
+  background: rgba(255, 255, 255, 0.05);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 800;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.back-link svg {
+  width: 17px;
+  height: 17px;
+}
+
+.back-link:hover,
+.back-link:focus-visible {
+  border-color: rgba(20, 184, 166, 0.48);
+  color: #ecfeff;
+  background: rgba(20, 184, 166, 0.16);
 }
 
 .settings-tabs {
@@ -433,6 +617,10 @@
 .desktop-shell .new-chat-button:focus-visible,
 .desktop-shell .settings-link:focus-visible,
 .desktop-shell .settings-tabs button:focus-visible,
+.desktop-shell .collapse-button:focus-visible,
+.desktop-shell .composer-settings-button:focus-visible,
+.desktop-shell .composer-icon-button:focus-visible,
+.back-link:focus-visible,
 .desktop-shell input:focus-visible,
 .desktop-shell textarea:focus-visible {
   outline: 3px solid rgba(94, 234, 212, 0.52);

@@ -120,10 +120,19 @@ scripts/build-desktop-app.ps1
 - 桌面窗口加载 `http://127.0.0.1:{port}/`，前端 `/api` 相对路径继续同源工作。
 - 关闭窗口后，Tauri 会终止后端进程。
 
-后端日志路径：
+日志路径：
 
 ```text
 %APPDATA%\CogniNote\logs\desktop-backend.log
+%APPDATA%\CogniNote\logs\app.log
+```
+
+`desktop-backend.log` 记录 Tauri 启动后端进程时的输出，`app.log` 记录 Spring Boot 业务日志。启动失败先看前者，接口、模型调用、索引和 RAG 问题先看后者。
+
+如需临时把 Spring Boot 业务日志写到其它位置，可在启动后端前设置：
+
+```powershell
+$env:COGNINOTE_LOG_FILE='D:\temp\cogninote-app.log'
 ```
 
 数据目录仍然是：

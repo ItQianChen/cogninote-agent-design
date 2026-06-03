@@ -50,7 +50,7 @@ Base URL + /embeddings
 
 ## 配置流程
 
-1. 打开“模型配置”页。
+1. 打开“设置”页，切换到“模型”区域。
 2. 选择 Provider。
 3. 填写 API Key。
 4. 如果选择 OpenAI-compatible，填写 Base URL。

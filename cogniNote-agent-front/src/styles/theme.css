@@ -1,0 +1,213 @@
+/* 主题覆盖：默认深色由各模块提供，日间主题只覆写桌面壳和高频聊天/设置控件。 */
+
+html.theme-light body {
+  color: #182230;
+  background: #eef4f6;
+}
+
+html.theme-light .desktop-shell,
+html.theme-light .settings-shell {
+  color: #223040;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(20, 184, 166, 0.14), transparent 28%),
+    linear-gradient(135deg, #f8fbfc 0%, #edf4f7 58%, #e7eef2 100%);
+}
+
+html.theme-light .chat-sidebar {
+  border-right-color: rgba(15, 23, 42, 0.1);
+  background:
+    linear-gradient(180deg, rgba(245, 250, 251, 0.98), rgba(231, 239, 243, 0.98)),
+    #eef5f7;
+}
+
+html.theme-light .brand-panel h1,
+html.theme-light .conversation-header h2,
+html.theme-light .settings-header h2,
+html.theme-light .empty-chat h3,
+html.theme-light .settings-page,
+html.theme-light .markdown-content h1,
+html.theme-light .markdown-content h2,
+html.theme-light .markdown-content h3,
+html.theme-light .markdown-content h4,
+html.theme-light .markdown-content h5,
+html.theme-light .markdown-content h6 {
+  color: #102033;
+}
+
+html.theme-light .brand-panel .eyebrow,
+html.theme-light .conversation-header .eyebrow,
+html.theme-light .settings-header .eyebrow {
+  color: #0f766e;
+}
+
+html.theme-light .new-chat-button {
+  border-color: rgba(15, 118, 110, 0.32);
+  color: #0f4f49;
+  background: rgba(20, 184, 166, 0.14);
+}
+
+html.theme-light .session-item {
+  color: #44566c;
+}
+
+html.theme-light .session-item span,
+html.theme-light .sidebar-section-title,
+html.theme-light .sidebar-status {
+  color: #66798f;
+}
+
+html.theme-light .session-item:hover:not(:disabled),
+html.theme-light .session-item:focus-visible,
+html.theme-light .session-item.active,
+html.theme-light .settings-link,
+html.theme-light .back-link,
+html.theme-light .empty-chat,
+html.theme-light .composer-settings-popover,
+html.theme-light .sources-panel--compact {
+  border-color: rgba(15, 23, 42, 0.1);
+  color: #1d3044;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+html.theme-light .desktop-workspace,
+html.theme-light .conversation-header,
+html.theme-light .settings-header {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: rgba(247, 251, 252, 0.82);
+}
+
+html.theme-light .message-stream {
+  background: linear-gradient(180deg, rgba(239, 247, 249, 0.82), rgba(247, 251, 252, 0.96));
+}
+
+html.theme-light .message-label {
+  color: #637489;
+}
+
+html.theme-light .message-content {
+  color: #203044;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.1);
+}
+
+html.theme-light .message-bubble--user .message-content {
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f766e, #0e7490);
+}
+
+html.theme-light .message-bubble--assistant .message-content {
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+html.theme-light .composer-bar {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: linear-gradient(180deg, rgba(247, 251, 252, 0.72), rgba(247, 251, 252, 0.96));
+}
+
+html.theme-light .composer-input-row textarea,
+html.theme-light .composer-settings-popover {
+  border-color: rgba(15, 23, 42, 0.14);
+  color: #182230;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+html.theme-light .composer-bar textarea::placeholder {
+  color: #8290a3;
+}
+
+html.theme-light .knowledge-toggle,
+html.theme-light .settings-tabs button,
+html.theme-light .desktop-shell .collapse-button,
+html.theme-light .source-panel-actions span,
+html.theme-light .sources-panel--compact h3,
+html.theme-light .sources-panel--compact .source-panel-actions span {
+  color: #31514d;
+}
+
+html.theme-light .settings-tabs button,
+html.theme-light .desktop-shell .collapse-button,
+html.theme-light .composer-settings-button {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+html.theme-light .settings-tabs button.active,
+html.theme-light .settings-tabs button:hover,
+html.theme-light .settings-tabs button:focus-visible,
+html.theme-light .desktop-shell .collapse-button:hover,
+html.theme-light .desktop-shell .collapse-button:focus-visible,
+html.theme-light .composer-settings-button:hover,
+html.theme-light .composer-settings-button:focus-visible,
+html.theme-light .composer-settings-button[aria-expanded="true"] {
+  color: #0f4f49;
+  border-color: rgba(15, 118, 110, 0.3);
+  background: rgba(20, 184, 166, 0.15);
+}
+
+html.theme-light .markdown-content code {
+  color: #0f4f49;
+  background: rgba(20, 184, 166, 0.12);
+}
+
+html.theme-light .markdown-content pre {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: #f3f7f9;
+}
+
+html.theme-light .markdown-content pre code {
+  color: #263446;
+}
+
+.settings-card {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.theme-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.theme-choice button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  color: #b8c5d5;
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.theme-choice button.active,
+.theme-choice button:hover,
+.theme-choice button:focus-visible {
+  color: #ecfeff;
+  border-color: rgba(20, 184, 166, 0.48);
+  background: rgba(20, 184, 166, 0.16);
+}
+
+html.theme-light .settings-card {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+html.theme-light .theme-choice button {
+  color: #31514d;
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+html.theme-light .theme-choice button.active,
+html.theme-light .theme-choice button:hover,
+html.theme-light .theme-choice button:focus-visible {
+  color: #0f4f49;
+  border-color: rgba(15, 118, 110, 0.3);
+  background: rgba(20, 184, 166, 0.15);
+}

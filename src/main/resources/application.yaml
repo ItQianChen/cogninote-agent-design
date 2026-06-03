@@ -29,6 +29,15 @@ server:
   address: 127.0.0.1
   port: ${COGNINOTE_PORT:18080}
 
+logging:
+  file:
+    # Spring Boot 业务日志独立落盘；Tauri 的 desktop-backend.log 仍只记录桌面壳启动与 stdout/stderr。
+    name: ${COGNINOTE_LOG_FILE:${APPDATA:${user.home}}/CogniNote/logs/app.log}
+  logback:
+    rollingpolicy:
+      max-file-size: 20MB
+      max-history: 10
+
 app:
   storage:
     base-dir: ${COGNINOTE_DATA_DIR:}

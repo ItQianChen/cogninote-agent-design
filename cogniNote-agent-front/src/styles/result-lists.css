@@ -81,3 +81,14 @@
   font-weight: 800;
 }
 
+.source-panel-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.source-panel-actions span {
+  color: #526071;
+  font-weight: 800;
+}
+

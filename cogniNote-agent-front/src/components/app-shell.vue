@@ -9,6 +9,7 @@ const route = useRoute()
 const router = useRouter()
 const chatStore = useChatStore()
 const systemStore = useSystemStore()
+const isSettingsRoute = computed(() => route.name === 'settings')
 
 const pillState = computed(() => {
   if (systemStore.isLoading) {
@@ -29,7 +30,11 @@ function openSession(sessionId) {
 </script>
 
 <template>
-  <main class="desktop-shell">
+  <main v-if="isSettingsRoute" class="settings-shell">
+    <slot />
+  </main>
+
+  <main v-else class="desktop-shell">
     <aside class="chat-sidebar" aria-label="对话列表">
       <section class="brand-panel">
         <div class="brand-mark">CN</div>

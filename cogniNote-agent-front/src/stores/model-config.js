@@ -33,6 +33,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   const error = ref('')
   const message = ref('')
   const form = ref(defaultForm())
+  const isFormTouched = ref(false)
+  const isApiKeyVisible = ref(false)
 
   const apiKeyPlaceholder = computed(() => {
     if (modelConfig.value?.apiKeyConfigured) {
@@ -47,7 +49,11 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
 
   const isOpenAiCompatible = computed(() => form.value.provider === 'OPENAI_COMPATIBLE')
 
-  async function fetchModelConfig() {
+  async function fetchModelConfig({ force = true } = {}) {
+    if (!force && (modelConfig.value || isLoadingModelConfig.value)) {
+      return
+    }
+
     isLoadingModelConfig.value = true
     error.value = ''
     message.value = ''
@@ -55,23 +61,22 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     try {
       const config = await getModelConfig()
       modelConfig.value = config
-      form.value = {
-        provider: config.provider || 'DASHSCOPE',
-        displayName: config.displayName || 'DashScope',
-        baseUrl: config.baseUrl || defaultForm().baseUrl,
-        apiKey: '',
-        chatModel: config.chatModel,
-        embeddingModel: config.embeddingModel,
-        embeddingDimensions: config.embeddingDimensions,
-        temperature: config.temperature,
-        topK: config.topK
-      }
+      syncFormFromConfig(config)
     } catch (err) {
-      modelConfig.value = null
       error.value = `模型配置读取失败：${err.message}`
     } finally {
       isLoadingModelConfig.value = false
     }
+  }
+
+  function ensureModelConfigLoaded() {
+    // 设置页首次切到“模型”时只补齐缺失数据。
+    // 这里不能强制刷新，否则异步失败或重复挂载会把用户正在编辑的表单状态打掉。
+    if (modelConfig.value) {
+      syncFormFromConfigIfPristine()
+      return Promise.resolve()
+    }
+    return fetchModelConfig({ force: false })
   }
 
   async function fetchModels() {
@@ -103,17 +108,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     try {
       const saved = await requestSaveModelConfig(payload())
       modelConfig.value = saved
-      form.value = {
-        provider: saved.provider || form.value.provider,
-        displayName: saved.displayName || form.value.displayName,
-        baseUrl: saved.baseUrl || form.value.baseUrl,
-        apiKey: '',
-        chatModel: saved.chatModel || form.value.chatModel,
-        embeddingModel: saved.embeddingModel || form.value.embeddingModel,
-        embeddingDimensions: saved.embeddingDimensions || form.value.embeddingDimensions,
-        temperature: saved.temperature ?? form.value.temperature,
-        topK: saved.topK || form.value.topK
-      }
+      syncFormFromConfig(saved)
       message.value = '模型配置已保存'
       await searchStore.fetchIndexStatus()
     } catch (err) {
@@ -147,6 +142,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     form.value.provider = option.value
     form.value.displayName = option.displayName
     form.value.baseUrl = option.baseUrl
+    isFormTouched.value = true
     modelOptions.value = []
 
     // 切换协议时模型 ID 的可用范围也跟着变。
@@ -173,13 +169,55 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
 
   function autoSelectModels() {
     const chatModels = chatModelOptions.value
-    const embeddingModels = embeddingModelOptions.value
-    // 拉取模型后只在当前值不存在于列表时自动兜底，避免覆盖用户刚刚手动挑选的模型。
+    // Chat 模型可从 /models 返回的候选中兜底；Embedding 第一版允许用户手动填，
+    // 因为不少服务不会在模型列表里准确标注 embedding capability。
     if (chatModels.length && !chatModels.some(model => model.id === form.value.chatModel)) {
       form.value.chatModel = chatModels[0].id
+      isFormTouched.value = true
     }
-    if (embeddingModels.length && !embeddingModels.some(model => model.id === form.value.embeddingModel)) {
-      form.value.embeddingModel = embeddingModels[0].id
+  }
+
+  function markFormTouched() {
+    isFormTouched.value = true
+  }
+
+  function syncFormFromConfigIfPristine() {
+    if (!isFormTouched.value && modelConfig.value) {
+      syncFormFromConfig(modelConfig.value)
+    }
+  }
+
+  function syncFormFromConfig(config) {
+    form.value = {
+      provider: config.provider || 'DASHSCOPE',
+      displayName: config.displayName || 'DashScope',
+      baseUrl: config.baseUrl || defaultForm().baseUrl,
+      apiKey: config.apiKey || '',
+      chatModel: config.chatModel || defaultForm().chatModel,
+      embeddingModel: config.embeddingModel || defaultForm().embeddingModel,
+      embeddingDimensions: config.embeddingDimensions || defaultForm().embeddingDimensions,
+      temperature: config.temperature ?? defaultForm().temperature,
+      topK: config.topK || defaultForm().topK
+    }
+    isFormTouched.value = false
+    isApiKeyVisible.value = false
+  }
+
+  function toggleApiKeyVisible() {
+    isApiKeyVisible.value = !isApiKeyVisible.value
+  }
+
+  async function copyApiKey() {
+    if (!form.value.apiKey) {
+      error.value = '当前没有可复制的 API Key'
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(form.value.apiKey)
+      message.value = 'API Key 已复制'
+      error.value = ''
+    } catch (err) {
+      error.value = `复制失败：${err.message}`
     }
   }
 
@@ -202,6 +240,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     error,
     message,
     form,
+    isFormTouched,
+    isApiKeyVisible,
     providerOptions,
     providerLabel,
     isOpenAiCompatible,
@@ -209,6 +249,10 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     chatModelOptions,
     embeddingModelOptions,
     fetchModelConfig,
+    ensureModelConfigLoaded,
+    markFormTouched,
+    toggleApiKeyVisible,
+    copyApiKey,
     fetchModels,
     saveModelConfig,
     testModelConfig,

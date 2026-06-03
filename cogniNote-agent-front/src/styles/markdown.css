@@ -1,0 +1,130 @@
+/* Markdown 渲染样式：模型回答使用 v-html 输出，样式集中在这里便于统一审查安全边界。 */
+
+.markdown-content {
+  display: grid;
+  gap: 12px;
+  white-space: normal;
+}
+
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content p,
+.markdown-content ul,
+.markdown-content ol,
+.markdown-content blockquote,
+.markdown-content pre,
+.markdown-content table {
+  margin: 0;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  margin: 4px 0 0;
+  color: #f8fafc;
+  line-height: 1.35;
+}
+
+.markdown-content h1 {
+  font-size: 24px;
+}
+
+.markdown-content h2 {
+  font-size: 21px;
+}
+
+.markdown-content h3 {
+  font-size: 18px;
+}
+
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  font-size: 16px;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  display: grid;
+  gap: 6px;
+  padding-left: 22px;
+}
+
+.markdown-content li {
+  padding-left: 2px;
+}
+
+.markdown-content blockquote {
+  padding-left: 14px;
+  border-left: 3px solid rgba(94, 234, 212, 0.46);
+  color: #cbd5e1;
+}
+
+.markdown-content a {
+  color: #67e8f9;
+  text-decoration: none;
+}
+
+.markdown-content a:hover,
+.markdown-content a:focus-visible {
+  text-decoration: underline;
+}
+
+.markdown-content code {
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: #dffdf9;
+  background: rgba(15, 23, 42, 0.72);
+  font-family:
+    "Cascadia Mono",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+  font-size: 0.92em;
+}
+
+.markdown-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.74);
+}
+
+.markdown-content pre code {
+  display: block;
+  padding: 0;
+  color: #e2e8f0;
+  background: transparent;
+  line-height: 1.7;
+  white-space: pre;
+}
+
+.markdown-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  text-align: left;
+}
+
+.markdown-content th {
+  color: #ecfeff;
+  background: rgba(20, 184, 166, 0.14);
+}

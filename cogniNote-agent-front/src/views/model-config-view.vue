@@ -7,7 +7,12 @@ const modelConfigStore = useModelConfigStore()
 </script>
 
 <template>
-  <form class="model-form" @submit.prevent="modelConfigStore.saveModelConfig">
+  <form
+    class="model-form"
+    @input="modelConfigStore.markFormTouched"
+    @change="modelConfigStore.markFormTouched"
+    @submit.prevent="modelConfigStore.saveModelConfig"
+  >
     <label class="field">
       <span>配置名称</span>
       <input v-model="modelConfigStore.form.displayName" type="text" autocomplete="off" />
@@ -44,40 +49,52 @@ const modelConfigStore = useModelConfigStore()
 
     <label class="field field--full">
       <span>API Key</span>
-      <input
-        v-model="modelConfigStore.form.apiKey"
-        type="password"
-        :placeholder="modelConfigStore.apiKeyPlaceholder"
-        autocomplete="off"
-      />
+      <div class="secret-input">
+        <input
+          v-model="modelConfigStore.form.apiKey"
+          :type="modelConfigStore.isApiKeyVisible ? 'text' : 'password'"
+          :placeholder="modelConfigStore.apiKeyPlaceholder"
+          autocomplete="off"
+        />
+        <button class="secondary-button" type="button" @click="modelConfigStore.toggleApiKeyVisible">
+          {{ modelConfigStore.isApiKeyVisible ? '隐藏' : '显示' }}
+        </button>
+        <button class="secondary-button" type="button" :disabled="!modelConfigStore.form.apiKey" @click="modelConfigStore.copyApiKey">
+          复制
+        </button>
+      </div>
     </label>
 
     <label class="field">
       <span>Chat 模型</span>
-      <select v-model="modelConfigStore.form.chatModel">
-        <option
-          v-for="model in modelConfigStore.chatModelOptions"
-          :key="model.id"
-          :value="model.id"
-        >
+      <input
+        v-model="modelConfigStore.form.chatModel"
+        type="text"
+        list="chat-model-options"
+        autocomplete="off"
+        placeholder="例如 qwen-plus 或 gpt-4.1-mini"
+      />
+      <datalist id="chat-model-options">
+        <option v-for="model in modelConfigStore.chatModelOptions" :key="model.id" :value="model.id">
           {{ model.name || model.id }}
         </option>
-      </select>
-      <input v-model="modelConfigStore.form.chatModel" type="text" autocomplete="off" />
+      </datalist>
     </label>
 
     <label class="field">
       <span>Embedding 模型</span>
-      <select v-model="modelConfigStore.form.embeddingModel">
-        <option
-          v-for="model in modelConfigStore.embeddingModelOptions"
-          :key="model.id"
-          :value="model.id"
-        >
+      <input
+        v-model="modelConfigStore.form.embeddingModel"
+        type="text"
+        list="embedding-model-options"
+        autocomplete="off"
+        placeholder="例如 text-embedding-v4"
+      />
+      <datalist id="embedding-model-options">
+        <option v-for="model in modelConfigStore.embeddingModelOptions" :key="model.id" :value="model.id">
           {{ model.name || model.id }}
         </option>
-      </select>
-      <input v-model="modelConfigStore.form.embeddingModel" type="text" autocomplete="off" />
+      </datalist>
     </label>
 
     <label class="field">

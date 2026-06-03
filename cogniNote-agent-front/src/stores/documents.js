@@ -33,6 +33,13 @@ export const useDocumentsStore = defineStore('documents', () => {
     }
   }
 
+  function ensureDocumentsLoaded() {
+    if (documents.value.length || isLoadingDocuments.value) {
+      return Promise.resolve()
+    }
+    return fetchDocuments()
+  }
+
   async function ingestDocuments() {
     const trimmedFolderPath = folderPath.value.trim()
     if (!trimmedFolderPath) {
@@ -85,6 +92,7 @@ export const useDocumentsStore = defineStore('documents', () => {
     recursive,
     stats,
     fetchDocuments,
+    ensureDocumentsLoaded,
     ingestDocuments,
     deleteDocument
   }
