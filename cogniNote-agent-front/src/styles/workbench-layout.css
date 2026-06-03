@@ -1,0 +1,187 @@
+/* 旧工作台布局与面板外壳：设置页仍复用这些结构，迁移时不要随手删除。 */
+
+.app-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0 44px;
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.connection-panel,
+.workspace {
+  border: 1px solid #d8e2e7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.connection-panel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 18px;
+}
+
+.panel-header,
+.section-title-line,
+.document-title-line,
+.search-hit__top {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-header {
+  font-weight: 800;
+}
+
+.connection-summary,
+.panel-message,
+.hint-message,
+.warning-message,
+.success-message,
+.error-message {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.connection-summary,
+.panel-message,
+.hint-message {
+  color: #526071;
+}
+
+.status-pill {
+  min-width: 72px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.status-pill--loading {
+  color: #715300;
+  background: #fff2bf;
+}
+
+.status-pill--ok {
+  color: #0f513f;
+  background: #d7f4e8;
+}
+
+.status-pill--error {
+  color: #842029;
+  background: #f8d7da;
+}
+
+.module-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.module-tab {
+  display: grid;
+  min-height: 132px;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #d8e2e7;
+  border-radius: 8px;
+  color: #526071;
+  background: #ffffff;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.module-tab:hover,
+.module-tab:focus-visible,
+.module-tab.router-link-active {
+  border-color: #1f6f68;
+  background: #f1faf7;
+  color: #31514d;
+}
+
+.module-tab__top {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.module-tab strong {
+  color: #101828;
+  font-size: 19px;
+}
+
+.module-tab em {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #31514d;
+  background: #dff2ee;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.workspace {
+  margin-top: 18px;
+  padding: 24px;
+}
+
+.workspace-header {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: end;
+  margin-bottom: 22px;
+}
+
+.workspace-header p:last-child {
+  margin: 0;
+  color: #526071;
+  line-height: 1.7;
+}
+
+.chat-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.chat-composer,
+.answer-panel,
+.sources-panel,
+.search-hit,
+.document-row,
+.source-row {
+  border: 1px solid #e1e8ec;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.chat-composer,
+.answer-panel,
+.sources-panel {
+  padding: 18px;
+}
+
+.chat-composer {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+

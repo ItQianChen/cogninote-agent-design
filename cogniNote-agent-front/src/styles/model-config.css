@@ -1,0 +1,56 @@
+/* 模型配置页样式：只维护 provider、模型候选和配置表单相关布局。 */
+
+.model-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.model-form__actions {
+  grid-column: 1 / -1;
+}
+
+.model-options-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #e1e8ec;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.model-options-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.model-option-chip {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid #dfe8ee;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.model-option-chip strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #253041;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-option-chip em {
+  flex: 0 0 auto;
+  color: #2b6f61;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+

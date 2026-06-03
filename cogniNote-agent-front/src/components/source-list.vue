@@ -5,6 +5,10 @@ defineProps({
   sources: {
     type: Array,
     required: true
+  },
+  compact: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -12,7 +16,7 @@ defineEmits(['ask-source'])
 </script>
 
 <template>
-  <section class="sources-panel" aria-label="引用来源">
+  <section class="sources-panel" :class="{ 'sources-panel--compact': compact }" aria-label="引用来源">
     <div class="section-title-line">
       <h3>引用来源</h3>
       <span>{{ sources.length }} sources</span>

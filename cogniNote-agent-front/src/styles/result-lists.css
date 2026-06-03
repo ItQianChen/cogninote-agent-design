@@ -1,0 +1,83 @@
+/* 答案、来源、文档和搜索结果列表：多个页面共用的可扫描信息块。 */
+
+.answer-panel {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-height: 360px;
+}
+
+.answer-text {
+  white-space: pre-wrap;
+  color: #253041;
+  line-height: 1.8;
+}
+
+.sources-panel,
+.search-results,
+.document-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.source-row,
+.document-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+.source-index {
+  display: grid;
+  flex: 0 0 48px;
+  min-height: 48px;
+  place-items: center;
+  border-radius: 6px;
+  color: #18413d;
+  background: #dff2ee;
+  font-weight: 900;
+}
+
+.source-main,
+.document-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.path-text {
+  overflow-wrap: anywhere;
+  font-family:
+    "Cascadia Mono",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+  font-size: 13px;
+}
+
+.hit-preview {
+  margin: 10px 0;
+  color: #354152;
+  line-height: 1.7;
+}
+
+.document-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.score-chip,
+.search-hit__top span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #18413d;
+  background: #dff2ee;
+  font-size: 12px;
+  font-weight: 800;
+}
+

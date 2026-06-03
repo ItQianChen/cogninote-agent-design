@@ -1,0 +1,151 @@
+/* 表单、按钮和交互控件：保持在业务页面样式之前，方便页面模块做局部覆盖。 */
+
+.field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.field span,
+.checkbox-field {
+  color: #475467;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #cfd8e6;
+  border-radius: 6px;
+  color: #182230;
+  background: #ffffff;
+}
+
+.field select {
+  appearance: none;
+}
+
+.field textarea {
+  min-height: 150px;
+  padding: 12px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.field--small {
+  width: 98px;
+}
+
+.field--small input {
+  text-align: center;
+}
+
+.field--full {
+  grid-column: 1 / -1;
+}
+
+.inline-controls,
+.button-row,
+.header-actions,
+.model-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+
+.segmented-control {
+  display: flex;
+  min-height: 44px;
+  overflow: hidden;
+  border: 1px solid #bdd2ca;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.segmented-control button {
+  min-width: 72px;
+  border: 0;
+  border-right: 1px solid #d7e2de;
+  color: #31514d;
+  background: transparent;
+  cursor: pointer;
+}
+
+.segmented-control button:last-child {
+  border-right: 0;
+}
+
+.segmented-control button.active {
+  color: #ffffff;
+  background: #1f6f68;
+}
+
+.primary-button,
+.secondary-button,
+.text-button {
+  min-height: 44px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.primary-button {
+  border: 0;
+  color: #ffffff;
+  background: #1f6f68;
+}
+
+.primary-button:hover:not(:disabled),
+.primary-button:focus-visible {
+  background: #175b55;
+}
+
+.secondary-button {
+  border: 1px solid #bdd2ca;
+  color: #1f6f68;
+  background: #f6fbf9;
+}
+
+.secondary-button:hover:not(:disabled),
+.secondary-button:focus-visible {
+  border-color: #1f6f68;
+}
+
+.text-button {
+  flex: 0 0 auto;
+  border: 0;
+  color: #9a3412;
+  background: transparent;
+}
+
+.text-button:hover,
+.text-button:focus-visible {
+  color: #7c2d12;
+  background: #fff3ed;
+}
+
+.primary-button:focus-visible,
+.secondary-button:focus-visible,
+.text-button:focus-visible,
+.module-tab:focus-visible,
+.segmented-control button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #9ee6d8;
+  outline-offset: 2px;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}

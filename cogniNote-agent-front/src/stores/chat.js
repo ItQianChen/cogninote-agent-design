@@ -52,7 +52,7 @@ export const useChatStore = defineStore('chat', () => {
   )
   const activeMessages = computed(() => activeSession.value?.messages || [])
   const hasMessages = computed(() => activeMessages.value.length > 0)
-  const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.value && useKnowledgeBase.value)
+  const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.value)
   const knowledgeDisabledHint = computed(() =>
     useKnowledgeBase.value ? '' : '纯对话将在第八阶段接入后端聊天记忆后启用。'
   )
@@ -91,7 +91,7 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
 
-    const session = activeSession.value || createAndActivateSession()
+    const session = activeSession.value
     syncSessionOptions(session)
     appendMessage(session, createMessage('user', trimmedQuestion))
     const assistantMessage = createMessage('assistant')
@@ -177,13 +177,6 @@ export const useChatStore = defineStore('chat', () => {
 
   function askAboutSource(source) {
     draft.value = `请解释 ${source.fileName} 中和这段内容相关的要点。`
-  }
-
-  function createAndActivateSession() {
-    const session = createSession()
-    sessions.value.unshift(session)
-    activeSessionId.value = session.id
-    return session
   }
 
   function appendMessage(session, message) {
