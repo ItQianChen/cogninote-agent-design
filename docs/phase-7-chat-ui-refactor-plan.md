@@ -23,6 +23,7 @@
 - Assistant 消息使用 Markdown 渲染，禁用原始 HTML，避免外部模型输出直接注入页面。
 - 引用来源默认折叠，用户点击后展开文件名、路径、标题/页码、chunk 和预览。
 - 对话设置从输入框上方的大块区域改为输入框右侧按钮触发的浮层，包含知识库开关、关键词/向量/混合模式和 Top K。
+- 对话设置浮层拆成独立 `chat-settings-popover.vue` 组件，使用 `props -> emit -> chat store setter` 的单向数据流，不再让原生 checkbox / number input 直接 `v-model` 到 Pinia store，避免摘要状态和表单控件显示分叉。
 - 发送/停止使用右侧圆形图标按钮；未输入时置灰，输入后点亮，生成中显示旋转按钮并用于停止对话。
 - SSE `conversationId` 保留为协议字段，但不在用户界面展示。
 - 设置页内部用分段入口归拢系统状态、知识库管理、模型配置三个区域，复用现有知识库和模型配置逻辑。
@@ -36,6 +37,8 @@
 - `src/styles/` 拆分为基础、控件、桌面对话、结果列表、Markdown、主题和响应式样式模块，避免继续膨胀单个 CSS 文件。
 - `markdown-renderer.vue` 只负责把模型输出渲染为受控 Markdown，不承担消息状态和来源展示。
 - `source-list.vue` 内部维护折叠状态，消息组件只负责传入 sources。
+- `chat-settings-popover.vue` 内部使用受控 switch 表达“使用知识库”，并通过事件更新检索模式和 Top K，避免浏览器默认 checkbox 样式与主题样式冲突。
+- `chat` store 对 `useKnowledgeBase`、`mode`、`topK` 做统一归一化，并在设置变化时立即写回当前临时会话，避免关闭浮层或切换会话后设置丢失。
 - `theme` store 只管理主题偏好和 `html` 根节点 class，具体颜色变量由 `theme.css` 承载。
 - Spring Boot 业务日志写入 `%APPDATA%/CogniNote/logs/app.log`，Tauri 后端启动输出写入 `%APPDATA%/CogniNote/logs/desktop-backend.log`，避免桌面版出错时无日志可查。
 
@@ -65,6 +68,8 @@
 - Markdown 回答能渲染标题、列表、代码块和链接，原始 HTML 不执行。
 - 引用来源可折叠/展开，默认不挤占对话流。
 - 对话设置浮层打开/关闭正常，发送/停止按钮状态和 tooltip 正常。
+- 勾选或关闭“使用知识库”后，关闭再打开对话设置浮层，switch 状态、顶部摘要和当前会话设置保持一致。
+- 修改关键词/向量/混合模式或 Top K 后，浮层摘要、请求参数和当前临时会话设置保持一致。
 - 深色/夜间与日间主题切换后刷新页面仍保持选择。
 - 刷新 `/chat`、`/settings` 不白屏。
 

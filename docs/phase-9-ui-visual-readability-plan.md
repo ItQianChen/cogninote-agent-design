@@ -43,6 +43,7 @@
   - 首页空状态卡片缩小阴影，避免像漂浮广告卡。
   - 顶部状态 pill 降低亮度，未配置状态使用温和警示色而不是高亮色。
   - 输入区 placeholder、禁用发送按钮和提示文字提高可读性。
+  - 对话设置浮层使用受控 switch、分段检索模式和紧凑 Top K 输入，不再使用原生 checkbox 作为视觉状态源。
 
 ## Design Principles
 
@@ -143,6 +144,8 @@ font-family:
   - 空状态卡片减少宽度和阴影。
   - 顶部状态 pill 使用低饱和背景，未配置状态使用 warning token。
   - 输入区按钮保持 44px 最小点击尺寸。
+  - 对话设置浮层拆到 `chat-settings-popover.vue`，由 `props -> emit -> chat store setter` 驱动，避免 Pinia 状态、浮层摘要和原生表单控件显示不一致。
+  - “使用知识库”改为受控 switch，Top K 输入固定宽度并在窄屏降级为单列，避免设置面板撑开或遮挡输入框。
 - `SettingsView`
   - Header 高度收敛，title 不超过页面视觉重心。
   - Tab/section 之间使用统一间距。
@@ -174,6 +177,7 @@ font-family:
   - 模型配置页长 URL、模型 ID、时间字段不会撑破卡片或大字号挤压。
   - 设置页顶部 header 高度适中，tab 不抢主内容视觉重心。
   - 聊天输入区、发送/停止按钮、设置浮层状态清晰。
+  - 对话设置浮层关闭再打开后，知识库 switch、检索模式、Top K 与顶部摘要保持一致。
 - 浏览器截图验收：
   - 至少验证 1440px、1920px 宽度。
   - 如果条件允许，用 Playwright 或浏览器截图对比日间/夜间两套主题。
