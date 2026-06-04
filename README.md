@@ -187,6 +187,7 @@ mvn -Pwith-frontend package
 | [Phase 6 计划](docs/phase-6-desktop-app-delivery-plan.md) | Windows 桌面交付阶段计划 |
 | [Phase 9 计划](docs/phase-9-ui-visual-readability-plan.md) | UI 视觉可读性与主题系统修正 |
 | [Phase 10 计划](docs/phase-10-knowledge-base-folders-plan.md) | 知识库目录管理与局部索引重建 |
+| [Phase 11 计划](docs/phase-11-agent-model-runtime-refactor-plan.md) | 智能体模型运行时重构 |
 
 阶段计划文档保留在 `docs/phase-*.md`，用于追踪项目演进，不作为最终用户手册。
 
@@ -196,7 +197,8 @@ mvn -Pwith-frontend package
 
 - API Key 本地加密或凭据管理。
 - 桌面会话令牌保护。
-- SQLite 聊天记忆和纯模型对话（顺延到第十一阶段）。
+- 智能体模型运行时重构（第十一阶段）。
+- SQLite 聊天记忆和纯模型对话（顺延到第十二阶段）。
 - 更完整的发布验收和安装包测试。
 - 托盘、自动更新、代码签名等桌面增强能力。
 

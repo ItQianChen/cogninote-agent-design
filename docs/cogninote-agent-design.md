@@ -93,8 +93,10 @@ Vue 3 前端
       └─ 模型配置
 
 Spring Boot 后端
-  ├─ Chat API
-  ├─ Agent / RAG 调度
+  ├─ Chat API / SSE Adapter
+  ├─ Agent Execution Service
+  ├─ AI Runtime (DashScope / OpenAI-compatible)
+  ├─ Knowledge Context Provider
   ├─ KnowledgeStore 接口
   ├─ LuceneKnowledgeStore
   ├─ Document Ingestion Pipeline
@@ -260,9 +262,25 @@ app:
 
 未配置 API Key 时，关键词检索仍应可用；向量索引和混合检索需要明确提示 Embedding 未启用。Spring AI Alibaba 的若干 DashScope 自动配置默认会尝试创建模型 Bean，因此第三阶段默认把 `spring.ai.model.embedding.text` 设为 `none`，并关闭 Agent/Chat/Image 等未使用模块；启用向量检索时再通过环境变量打开 DashScope Embedding。
 
-### 5.5 LLM Gateway
+### 5.5 AI Runtime 与 LLM Gateway
 
-所有大模型调用统一通过 LLM Gateway。对话层同样使用 Spring AI 的 `ChatModel` / `ChatClient` 抽象，默认实现接 Spring AI Alibaba DashScope。不要让前端或 RAG 业务逻辑直接绑定某个厂商 SDK。
+所有大模型调用必须统一收敛到模型运行时层。对话层不直接绑定某个厂商 SDK，也不直接知道 OpenAI-compatible 的 HTTP 细节或 DashScope 的 endpoint 选择规则。
+
+当前实现状态：
+
+- `DASHSCOPE` 使用 Spring AI Alibaba 原生 `DashScopeChatModel` / `DashScopeEmbeddingModel`。
+- `OPENAI_COMPATIBLE` 当前仍使用自研 HTTP client 调用用户配置的 `Base URL + /chat/completions` 与 `Base URL + /embeddings`。
+- `RagChatService` 仍承担检索、Prompt 拼装和模型调用编排，后续继续叠加聊天记忆会让职责变得很重。
+
+第十一阶段将把这里重构为统一 AI Runtime：
+
+- `AiRuntimeFactory` 根据 active `ModelConfig` 创建和缓存 Chat / Embedding runtime。
+- `DashScopeRuntime` 继续封装 Spring AI Alibaba，并保留 DashScope 默认百炼地址和多模态 endpoint 判断。
+- `OpenAiCompatibleRuntime` 使用 Spring AI OpenAI 官方模型实现，读取用户自定义 Base URL、API Key、模型 ID 和模型参数。
+- 旧 `OpenAiCompatibleClient` / `OpenAiCompatibleEmbeddingClient` 不进入第十一阶段新架构；迁移完成后删除，避免长期维护两套 OpenAI-compatible 调用路径。
+- `AgentExecutionService` 和 `CogninoteChatAgent` 负责对话编排，Controller 只负责 SSE 适配。
+
+这次重构的边界是“整理调用层”，不是“把 RAG 强行改成 Spring AI VectorStore”。当前 Lucene + SQLite 的检索、来源展示和降级逻辑继续由 CogniNote 自己掌控。
 
 用户在前端配置：
 
@@ -334,10 +352,10 @@ Lucene 混合检索
 - 输入区右侧放置对话设置按钮和发送/停止图标按钮，避免设置项挤压文本框。
 - 对话设置通过右侧浮层展开，包含“使用知识库”、关键词/向量/混合检索模式和 Top K。
 - 对话设置浮层由独立 `chat-settings-popover.vue` 维护，只通过 `props -> emit -> chat store setter` 更新状态；不要让原生 checkbox / number input 直接 `v-model` 到 Pinia store，避免浮层摘要、表单控件和当前会话设置分叉。
-- “使用知识库”在界面上使用受控 switch 表达。关闭后第七至第十阶段不发送纯对话请求，只提示纯模型对话会在第十一阶段接入。
+- “使用知识库”在界面上使用受控 switch 表达。关闭后第七至第十一阶段不发送纯对话请求，只提示纯模型对话会在第十二阶段接入。
 - `conversationId` 只作为 SSE 协议内部字段，不在前端界面显示。
 
-第七阶段的会话是前端运行期临时状态，刷新页面后不承诺恢复。真正跨重启聊天记忆顺延到第十一阶段，通过 SQLite 会话表和消息表实现。
+第七阶段的会话是前端运行期临时状态，刷新页面后不承诺恢复。第十一阶段先重构智能体执行管线和模型运行时；真正跨重启聊天记忆顺延到第十二阶段，通过 SQLite 会话表和消息表实现。
 
 ### 6.2 设置页
 
@@ -723,7 +741,15 @@ POST   /api/chat/stream
 - 删除目录不删除用户本机原始文件
 - 桌面环境接入系统文件夹选择器，浏览器开发态保留手动路径输入
 
-### Milestone 11：SQLite 聊天记忆
+### Milestone 11：智能体模型运行时重构
+
+- 新增统一 AI Runtime，收敛 DashScope 与 OpenAI-compatible 调用边界
+- 新增 Agent 执行层，拆分 Controller、RAG、Prompt、模型流职责
+- 抽离 Knowledge Context Provider，保留 Lucene + SQLite 来源展示和检索降级能力
+- OpenAI-compatible 迁移到 Spring AI OpenAI 官方模型实现，并保留用户自定义 Base URL
+- 为第十二阶段 SQLite ChatMemory 预留接口，但不新增会话表和消息表
+
+### Milestone 12：SQLite 聊天记忆
 
 - SQLite 保存会话和消息
 - 支持纯模型对话与 RAG 对话切换

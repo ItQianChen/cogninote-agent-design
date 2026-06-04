@@ -10,7 +10,7 @@
 
 本阶段目标是建立一套统一、克制、适合桌面知识库工具的视觉系统：文字清晰、对比舒适、界面层级稳定，聊天页、设置页、知识库页和模型配置页保持一致。
 
-原第九阶段“SQLite 聊天记忆”已顺延：第十阶段改做知识库目录管理与局部索引重建，SQLite 聊天记忆顺延为第十一阶段。
+原第九阶段“SQLite 聊天记忆”已顺延：第十阶段改做知识库目录管理与局部索引重建，第十一阶段改做智能体模型运行时重构，SQLite 聊天记忆顺延为第十二阶段。
 
 计划文件落地路径：`docs/phase-9-ui-visual-readability-plan.md`。
 
@@ -162,9 +162,9 @@ font-family:
 - 新增 `docs/phase-9-ui-visual-readability-plan.md`。
 - 更新 `docs/cogninote-agent-design.md`：
   - Milestone 9 改为 UI 视觉可读性与主题系统修正。
-  - SQLite 聊天记忆顺延到 Milestone 11。
+  - SQLite 聊天记忆顺延到 Milestone 12。
   - 前端页面设计补充视觉系统约束。
-- 更新 `docs/phase-7-chat-ui-refactor-plan.md`、`docs/phase-8-multi-model-configuration-plan.md` 和 `docs/phase-10-knowledge-base-folders-plan.md` 中关于聊天记忆阶段的描述。
+- 更新 `docs/phase-7-chat-ui-refactor-plan.md`、`docs/phase-8-multi-model-configuration-plan.md`、`docs/phase-10-knowledge-base-folders-plan.md` 和 `docs/phase-11-agent-model-runtime-refactor-plan.md` 中关于聊天记忆阶段的描述。
 - README 只增加 Phase 9 计划入口，不展开完整设计细节。
 
 ## Test Plan
@@ -192,4 +192,4 @@ font-family:
 - 不引入大型 UI 组件库。
 - 继续保留当前 Vue Router、Pinia、现有组件拆分结构。
 - 图标继续优先使用 `lucide-vue-next`。
-- SQLite 聊天记忆、纯模型对话和会话持久化顺延到第十一阶段。
+- SQLite 聊天记忆、纯模型对话和会话持久化顺延到第十二阶段。

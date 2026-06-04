@@ -4,6 +4,8 @@ CogniNote 第八阶段开始使用多模型配置中心。对话模型和 Embedd
 
 配置保存在本机 SQLite 的 `model_configs` 表中，应用启动后无需重启即可读取最新 active 配置。旧的单行 `model_config` 会在启动时自动拆成 Chat 和 Embedding 两条配置。
 
+第十一阶段会把这些 active 配置统一交给 AI Runtime 消费：DashScope Runtime 封装 Spring AI Alibaba，OpenAI-compatible Runtime 使用 Spring AI OpenAI 官方模型实现，并保留用户自定义 Base URL。现有自研 OpenAI-compatible HTTP client 不进入新架构，迁移完成后删除。
+
 ## Provider 类型
 
 ### DashScope

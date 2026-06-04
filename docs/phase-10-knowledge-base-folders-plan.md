@@ -2,7 +2,7 @@
 
 ## Summary
 
-第十阶段改为调整知识库功能，原第十阶段“SQLite 聊天记忆”顺延为第十一阶段。
+第十阶段改为调整知识库功能，原第十阶段“SQLite 聊天记忆”继续顺延；第十一阶段改做智能体模型运行时重构，SQLite 聊天记忆顺延为第十二阶段。
 
 本阶段把当前“导入目录后只显示散落文档”的模式升级为“知识库文件夹”管理：用户通过系统文件夹选择器导入本地目录，目录记录写入 SQLite 并显示在知识库页；每个目录可启用/停用、删除、重新扫描并重建该目录索引；文档列表按目录折叠/展开展示。Lucene 仍是可重建索引，SQLite 仍是事实来源。
 
@@ -23,7 +23,8 @@
   - 文档列表按知识库文件夹分组，每个文件夹支持展开/收起、启用/停用、重建、删除。
   - 默认索引地址文本调整为更清晰的主题 token，保证日间/夜间模式可读。
 - 文档阶段顺延：
-  - 原第十阶段“SQLite 聊天记忆”改为第十一阶段。
+  - 原第十阶段“SQLite 聊天记忆”改为第十二阶段。
+  - 新增第十一阶段“智能体模型运行时重构”，先整理 OpenAI-compatible 与 DashScope 调用层。
   - 同步更新 `docs/cogninote-agent-design.md`、`docs/phase-7-chat-ui-refactor-plan.md`、`docs/phase-8-multi-model-configuration-plan.md`、`docs/phase-9-ui-visual-readability-plan.md` 中的阶段引用。
   - README 只更新当前状态和文档入口，不塞入完整 API 细节。
 
@@ -106,7 +107,7 @@ npm --prefix cogniNote-agent-front run build
 
 ## Assumptions
 
-- 第十阶段只做知识库目录管理，不做 SQLite 聊天记忆；聊天记忆顺延为第十一阶段。
+- 第十阶段只做知识库目录管理，不做 SQLite 聊天记忆；第十一阶段先做智能体模型运行时重构，聊天记忆顺延为第十二阶段。
 - 用户原始文件始终留在本地原路径，应用只保存目录路径、文档元数据、解析 chunks 和索引。
 - 停用目录应立即从搜索/RAG 中消失，因此清理 Lucene 条目但保留 SQLite 解析数据。
 - 历史散落文档不自动归属目录，避免错误猜测用户文件夹边界。
