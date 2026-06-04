@@ -1,6 +1,8 @@
 package com.itqianchen.agentdesign.service.knowledge;
 
 import com.itqianchen.agentdesign.common.api.ResourceNotFoundException;
+import com.itqianchen.agentdesign.domain.document.DocumentStatus;
+import com.itqianchen.agentdesign.domain.document.KnowledgeDocument;
 import com.itqianchen.agentdesign.domain.ingestion.DocumentIdentity;
 import com.itqianchen.agentdesign.domain.ingestion.DocumentParseException;
 import com.itqianchen.agentdesign.domain.knowledge.KnowledgeFolder;
@@ -75,9 +77,7 @@ public class KnowledgeFolderService {
         );
         long now = System.currentTimeMillis();
         knowledgeFolderRepository.markIngested(folder.id(), now);
-        if (response.parsedCount() > 0 || response.skippedCount() > 0) {
-            knowledgeFolderRepository.markIndexed(folder.id(), now);
-        }
+        markFolderIndexedIfAllParsedDocumentsIndexed(folder.id(), now);
         log.info("knowledge_folder_imported folderId={} folderPath={} scanned={} parsed={} skipped={} failed={}",
                 folder.id(),
                 folder.folderPath(),
@@ -87,6 +87,26 @@ public class KnowledgeFolderService {
                 response.failedCount()
         );
         return response;
+    }
+
+    private void markFolderIndexedIfAllParsedDocumentsIndexed(String folderId, long indexedAt) {
+        List<KnowledgeDocument> parsedDocuments = documentRepository.findByKnowledgeFolderIdOrderByUpdatedAtDesc(folderId)
+                .stream()
+                .filter(document -> document.status() == DocumentStatus.PARSED)
+                .toList();
+        if (parsedDocuments.isEmpty()) {
+            return;
+        }
+        boolean allIndexed = parsedDocuments.stream()
+                .allMatch(document -> document.indexedAt() != null);
+        if (allIndexed) {
+            /*
+             * 导入流程会尝试增量写 Lucene，但单文档索引失败会把 indexed_at 清空。
+             * 目录级 last_indexed_at 只能在目录内 PARSED 文档全部完成索引后更新，避免 UI 显示“已索引”
+             * 而搜索实际缺失部分文档。
+             */
+            knowledgeFolderRepository.markIndexed(folderId, indexedAt);
+        }
     }
 
     @Transactional
