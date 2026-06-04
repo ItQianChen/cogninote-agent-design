@@ -1,6 +1,7 @@
 package com.itqianchen.agentdesign.model;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -57,5 +58,35 @@ class ModelConfigControllerTests {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.chat.role").value("CHAT"))
                 .andExpect(jsonPath("$.data.embedding.role").value("EMBEDDING"));
+    }
+
+    @Test
+    void listConfigsRejectsInvalidRoleWithUnifiedBadRequest() throws Exception {
+        mockMvc.perform(get("/api/model-configs").param("role", "invalid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("MODEL_CONFIGURATION"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Invalid role")));
+    }
+
+    @Test
+    void embeddingConnectionTestReturnsExplicitSkipMessage() throws Exception {
+        mockMvc.perform(post("/api/model-configs/test")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "role": "EMBEDDING",
+                                  "provider": "DASHSCOPE",
+                                  "displayName": "DashScope Embedding",
+                                  "baseUrl": "https://dashscope.aliyuncs.com/api/v1",
+                                  "apiKey": "sk-test",
+                                  "modelName": "text-embedding-v4",
+                                  "embeddingDimensions": 1024
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.ok").value(true))
+                .andExpect(jsonPath("$.data.message").value(org.hamcrest.Matchers.containsString("未发起向量调用")));
     }
 }

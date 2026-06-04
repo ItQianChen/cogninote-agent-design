@@ -146,6 +146,35 @@ class ModelConfigServiceTests {
     }
 
     @Test
+    void deleteActiveConfigPromotesRemainingConfig() {
+        ModelConfig active = modelConfigService.create(chatRequest(
+                "DASHSCOPE",
+                "Chat A",
+                "sk-active",
+                ModelConfigDefaults.BASE_URL,
+                "qwen-plus",
+                0.7,
+                8
+        ));
+        ModelConfig standby = modelConfigService.create(chatRequest(
+                "DASHSCOPE",
+                "Chat B",
+                "sk-standby",
+                ModelConfigDefaults.BASE_URL,
+                "qwen-max",
+                0.4,
+                6
+        ));
+
+        modelConfigService.delete(active.id());
+
+        ModelConfig promoted = modelConfigService.requireActiveChatConfigured();
+        assertThat(promoted.id()).isEqualTo(standby.id());
+        assertThat(promoted.active()).isTrue();
+        assertThat(promoted.modelName()).isEqualTo("qwen-max");
+    }
+
+    @Test
     void saveLegacyRequestSplitsChatAndEmbedding() {
         modelConfigService.save(new ModelConfigRequest(
                 null,

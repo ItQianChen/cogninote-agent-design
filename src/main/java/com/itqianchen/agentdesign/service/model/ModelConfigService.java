@@ -115,11 +115,19 @@ public class ModelConfigService {
             throw new ModelConfigurationException("Cannot delete the only active " + roleLabel(config.role()) + " config");
         }
         modelConfigRepository.delete(id);
-        if (config.active()) {
-            List<ModelConfig> remaining = modelConfigRepository.findAll(config.role());
-            if (!remaining.isEmpty() && remaining.stream().noneMatch(ModelConfig::active)) {
-                modelConfigRepository.activate(remaining.getFirst().id(), System.currentTimeMillis());
-            }
+        ensureRoleHasActiveConfig(config.role());
+    }
+
+    private void ensureRoleHasActiveConfig(ModelConfigRole role) {
+        List<ModelConfig> remaining = modelConfigRepository.findAll(role);
+        if (remaining.isEmpty()) {
+            // 并发删除可能绕过“删除前计数”检查。这里兜底创建默认配置，
+            // 保证 Chat/Embedding 任一角色都不会进入无配置、无 active 的坏状态。
+            modelConfigRepository.save(defaultConfig(role, true));
+            return;
+        }
+        if (remaining.stream().noneMatch(ModelConfig::active)) {
+            modelConfigRepository.activate(remaining.getFirst().id(), System.currentTimeMillis());
         }
     }
 
