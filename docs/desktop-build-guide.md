@@ -281,7 +281,13 @@ macOS 图标位于：
 cogniNote-agent-front/src-tauri/icons/icon.icns
 ```
 
-macOS 配置只引用 `.icns`，Windows 配置只引用 `.ico`。不要把两个平台图标混进同一份 Tauri 配置。
+Tauri 编译期默认窗口图标源位于：
+
+```text
+cogniNote-agent-front/src-tauri/icons/icon.png
+```
+
+`icon.png` 是 `tauri::generate_context!()` 在 macOS/Linux 编译期读取的运行时默认窗口图标源。macOS bundle 配置仍然只引用 `.icns`，Windows bundle 配置仍然只引用 `.ico`。不要把两个平台的 bundle 图标混进同一份 Tauri 配置，也不要删除 `icon.png`，否则 GitHub macOS 构建会在 Rust 编译阶段报 `failed to open icon ... icons/icon.png`。
 
 ## 常见问题
 

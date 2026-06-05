@@ -2,4 +2,5 @@
 *.sh text eol=lf
 .github/workflows/*.yml text eol=lf
 cogniNote-agent-front/src-tauri/icons/*.icns binary
+cogniNote-agent-front/src-tauri/icons/*.png binary
 *.cmd text eol=crlf
