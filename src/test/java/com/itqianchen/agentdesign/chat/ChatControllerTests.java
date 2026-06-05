@@ -16,9 +16,12 @@ import com.itqianchen.agentdesign.dto.model.ModelConfigRequest;
 import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -60,6 +63,8 @@ class ChatControllerTests {
 
     @BeforeEach
     void clearState() {
+        jdbcTemplate.update("DELETE FROM chat_messages");
+        jdbcTemplate.update("DELETE FROM chat_sessions");
         jdbcTemplate.update("DELETE FROM chunks");
         jdbcTemplate.update("DELETE FROM documents");
         jdbcTemplate.update("DELETE FROM model_configs");
@@ -170,6 +175,16 @@ class ChatControllerTests {
                     return new AiChatRuntime() {
                         @Override
                         public Flux<String> stream(Prompt prompt) {
+                            return Flux.just("可以使用 Launch4j 打包。");
+                        }
+
+                        @Override
+                        public Flux<String> stream(
+                                String systemPrompt,
+                                String userMessage,
+                                List<Advisor> advisors,
+                                Map<String, Object> advisorParams
+                        ) {
                             return Flux.just("可以使用 Launch4j 打包。");
                         }
 

@@ -28,12 +28,16 @@ public record ChatPromptProperties(
             requireText(user, "app.chat.prompts.rag.user");
             requireText(emptyContext, "app.chat.prompts.rag.empty-context");
             /*
-             * RAG 用户提示词由配置文件管理，但问题和上下文必须由运行时填充。
-             * 启动期校验占位符，能避免后续改提示词时把知识库上下文静默丢掉。
+             * 第十三阶段后知识库上下文由 Spring AI RAG Advisor 注入，
+             * user 模板只负责承载当前用户问题，不能再要求 {context} 占位符。
              */
-            if (!user.contains("{question}") || !user.contains("{context}")) {
+            if (!user.contains("{question}")) {
                 throw new IllegalArgumentException(
-                        "app.chat.prompts.rag.user must contain {question} and {context}");
+                        "app.chat.prompts.rag.user must contain {question}");
+            }
+            if (user.contains("{context}")) {
+                throw new IllegalArgumentException(
+                        "app.chat.prompts.rag.user must not contain {context}; RAG context is injected by Spring AI Advisor");
             }
         }
     }

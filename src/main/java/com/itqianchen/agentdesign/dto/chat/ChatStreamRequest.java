@@ -8,7 +8,9 @@ public record ChatStreamRequest(
         @NotBlank @Size(max = 4000) String question,
         Integer topK,
         SearchMode mode,
-        @Size(max = 80) String requestId
+        @Size(max = 80) String requestId,
+        @Size(max = 80) String conversationId,
+        Boolean useKnowledgeBase
 ) {
 }
 

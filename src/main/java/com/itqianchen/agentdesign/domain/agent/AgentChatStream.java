@@ -10,6 +10,7 @@ public record AgentChatStream(
         String conversationId,
         SearchMode retrievalMode,
         List<RagSourceResponse> sources,
-        Flux<String> answer
+        Flux<String> answer,
+        Runnable onCancel
 ) {
 }

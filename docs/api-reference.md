@@ -32,6 +32,7 @@
 
 - `POST /api/chat/stream` 返回 `text/event-stream`，不包装。
 - `POST /api/chat/stream/{requestId}/cancel` 是普通 JSON API，用于用户显式停止当前模型流。
+- `/api/chat/sessions...` 是普通 JSON API，会话和消息都以 SQLite 为事实来源。
 - `DELETE /api/documents/{id}` 删除成功时返回 `204 No Content`。
 - `PATCH /api/knowledge-folders/{id}/enabled` 和 `DELETE /api/knowledge-folders/{id}` 成功时返回 `204 No Content`。
 
@@ -404,7 +405,94 @@ POST /api/model-config/models
 }
 ```
 
-## RAG 流式对话
+## 聊天会话
+
+第十三阶段开始，左侧会话列表和历史消息都由后端 SQLite 提供。前端刷新后通过会话 API 恢复消息、引用来源、检索模式和 stopped/error 状态。
+
+### 查询会话列表
+
+```text
+GET /api/chat/sessions
+```
+
+返回按 `updatedAt` 倒序排列的会话摘要。摘要不携带完整消息，只包含 `messageCount`：
+
+```json
+[
+  {
+    "id": "conversation-1",
+    "title": "如何打包？",
+    "summary": null,
+    "useKnowledgeBase": true,
+    "mode": "HYBRID",
+    "topK": 8,
+    "createdAt": 1780000000000,
+    "updatedAt": 1780000000000,
+    "messageCount": 2,
+    "messages": []
+  }
+]
+```
+
+### 创建会话
+
+```text
+POST /api/chat/sessions
+```
+
+请求体可为空，也可提供默认检索设置：
+
+```json
+{
+  "title": "新对话",
+  "useKnowledgeBase": true,
+  "mode": "HYBRID",
+  "topK": 8
+}
+```
+
+### 查询会话详情
+
+```text
+GET /api/chat/sessions/{conversationId}
+```
+
+返回会话详情和完整消息列表。assistant 消息会带回 `sources`，用于刷新页面后恢复引用来源。
+
+### 更新会话
+
+```text
+PATCH /api/chat/sessions/{conversationId}
+```
+
+可更新标题和该会话默认检索设置：
+
+```json
+{
+  "title": "桌面打包问题",
+  "useKnowledgeBase": true,
+  "mode": "KEYWORD",
+  "topK": 5
+}
+```
+
+### 删除会话
+
+```text
+DELETE /api/chat/sessions/{conversationId}
+```
+
+软删除会话，不影响知识库文档、chunks、索引或用户原始文件。
+
+### 清空会话消息
+
+```text
+DELETE /api/chat/sessions/{conversationId}/messages
+```
+
+删除该会话下的消息，同时清空会话摘要和摘要覆盖序号，返回清空后的会话详情。
+
+## RAG / 纯模型流式对话
 
 ```text
 POST /api/chat/stream
@@ -415,13 +503,15 @@ POST /api/chat/stream
 ```json
 {
   "requestId": "前端生成的请求 ID，可省略",
+  "conversationId": "conversation-xxx，可省略",
   "question": "这个项目如何打包？",
+  "useKnowledgeBase": true,
   "topK": 8,
   "mode": "HYBRID"
 }
 ```
 
-`requestId`、`topK` 和 `mode` 可省略。默认使用后端生成的 `requestId`、active Chat 配置中的 `defaultTopK` 与 `HYBRID`。前端需要支持停止生成时，应在请求体中传入稳定 `requestId`，然后调用取消接口。
+`requestId`、`conversationId`、`topK`、`mode` 和 `useKnowledgeBase` 可省略。默认使用后端生成的 `requestId/conversationId`、active Chat 配置中的 `defaultTopK`、`HYBRID` 和 `useKnowledgeBase=true`。前端需要支持停止生成时，应在请求体中传入稳定 `requestId`，然后调用取消接口。
 
 SSE 事件格式：
 
@@ -445,14 +535,18 @@ data: {"message":"..."}
 meta -> delta -> done
 ```
 
-异常时输出 `error`。如果 `HYBRID` 或 `VECTOR` 因 Embedding 不可用失败，RAG 服务会自动降级到 `KEYWORD`，并在 `meta.retrievalMode` 中返回实际检索模式。
+异常时输出 `error`。如果 `HYBRID` 或 `VECTOR` 因 Embedding 不可用失败，RAG 服务会自动降级到 `KEYWORD`，并在 `meta.retrievalMode` 中返回实际检索模式。`useKnowledgeBase=false` 时不挂 RAG Advisor，`retrievalMode` 为 `null`、`sources` 为空，只注入会话记忆。
 
 重要约束：
 
+- SQLite 会保存全量会话历史。模型输入由“会话摘要 + token 预算内最近原文消息”组成；默认至少保留最近 8 条原文消息，但不会把固定条数作为唯一记忆策略。
+- RAG 不再手动把 `{context}` 拼进 user prompt。知识库片段通过 Spring AI `RetrievalAugmentationAdvisor` 和 `CogninoteDocumentRetriever` 注入。
+- Spring AI `Document.metadata` 不允许出现 `null`。后端转换 RAG sources 时会省略缺失的 `heading/pageNumber` 等可选字段，前端仍以 SSE `meta.sources` 作为引用来源展示事实来源。
 - `delta.text` 是模型原始流式文本增量，可能只包含一个空格、换行或缩进。客户端和服务端都不能对它做 `trim()`、`trimStart()` 或 `isBlank()` 过滤，否则 Markdown 标题、列表、代码块和表格可能被破坏。
 - 前端手写 SSE parser 时，`data:` 后最多只移除一个协议分隔空格；内容本身的前导空白必须保留。
 - `POST /api/chat/stream` 已经写出 `text/event-stream` 后，错误不能再按 JSON `ApiResponse` 写回。能进入业务流的错误应发送 SSE `error` 事件；连接关闭或容器异常只能关闭响应。
-- 普通浏览器刷新、切页或 SSE 连接断开不代表用户停止生成。后端仍会消费模型流到结束，为第十三阶段完整保存 assistant 消息预留空间。
+- 普通浏览器刷新、切页或 SSE 连接断开不代表用户停止生成。后端仍会消费模型流到结束并在完成后保存完整 assistant 消息。
+- 用户显式停止时，取消接口会中断模型订阅，并把已生成的 assistant 片段保存为 `STOPPED`。
 
 ### 取消流式生成
 

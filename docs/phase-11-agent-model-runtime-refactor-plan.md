@@ -13,7 +13,7 @@
 - `ModelRoutingLlmGateway` 只做 provider 分流，无法承载后续记忆、工具、Advisor、取消保存等智能体能力。
 - `DASHSCOPE` 走 Spring AI Alibaba 原生模型，`OPENAI_COMPATIBLE` 目前走自研 HTTP client，两套调用行为缺少统一运行时边界。
 
-第十一阶段的目标是先把“模型运行时”和“智能体执行”从 RAG 业务里拆出来。第十三阶段再在这个清晰边界上接 SQLite 会话表、消息表和短期聊天记忆。
+第十一阶段的目标是先把“模型运行时”和“智能体执行”从 RAG 业务里拆出来。第十三阶段已在这个边界上接入 SQLite 会话表、消息表、分层聊天记忆和 Spring AI RAG Advisor。
 
 ## Reference Findings
 
@@ -52,17 +52,17 @@
   - `AgentEvent` 表达 `meta/delta/error/done` 等内部事件。
   - Controller 只把内部事件映射成 SSE，不参与 Prompt、RAG、模型调用细节。
 - 抽离 RAG 上下文：
-  - `KnowledgeContextProvider` 只负责调用知识库检索、降级、来源补全和上下文长度控制。
+  - 第十一阶段先由 `KnowledgeContextProvider` 负责调用知识库检索、降级、来源补全和上下文长度控制。
   - 向量检索和混合检索仍由 `LuceneKnowledgeStore -> EmbeddingGateway -> AiRuntimeFactory` 链路生成查询向量，必须读取 active `EMBEDDING` 配置。
-  - `PromptAssembler` 只负责把系统提示词、知识上下文、用户问题组装为模型消息。
+  - 第十三阶段后，知识库片段由 `CogninoteDocumentRetriever` 交给 Spring AI `RetrievalAugmentationAdvisor` 注入，`PromptAssembler` 不再拼接 `{context}`。
 - OpenAI-compatible 和 DashScope 重构到同一运行时接口：
   - DashScope 保留 Spring AI Alibaba 原生实现。
   - OpenAI-compatible 迁移到 Spring AI OpenAI 模型实现，并保留用户自定义 Base URL。
   - 现有 `OpenAiCompatibleClient` / `OpenAiCompatibleEmbeddingClient` 不进入第十一阶段新架构；迁移完成后删除。
-- 为第十三阶段预留聊天记忆接口：
+- 聊天记忆现状补注：
   - 第十一阶段不新增 `chat_sessions` / `chat_messages` 表。
-  - 只新增 `ConversationMemoryPort` 或等价空实现接口，定义“读取最近 N 轮消息、保存用户消息、保存 assistant 消息”的边界。
-  - 第十三阶段再落 SQLite 实现。
+  - 最终第十三阶段没有保留第十一阶段设想的旧空记忆接口，而是采用 `SQLiteChatMemory` + `CogninoteMemoryAdvisor`。
+  - 记忆策略为 SQLite 全量保存，模型输入按“会话摘要 + token 预算内最近原文消息”生成，不写死固定条数。
 
 ## Backend Architecture
 
@@ -85,11 +85,12 @@ src/main/java/com/itqianchen/agentdesign/
       AgentExecutionService.java
       KnowledgeContextProvider.java
       PromptAssembler.java
-      ConversationMemoryPort.java
     ai/
       DashScopeRuntimeFactory.java
       OpenAiCompatibleRuntimeFactory.java
     chat/
+      SQLiteChatMemory.java
+      CogninoteMemoryAdvisor.java
       ChatSseEventMapper.java
 ```
 
@@ -110,7 +111,7 @@ src/main/java/com/itqianchen/agentdesign/
 - `service.agent.PromptAssembler`
   - 读取 `ChatPromptProperties`。
   - 组装 system/user messages。
-  - 后续第十三阶段在这里接入 memory messages 或 memory advisor 参数。
+  - 第十三阶段后只承载 system prompt 和当前用户问题，不再手动拼接 RAG `{context}` 或聊天历史。
 - `service.ai.AiRuntimeFactory`
   - 根据 `ModelConfig.provider()` 创建 runtime。
   - 保证同一配置对应的模型实例可复用。
@@ -164,7 +165,6 @@ CogninoteChatAgent
   ├─ 读取当前请求设置
   ├─ KnowledgeContextProvider 调用 KnowledgeStore 检索知识库
   │    └─ 向量/混合模式由 LuceneKnowledgeStore 通过 EmbeddingGateway 生成查询向量
-  ├─ ConversationMemoryPort 空实现预留
   ├─ PromptAssembler 组装 messages
   └─ AiChatRuntime.stream(...)
        ↓
@@ -187,7 +187,8 @@ SSE: meta -> delta -> done/error
 
 - `conversationId` 从前端传入或由后端创建并返回。
 - `useKnowledgeBase=false` 走纯模型对话。
-- `useKnowledgeBase=true` 走 RAG + 最近 N 轮会话记忆。
+- `useKnowledgeBase=true` 走 RAG + 分层会话记忆。
+- SQLite 保存全量历史，模型输入由会话摘要和 token 预算内最近原文消息组成。
 
 ## API Compatibility
 
@@ -243,7 +244,7 @@ done
 - Prompt 组装继续由 CogniNote 自己控制。
 - RAG 检索抽成 `KnowledgeContextProvider`，形成 advisor-like 的业务组件；向量查询仍通过 `KnowledgeStore -> EmbeddingGateway -> AiRuntimeFactory` 使用 active `EMBEDDING` runtime。
 - 日志、记忆、工具调用等通用增强能力在 Agent 层预留 Advisor 接入点。
-- 第十三阶段可实现 SQLite `ChatMemory`，并决定是用 Spring AI `MessageChatMemoryAdvisor`，还是继续用 CogniNote 自己的 memory message 注入。
+- 第十三阶段最终实现 SQLite `ChatMemory` 适配和 `CogninoteMemoryAdvisor`，RAG 改由 `CogninoteDocumentRetriever` + `RetrievalAugmentationAdvisor` 注入，不再手动拼 `{context}`。
 
 ## Logging And Observability
 
@@ -288,7 +289,7 @@ done
 - 新增 `CogninoteChatAgent`，承接原 RAG 对话编排职责。
 - 将 Prompt 构造拆到 `PromptAssembler`。
 - 将原 `searchWithFallback()`、`hydrateSources()`、`buildContext()` 拆到 `KnowledgeContextProvider`，并保留 `KnowledgeStore` / `EmbeddingGateway` 负责查询向量生成的职责边界。
-- 新增 `ConversationMemoryPort` 空实现，明确第十三阶段的扩展点。
+- 第十三阶段后，旧的空记忆接口已删除，聊天记忆由 `SQLiteChatMemory`、`ConversationMemorySnapshotService` 和 `CogninoteMemoryAdvisor` 承接。
 
 ### 第四组：SSE 适配
 

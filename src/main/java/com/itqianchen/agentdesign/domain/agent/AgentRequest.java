@@ -18,8 +18,8 @@ public record AgentRequest(
                 request.question().trim(),
                 request.topK(),
                 request.mode(),
-                null,
-                true
+                request.conversationId(),
+                request.useKnowledgeBase() == null || request.useKnowledgeBase()
         );
     }
 }

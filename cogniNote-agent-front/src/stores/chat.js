@@ -1,6 +1,15 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { cancelChatAnswer, streamChatAnswer } from '../api/chat-stream'
+import {
+  cancelChatAnswer,
+  clearChatSessionMessages,
+  createChatSession,
+  deleteChatSession,
+  getChatSession,
+  listChatSessions,
+  streamChatAnswer,
+  updateChatSession
+} from '../api/chat-stream'
 
 const DEFAULT_RETRIEVAL_MODE = 'HYBRID'
 const DEFAULT_TOP_K = 8
@@ -12,33 +21,6 @@ function nextId(prefix) {
   return `${prefix}-${Date.now()}-${localIdSeed}`
 }
 
-function createMessage(role, content = '') {
-  return {
-    id: nextId(role),
-    role,
-    content,
-    status: role === 'assistant' ? 'streaming' : 'done',
-    sources: [],
-    retrievalMode: '',
-    conversationId: '',
-    requestId: '',
-    createdAt: Date.now()
-  }
-}
-
-function createSession(title = '新对话') {
-  return {
-    id: nextId('session'),
-    title,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    useKnowledgeBase: true,
-    mode: DEFAULT_RETRIEVAL_MODE,
-    topK: DEFAULT_TOP_K,
-    messages: []
-  }
-}
-
 function normalizeKnowledgeBaseFlag(value) {
   if (typeof value === 'boolean') {
     return value
@@ -47,7 +29,7 @@ function normalizeKnowledgeBaseFlag(value) {
     const normalized = value.trim().toLowerCase()
     return normalized !== '' && normalized !== 'false' && normalized !== '0' && normalized !== 'off'
   }
-  return Boolean(value)
+  return value !== false
 }
 
 function normalizeTopK(value) {
@@ -58,32 +40,89 @@ function normalizeTopK(value) {
   return Math.min(50, Math.max(1, Math.trunc(parsed)))
 }
 
+function normalizeRole(role) {
+  const value = String(role || '').toUpperCase()
+  if (value === 'USER') {
+    return 'user'
+  }
+  if (value === 'ASSISTANT') {
+    return 'assistant'
+  }
+  return value.toLowerCase() || 'assistant'
+}
+
+function normalizeStatus(status, role) {
+  if (role === 'user') {
+    return 'done'
+  }
+  return String(status || 'done').toLowerCase()
+}
+
+function normalizeMessage(message, fallbackRole = 'assistant') {
+  const role = normalizeRole(message?.role || fallbackRole)
+  return {
+    id: message?.id || nextId(role),
+    role,
+    content: message?.content || '',
+    status: normalizeStatus(message?.status, role),
+    sources: message?.sources || [],
+    retrievalMode: message?.retrievalMode || '',
+    conversationId: message?.conversationId || '',
+    requestId: message?.requestId || '',
+    createdAt: message?.createdAt || Date.now()
+  }
+}
+
+function normalizeSession(session) {
+  return {
+    id: session?.id || nextId('session'),
+    title: session?.title || '新对话',
+    summary: session?.summary || '',
+    createdAt: session?.createdAt || Date.now(),
+    updatedAt: session?.updatedAt || Date.now(),
+    useKnowledgeBase: normalizeKnowledgeBaseFlag(session?.useKnowledgeBase),
+    mode: session?.mode || DEFAULT_RETRIEVAL_MODE,
+    topK: normalizeTopK(session?.topK),
+    messageCount: Number(session?.messageCount || session?.messages?.length || 0),
+    messages: (session?.messages || []).map((message) => normalizeMessage(message))
+  }
+}
+
+function createLocalMessage(role, content = '') {
+  return normalizeMessage({
+    id: nextId(role),
+    role,
+    content,
+    status: role === 'assistant' ? 'streaming' : 'done',
+    createdAt: Date.now()
+  }, role)
+}
+
 export const useChatStore = defineStore('chat', () => {
-  const sessions = ref([createSession()])
-  const activeSessionId = ref(sessions.value[0].id)
+  const sessions = ref([])
+  const activeSessionId = ref('')
   const draft = ref('')
   const useKnowledgeBaseValue = ref(true)
   const modeValue = ref(DEFAULT_RETRIEVAL_MODE)
   const topKValue = ref(DEFAULT_TOP_K)
+  const isLoadingSessions = ref(false)
+  const isLoadingActiveSession = ref(false)
   const isStreaming = ref(false)
   const error = ref('')
   const abortController = ref(null)
   const streamingContext = ref(null)
 
   const activeSession = computed(() =>
-    sessions.value.find((session) => session.id === activeSessionId.value) || sessions.value[0]
+    sessions.value.find((session) => session.id === activeSessionId.value) || sessions.value[0] || null
   )
   const activeMessages = computed(() => activeSession.value?.messages || [])
   const hasMessages = computed(() => activeMessages.value.length > 0)
-  const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.value)
+  const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.value && !!activeSession.value)
   const useKnowledgeBase = computed({
     get: () => normalizeKnowledgeBaseFlag(useKnowledgeBaseValue.value),
     set: (value) => {
       useKnowledgeBaseValue.value = normalizeKnowledgeBaseFlag(value)
       syncSessionOptions()
-      if (useKnowledgeBaseValue.value) {
-        error.value = ''
-      }
     }
   })
   const mode = computed({
@@ -100,43 +139,110 @@ export const useChatStore = defineStore('chat', () => {
       syncSessionOptions()
     }
   })
-  const knowledgeDisabledHint = computed(() =>
-    useKnowledgeBase.value ? '' : '纯对话将在第十三阶段接入后端聊天记忆后启用。'
-  )
+  const knowledgeDisabledHint = computed(() => '')
 
-  function setUseKnowledgeBase(value) {
-    useKnowledgeBase.value = value
-  }
-
-  function setMode(value) {
-    mode.value = value
-  }
-
-  function setTopK(value) {
-    topK.value = value
-  }
-
-  function startNewSession() {
-    const session = createSession()
-    sessions.value.unshift(session)
-    selectSession(session.id)
-    draft.value = ''
+  async function initializeSessions() {
+    isLoadingSessions.value = true
     error.value = ''
+    try {
+      const response = await listChatSessions()
+      sessions.value = (response || []).map(normalizeSession)
+      if (!sessions.value.length) {
+        const created = await createChatSession(defaultSessionPayload())
+        sessions.value = [normalizeSession(created)]
+      }
+      const nextActiveId = activeSessionId.value && sessions.value.some((item) => item.id === activeSessionId.value)
+        ? activeSessionId.value
+        : sessions.value[0].id
+      await selectSession(nextActiveId, { force: true })
+    } catch (err) {
+      error.value = `读取会话失败：${err.message}`
+    } finally {
+      isLoadingSessions.value = false
+    }
   }
 
-  function selectSession(sessionId) {
+  async function startNewSession() {
     if (isStreaming.value) {
       return
     }
+    error.value = ''
+    try {
+      const created = normalizeSession(await createChatSession(defaultSessionPayload()))
+      upsertSession(created)
+      await selectSession(created.id, { force: true })
+      draft.value = ''
+    } catch (err) {
+      error.value = `新建会话失败：${err.message}`
+    }
+  }
+
+  async function selectSession(sessionId, options = {}) {
+    if (isStreaming.value && !options.force) {
+      return
+    }
+    if (!sessionId) {
+      return
+    }
+    activeSessionId.value = sessionId
+    isLoadingActiveSession.value = true
+    error.value = ''
+    try {
+      const detail = normalizeSession(await getChatSession(sessionId))
+      upsertSession(detail)
+      applySessionOptions(detail)
+    } catch (err) {
+      error.value = `读取会话详情失败：${err.message}`
+    } finally {
+      isLoadingActiveSession.value = false
+    }
+  }
+
+  async function renameSession(sessionId, title) {
     const session = sessions.value.find((item) => item.id === sessionId)
     if (!session) {
       return
     }
-    activeSessionId.value = session.id
-    useKnowledgeBaseValue.value = normalizeKnowledgeBaseFlag(session.useKnowledgeBase)
-    modeValue.value = session.mode || DEFAULT_RETRIEVAL_MODE
-    topKValue.value = normalizeTopK(session.topK)
-    error.value = ''
+    const nextTitle = String(title || '').trim()
+    if (!nextTitle || nextTitle === session.title) {
+      return
+    }
+    try {
+      const updated = normalizeSession(await updateChatSession(sessionId, { title: nextTitle }))
+      upsertSession(updated)
+    } catch (err) {
+      error.value = `重命名会话失败：${err.message}`
+    }
+  }
+
+  async function removeSession(sessionId) {
+    if (isStreaming.value) {
+      return
+    }
+    try {
+      await deleteChatSession(sessionId)
+      sessions.value = sessions.value.filter((item) => item.id !== sessionId)
+      if (!sessions.value.length) {
+        const created = normalizeSession(await createChatSession(defaultSessionPayload()))
+        sessions.value = [created]
+      }
+      await selectSession(sessions.value[0].id, { force: true })
+    } catch (err) {
+      error.value = `删除会话失败：${err.message}`
+    }
+  }
+
+  async function clearActiveMessages() {
+    if (!activeSession.value || isStreaming.value) {
+      return
+    }
+    try {
+      const updated = normalizeSession(await clearChatSessionMessages(activeSession.value.id))
+      upsertSession(updated)
+      applySessionOptions(updated)
+    } catch (err) {
+      error.value = `清空会话失败：${err.message}`
+    }
   }
 
   async function streamChat() {
@@ -145,15 +251,15 @@ export const useChatStore = defineStore('chat', () => {
       error.value = '请输入问题'
       return
     }
-    if (!useKnowledgeBase.value) {
-      error.value = knowledgeDisabledHint.value
-      return
+    if (!activeSession.value) {
+      await startNewSession()
     }
 
     const session = activeSession.value
     syncSessionOptions(session)
-    appendMessage(session, createMessage('user', trimmedQuestion))
-    const assistantMessage = createMessage('assistant')
+    const userMessage = createLocalMessage('user', trimmedQuestion)
+    appendMessage(session, userMessage)
+    const assistantMessage = createLocalMessage('assistant')
     const requestId = nextId('request')
     assistantMessage.requestId = requestId
     appendMessage(session, assistantMessage)
@@ -166,15 +272,19 @@ export const useChatStore = defineStore('chat', () => {
     streamingContext.value = {
       sessionId: session.id,
       messageId: assistantMessage.id,
-      requestId
+      requestId,
+      cancelPromise: null
     }
 
     try {
+      await updateChatSession(session.id, sessionPayload(session))
       await streamChatAnswer(
         {
+          conversationId: session.id,
           question: trimmedQuestion,
           mode: mode.value,
           topK: Number(topK.value),
+          useKnowledgeBase: useKnowledgeBase.value,
           requestId
         },
         {
@@ -187,18 +297,22 @@ export const useChatStore = defineStore('chat', () => {
           message.status = 'done'
         }
       })
+      await refreshActiveSession()
+      await refreshSessionList()
     } catch (err) {
       if (err.name === 'AbortError') {
+        await streamingContext.value?.cancelPromise?.catch(() => {})
         updateAssistantMessage((message) => {
           message.status = message.content ? 'stopped' : 'error'
           if (!message.content) {
             message.content = '已停止生成。'
           }
         })
+        await refreshActiveSession()
+        await refreshSessionList()
       } else {
         error.value = `对话失败：${err.message}`
         updateAssistantMessage((message) => {
-          // 流式响应可能已经输出了部分答案；网络或服务端尾部错误不应抹掉用户已看到的内容。
           if (message.content) {
             message.status = 'done'
             return
@@ -217,19 +331,16 @@ export const useChatStore = defineStore('chat', () => {
   function stopChat() {
     const requestId = streamingContext.value?.requestId
     if (requestId) {
-      // 停止按钮是显式取消命令；普通刷新/断开不会调用这里，后端仍可生成到完成。
-      cancelChatAnswer(requestId).catch(() => {})
+      streamingContext.value.cancelPromise = cancelChatAnswer(requestId).catch(() => {})
     }
     abortController.value?.abort()
   }
 
   function handleEvent(eventName, payload) {
-    // SSE 的 meta/delta/error 在 store 中归档，页面只消费消息状态，
-    // 第十三阶段接入 SQLite 会话时可以复用同一套前端消息模型。
     if (eventName === 'meta') {
       updateAssistantMessage((message) => {
         message.requestId = payload.requestId || message.requestId
-        message.conversationId = payload.conversationId || ''
+        message.conversationId = payload.conversationId || activeSessionId.value
         message.retrievalMode = payload.retrievalMode || ''
         message.sources = payload.sources || []
         if (payload.requestId && streamingContext.value) {
@@ -264,8 +375,39 @@ export const useChatStore = defineStore('chat', () => {
     draft.value = `请解释 ${source.fileName} 中和这段内容相关的要点。`
   }
 
+  function setUseKnowledgeBase(value) {
+    useKnowledgeBase.value = value
+  }
+
+  function setMode(value) {
+    mode.value = value
+  }
+
+  function setTopK(value) {
+    topK.value = value
+  }
+
+  async function refreshActiveSession() {
+    if (!activeSessionId.value) {
+      return
+    }
+    const detail = normalizeSession(await getChatSession(activeSessionId.value))
+    upsertSession(detail)
+    applySessionOptions(detail)
+  }
+
+  async function refreshSessionList() {
+    const response = await listChatSessions()
+    const summaries = (response || []).map(normalizeSession)
+    sessions.value = summaries.map((summary) => {
+      const existing = sessions.value.find((item) => item.id === summary.id)
+      return existing ? { ...summary, messages: existing.messages } : summary
+    })
+  }
+
   function appendMessage(session, message) {
     session.messages.push(message)
+    session.messageCount = session.messages.length
     session.updatedAt = Date.now()
   }
 
@@ -280,7 +422,6 @@ export const useChatStore = defineStore('chat', () => {
     if (!session) {
       return
     }
-    // 输入区设置会频繁开关弹层，直接写回当前临时会话，避免 UI 和会话列表状态分叉。
     session.useKnowledgeBase = useKnowledgeBase.value
     session.mode = mode.value
     session.topK = topK.value
@@ -301,6 +442,39 @@ export const useChatStore = defineStore('chat', () => {
     session.updatedAt = Date.now()
   }
 
+  function upsertSession(session) {
+    const index = sessions.value.findIndex((item) => item.id === session.id)
+    if (index >= 0) {
+      sessions.value[index] = session
+    } else {
+      sessions.value.unshift(session)
+    }
+    sessions.value.sort((left, right) => Number(right.updatedAt) - Number(left.updatedAt))
+  }
+
+  function applySessionOptions(session) {
+    useKnowledgeBaseValue.value = normalizeKnowledgeBaseFlag(session.useKnowledgeBase)
+    modeValue.value = session.mode || DEFAULT_RETRIEVAL_MODE
+    topKValue.value = normalizeTopK(session.topK)
+  }
+
+  function defaultSessionPayload() {
+    return {
+      useKnowledgeBase: useKnowledgeBase.value,
+      mode: mode.value,
+      topK: topK.value
+    }
+  }
+
+  function sessionPayload(session) {
+    return {
+      title: session.title,
+      useKnowledgeBase: session.useKnowledgeBase,
+      mode: session.mode,
+      topK: session.topK
+    }
+  }
+
   return {
     sessions,
     activeSessionId,
@@ -311,15 +485,21 @@ export const useChatStore = defineStore('chat', () => {
     useKnowledgeBase,
     mode,
     topK,
+    isLoadingSessions,
+    isLoadingActiveSession,
     isStreaming,
     error,
     canSend,
     knowledgeDisabledHint,
+    initializeSessions,
     setUseKnowledgeBase,
     setMode,
     setTopK,
     startNewSession,
     selectSession,
+    renameSession,
+    removeSession,
+    clearActiveMessages,
     streamChat,
     stopChat,
     askAboutSource

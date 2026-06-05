@@ -1,6 +1,6 @@
 <script setup>
 import { computed, defineAsyncComponent, ref } from 'vue'
-import { LoaderCircle, Send, SlidersHorizontal } from 'lucide-vue-next'
+import { LoaderCircle, Send, SlidersHorizontal, Trash2 } from 'lucide-vue-next'
 import ChatSettingsPopover from '../components/chat-settings-popover.vue'
 import SourceList from '../components/source-list.vue'
 import { useChatStore } from '../stores/chat'
@@ -23,6 +23,16 @@ function handleComposerAction() {
     chatStore.stopChat()
   }
 }
+
+function clearMessages() {
+  if (!chatStore.hasMessages || chatStore.isStreaming) {
+    return
+  }
+  const confirmed = window.confirm('清空当前会话的全部消息？')
+  if (confirmed) {
+    chatStore.clearActiveMessages()
+  }
+}
 </script>
 
 <template>
@@ -33,17 +43,27 @@ function handleComposerAction() {
         <h2>{{ chatStore.activeSession?.title || '新对话' }}</h2>
       </div>
       <div class="conversation-meta">
-        <span>{{ chatStore.useKnowledgeBase ? '知识库已启用' : '纯对话待接入' }}</span>
+        <span>{{ chatStore.useKnowledgeBase ? '知识库已启用' : '纯模型对话' }}</span>
         <span>{{ chatStore.mode }}</span>
         <span>{{ activeModelSummary }}</span>
+        <button
+          class="conversation-action-button"
+          type="button"
+          title="清空当前会话"
+          aria-label="清空当前会话"
+          :disabled="!chatStore.hasMessages || chatStore.isStreaming"
+          @click="clearMessages"
+        >
+          <Trash2 aria-hidden="true" />
+        </button>
       </div>
     </header>
 
     <section class="message-stream" aria-live="polite">
       <div v-if="!chatStore.hasMessages" class="empty-chat">
-        <p class="eyebrow">开始一次检索增强对话</p>
-        <h3>导入资料后，直接问它。</h3>
-        <p>第七阶段先完成对话式前端。左侧会话是临时状态；跨重启聊天记忆会在第十三阶段用 SQLite 接上。</p>
+        <p class="eyebrow">开始一次对话</p>
+        <h3>可以直接问，也可以带知识库问。</h3>
+        <p>会话和消息会保存到本地 SQLite。开启知识库时，回答会附带检索来源；关闭后就是纯模型对话。</p>
       </div>
 
       <article
@@ -80,7 +100,7 @@ function handleComposerAction() {
         <textarea
           v-model="chatStore.draft"
           rows="3"
-          :placeholder="chatStore.useKnowledgeBase ? '向知识库提问...' : '纯对话将在第十三阶段启用'"
+          :placeholder="chatStore.useKnowledgeBase ? '向知识库提问...' : '直接和模型对话...'"
           :disabled="chatStore.isStreaming"
         ></textarea>
 

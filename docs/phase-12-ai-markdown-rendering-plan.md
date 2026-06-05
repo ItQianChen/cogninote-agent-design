@@ -6,7 +6,7 @@
 
 本阶段从“只换 Markdown 渲染器”扩展为“AI 流式 Markdown 输出链路修正”：前端用 `markstream-vue` 替换当前基础 `markdown-it` 封装，同时修复 SSE 解析和后端 Spring AI 流式 chunk 处理，保证标题、列表、表格、任务列表、代码块和流式输出中的未完成 Markdown 不因为空格/换行被吞而渲染失败。
 
-实施状态：已落地。聊天页 assistant 消息改用异步加载的 `ai-markdown-renderer.vue`，旧 `markdown-renderer.vue` 保留一个阶段作为兼容组件。后端已保留 Spring AI 返回的空白 chunk，前端 SSE parser 只移除 `data:` 后的协议分隔空格，不再对内容做 `trimStart()`。
+实施状态：已落地。聊天页 assistant 消息改用异步加载的 `ai-markdown-renderer.vue`，旧 `markdown-renderer.vue` 保留一个阶段作为兼容组件。后端已保留 Spring AI 返回的空白 chunk，前端 SSE parser 只移除 `data:` 后的协议分隔空格，不再对内容做 `trimStart()`。第十三阶段后，普通 SSE 断开会继续生成并保存完整 assistant 消息，只有用户显式停止才落库为 `STOPPED`。
 
 ## Key Changes
 
@@ -26,13 +26,13 @@
 
 - SSE 仍是 `meta -> delta -> done/error`，但 `meta` 中包含 `requestId`，前端停止生成时用它调用取消接口。
 - `delta.text` 是模型原始文本增量，客户端和服务端都不能对其做 `trim()`、`trimStart()` 或 `isBlank()` 过滤。
-- SSE 是观察通道，不是生成任务本身。只有用户点击停止才取消模型订阅；普通连接断开时后端仍消费到完成，后续聊天记忆可保存完整回答。
+- SSE 是观察通道，不是生成任务本身。只有用户点击停止才取消模型订阅；普通连接断开时后端仍消费到完成，第十三阶段聊天记忆会保存完整回答。
 - 一旦响应 Content-Type 进入 `text/event-stream`，全局异常处理不能再写 `ApiResponse` JSON；错误应尽量映射为 SSE `error` 事件，兜底只关闭响应。
 
 ## Documentation Changes
 
 - `docs/cogninote-agent-design.md` 中 Milestone 12 改为 AI 流式 Markdown 渲染重构，并补充 SSE 空白保留、显式取消和 event-stream 异常处理约束。
-- 原 SQLite 聊天记忆顺延为 Milestone 13。
+- 原 SQLite 聊天记忆已在 Milestone 13 落地。
 - `README.md` 更新 Phase 12 文档入口、当前状态和流式 Markdown 链路说明。
 - `docs/phase-7-chat-ui-refactor-plan.md`、`docs/phase-8-multi-model-configuration-plan.md`、`docs/phase-9-ui-visual-readability-plan.md`、`docs/phase-10-knowledge-base-folders-plan.md`、`docs/phase-11-agent-model-runtime-refactor-plan.md` 中关于聊天记忆阶段的引用同步顺延。
 
@@ -50,7 +50,7 @@
 
 ## Assumptions
 
-- 本阶段只解决 AI Markdown 渲染质量和流式传输正确性，不做聊天记忆、不做纯模型对话。
+- 本阶段只解决 AI Markdown 渲染质量和流式传输正确性；聊天记忆和纯模型对话已由第十三阶段承接。
 - SSE 协议保持向后兼容，新增的取消端点只服务“用户显式停止”。
 - `markstream-vue` 的 Mermaid、KaTeX、Monaco、D2 等 peer dependencies 暂不安装；第一版只启用基础 Markdown 渲染。
 - 原始 HTML 继续转义，不能为了渲染效果开放模型 HTML 注入。

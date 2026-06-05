@@ -48,7 +48,7 @@ public class ChatSseEventMapper {
                 stream.sources()
         ));
 
-        StreamCancellation cancellation = cancellationRegistry.register(stream.requestId());
+        StreamCancellation cancellation = cancellationRegistry.register(stream.requestId(), stream.onCancel());
         if (cancellation.isDisposed()) {
             // 停止请求可能先于模型订阅注册到达；此时不要再启动模型调用。
             completeSafely(emitter, completed);

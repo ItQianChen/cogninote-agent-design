@@ -105,6 +105,36 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
                     updated_at INTEGER NOT NULL
                 )
                 """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS chat_sessions (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    summary TEXT,
+                    summary_message_sequence INTEGER NOT NULL DEFAULT 0,
+                    use_knowledge_base INTEGER NOT NULL DEFAULT 1,
+                    retrieval_mode TEXT NOT NULL DEFAULT 'HYBRID',
+                    top_k INTEGER NOT NULL DEFAULT 8,
+                    deleted INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id TEXT PRIMARY KEY,
+                    conversation_id TEXT NOT NULL,
+                    message_sequence INTEGER NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    request_id TEXT,
+                    retrieval_mode TEXT,
+                    sources_json TEXT,
+                    token_estimate INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL,
+                    FOREIGN KEY (conversation_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+                )
+                """);
         jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_folders_path ON knowledge_folders(folder_path)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_folders_enabled ON knowledge_folders(enabled)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_documents_knowledge_folder_id ON documents(knowledge_folder_id)");
@@ -112,6 +142,9 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_model_configs_role ON model_configs(role)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_model_configs_role_active ON model_configs(role, is_active)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated_at ON chat_sessions(deleted, updated_at DESC)");
+        jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_messages_sequence ON chat_messages(conversation_id, message_sequence)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id, created_at)");
         migrateLegacyModelConfigIfNeeded();
     }
 

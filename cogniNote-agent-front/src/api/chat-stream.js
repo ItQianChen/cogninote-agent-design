@@ -25,6 +25,30 @@ export async function cancelChatAnswer(requestId) {
   return requestJson(`/api/chat/stream/${encodeURIComponent(requestId)}/cancel`, jsonOptions('POST', {}))
 }
 
+export function listChatSessions() {
+  return requestJson('/api/chat/sessions')
+}
+
+export function createChatSession(payload = {}) {
+  return requestJson('/api/chat/sessions', jsonOptions('POST', payload))
+}
+
+export function getChatSession(conversationId) {
+  return requestJson(`/api/chat/sessions/${encodeURIComponent(conversationId)}`)
+}
+
+export function updateChatSession(conversationId, payload) {
+  return requestJson(`/api/chat/sessions/${encodeURIComponent(conversationId)}`, jsonOptions('PATCH', payload))
+}
+
+export function deleteChatSession(conversationId) {
+  return requestJson(`/api/chat/sessions/${encodeURIComponent(conversationId)}`, { method: 'DELETE' })
+}
+
+export function clearChatSessionMessages(conversationId) {
+  return requestJson(`/api/chat/sessions/${encodeURIComponent(conversationId)}/messages`, { method: 'DELETE' })
+}
+
 async function readSseStream(body, onEvent) {
   const reader = body.getReader()
   const decoder = new TextDecoder('utf-8')

@@ -6,7 +6,6 @@ import java.util.List;
 
 public record KnowledgeContext(
         SearchMode retrievalMode,
-        List<RagSourceResponse> sources,
-        String contextText
+        List<RagSourceResponse> sources
 ) {
 }

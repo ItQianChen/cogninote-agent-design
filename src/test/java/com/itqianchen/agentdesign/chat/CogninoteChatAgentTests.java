@@ -2,11 +2,16 @@ package com.itqianchen.agentdesign.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itqianchen.agentdesign.domain.agent.AgentChatStream;
 import com.itqianchen.agentdesign.domain.agent.AgentRequest;
 import com.itqianchen.agentdesign.domain.ai.AiChatRuntime;
 import com.itqianchen.agentdesign.domain.ai.AiEmbeddingRuntime;
 import com.itqianchen.agentdesign.domain.ai.AiRuntimeFactory;
+import com.itqianchen.agentdesign.domain.chat.ChatMemoryProperties;
+import com.itqianchen.agentdesign.domain.chat.ChatMessage;
+import com.itqianchen.agentdesign.domain.chat.ChatMessageRole;
+import com.itqianchen.agentdesign.domain.chat.ChatMessageStatus;
 import com.itqianchen.agentdesign.domain.chat.ChatPromptProperties;
 import com.itqianchen.agentdesign.domain.model.ModelConfig;
 import com.itqianchen.agentdesign.domain.model.ModelConfigDefaults;
@@ -21,200 +26,169 @@ import com.itqianchen.agentdesign.dto.index.RebuildIndexResponse;
 import com.itqianchen.agentdesign.dto.search.SearchHitResponse;
 import com.itqianchen.agentdesign.dto.search.SearchRequest;
 import com.itqianchen.agentdesign.dto.search.SearchResponse;
+import com.itqianchen.agentdesign.metadata.DatabaseSchemaInitializer;
+import com.itqianchen.agentdesign.repository.chat.ChatSessionRepository;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.repository.model.ModelConfigRepository;
 import com.itqianchen.agentdesign.service.agent.CogninoteChatAgent;
-import com.itqianchen.agentdesign.service.agent.ConversationMemoryPort;
-import com.itqianchen.agentdesign.service.agent.KnowledgeContext;
+import com.itqianchen.agentdesign.service.agent.CogninoteDocumentRetriever;
 import com.itqianchen.agentdesign.service.agent.KnowledgeContextProvider;
-import com.itqianchen.agentdesign.service.agent.NoopConversationMemoryPort;
 import com.itqianchen.agentdesign.service.agent.PromptAssembler;
+import com.itqianchen.agentdesign.service.chat.ChatSessionService;
+import com.itqianchen.agentdesign.service.chat.CogninoteMemoryAdvisor;
+import com.itqianchen.agentdesign.service.chat.ConversationMemorySnapshotService;
+import com.itqianchen.agentdesign.service.chat.RagSourcesJsonCodec;
+import com.itqianchen.agentdesign.service.chat.TokenEstimator;
 import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import org.springframework.ai.document.Document;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.rag.Query;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
 class CogninoteChatAgentTests {
 
     @Test
-    void promptContainsQuestionContextAndSourceNumbers() {
+    void promptAssemblerNoLongerRequiresManualContextPlaceholder() {
         PromptAssembler promptAssembler = new PromptAssembler(defaultPromptProperties());
-        String context = """
-                [1] 文件：packaging.md
-                路径：D:/notes/packaging.md
-                位置：打包
-                内容：CogniNote 使用 Launch4j 生成 Windows EXE。
-                """;
 
-        Prompt prompt = promptAssembler.assembleRagPrompt("如何打包？", context);
-
-        assertThat(prompt.getContents())
+        assertThat(promptAssembler.systemPrompt()).contains("Markdown");
+        assertThat(promptAssembler.userPrompt("如何打包？"))
                 .contains("如何打包？")
-                .contains("[1]")
-                .contains("packaging.md")
-                .contains("Launch4j");
-    }
-
-    @Test
-    void promptUsesConfiguredTemplates() {
-        ChatPromptProperties promptProperties = new ChatPromptProperties(
-                new ChatPromptProperties.Rag(
-                        "自定义系统提示词",
-                        "Q={question}\nCTX={context}",
-                        "自定义空上下文"
-                ),
-                new ChatPromptProperties.ConnectionTest("测试连接")
-        );
-        PromptAssembler promptAssembler = new PromptAssembler(promptProperties);
-
-        Prompt prompt = promptAssembler.assembleRagPrompt("没有资料的问题", promptProperties.rag().emptyContext());
-
-        assertThat(prompt.getContents())
-                .contains("自定义系统提示词")
-                .contains("Q=没有资料的问题")
-                .contains("CTX=自定义空上下文");
+                .doesNotContain("{context}");
+        assertThat(promptAssembler.emptyContextPrompt()).contains("没有检索到");
     }
 
     @Test
     void hybridFallsBackToKeywordWhenEmbeddingIsUnavailable() {
-        FakeKnowledgeStore knowledgeStore = new FakeKnowledgeStore(true);
-        CogninoteChatAgent agent = newAgent(knowledgeStore, defaultPromptProperties());
+        AgentFixture fixture = new AgentFixture(new FakeKnowledgeStore(true), Flux.just("答案片段"));
 
-        AgentChatStream stream = agent.stream(new AgentRequest(
-                null,
+        AgentChatStream stream = fixture.agent.stream(new AgentRequest(
+                "request-1",
                 "Launch4j 是什么？",
                 5,
                 SearchMode.HYBRID,
-                null,
+                "conversation-1",
                 true
         ));
 
         assertThat(stream.retrievalMode()).isEqualTo(SearchMode.KEYWORD);
         assertThat(stream.sources()).hasSize(1);
         assertThat(stream.answer().collectList().block()).containsExactly("答案片段");
-        assertThat(knowledgeStore.seenModes).containsExactly(SearchMode.HYBRID, SearchMode.KEYWORD);
+        assertThat(fixture.knowledgeStore.seenModes).containsExactly(SearchMode.HYBRID, SearchMode.KEYWORD);
     }
 
     @Test
-    void knowledgeContextHydratesSourceContentFromSqliteChunks() {
-        KnowledgeContextProvider provider = new KnowledgeContextProvider(
-                new FakeKnowledgeStore(false),
-                new FakeDocumentRepository(),
-                defaultPromptProperties()
-        );
+    void pureModelChatUsesMemoryAdvisorWithoutSearchingKnowledgeBase() {
+        AgentFixture fixture = new AgentFixture(new FakeKnowledgeStore(false), Flux.just("纯对话答案"));
 
-        KnowledgeContext context = provider.retrieve("如何打包？", SearchMode.KEYWORD, 3);
-
-        assertThat(context.contextText())
-                .contains("[1]")
-                .contains("packaging.md")
-                .contains("CogniNote 使用 Launch4j 生成 Windows EXE。");
-        assertThat(context.sources())
-                .singleElement()
-                .satisfies(source -> assertThat(source.content()).contains("Launch4j"));
-    }
-
-    @Test
-    void assistantMessageIsSavedOnlyAfterModelStreamCompletes() {
-        RecordingConversationMemoryPort memory = new RecordingConversationMemoryPort();
-        CogninoteChatAgent agent = newAgent(
-                new FakeKnowledgeStore(false),
-                defaultPromptProperties(),
-                new FakeAiRuntimeFactory(Flux.just("答案", "片段")),
-                memory
-        );
-
-        AgentChatStream stream = agent.stream(new AgentRequest(
-                "request-1",
-                "Launch4j 是什么？",
+        AgentChatStream stream = fixture.agent.stream(new AgentRequest(
+                "request-2",
+                "不用知识库也能回答吗？",
                 5,
+                SearchMode.HYBRID,
+                "conversation-2",
+                false
+        ));
+
+        assertThat(stream.retrievalMode()).isNull();
+        assertThat(stream.sources()).isEmpty();
+        assertThat(stream.answer().collectList().block()).containsExactly("纯对话答案");
+        assertThat(fixture.knowledgeStore.seenModes).isEmpty();
+        assertThat(fixture.runtime.lastAdvisors).hasSize(1);
+
+        List<ChatMessage> messages = fixture.chatSessionRepository.findMessages("conversation-2");
+        assertThat(messages)
+                .extracting(ChatMessage::role)
+                .containsExactly(ChatMessageRole.USER, ChatMessageRole.ASSISTANT);
+        assertThat(messages.get(1).status()).isEqualTo(ChatMessageStatus.DONE);
+        assertThat(messages.get(1).content()).isEqualTo("纯对话答案");
+    }
+
+    @Test
+    void ragChatPassesRetrievalAdvisorAndPersistsSources() {
+        AgentFixture fixture = new AgentFixture(new FakeKnowledgeStore(false), Flux.just("可以使用 Launch4j。"));
+
+        AgentChatStream stream = fixture.agent.stream(new AgentRequest(
+                "request-3",
+                "如何打包？",
+                3,
                 SearchMode.KEYWORD,
-                "conversation-1",
+                "conversation-3",
                 true
         ));
 
-        assertThat(memory.userMessages).containsExactly("Launch4j 是什么？");
-        assertThat(memory.assistantMessages).isEmpty();
+        assertThat(stream.sources()).singleElement()
+                .satisfies(source -> assertThat(source.content()).contains("Launch4j"));
+        assertThat(stream.answer().collectList().block()).containsExactly("可以使用 Launch4j。");
+        assertThat(fixture.runtime.lastAdvisors)
+                .anySatisfy(advisor -> assertThat(advisor.getClass().getName()).contains("RetrievalAugmentationAdvisor"));
+        assertThat(fixture.runtime.lastAdvisorParams)
+                .containsEntry(ChatMemory.CONVERSATION_ID, "conversation-3")
+                .containsEntry(CogninoteMemoryAdvisor.MAX_MESSAGE_SEQUENCE, 0);
 
-        assertThat(stream.answer().collectList().block()).containsExactly("答案", "片段");
-        assertThat(memory.assistantMessages).containsExactly("答案片段");
+        List<ChatMessage> messages = fixture.chatSessionRepository.findMessages("conversation-3");
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(1).retrievalMode()).isEqualTo(SearchMode.KEYWORD);
+        assertThat(fixture.chatSessionService.getSession("conversation-3").messages().get(1).sources())
+                .singleElement()
+                .satisfies(source -> assertThat(source.fileName()).isEqualTo("packaging.md"));
     }
 
     @Test
-    void cancelledModelStreamDoesNotSaveAssistantMessageAsCompleteAnswer() {
-        RecordingConversationMemoryPort memory = new RecordingConversationMemoryPort();
-        CogninoteChatAgent agent = newAgent(
-                new FakeKnowledgeStore(false),
-                defaultPromptProperties(),
-                new FakeAiRuntimeFactory(Flux.concat(Flux.just("半截"), Flux.never())),
-                memory
+    void documentRetrieverOmitsNullMetadataValues() {
+        CogninoteDocumentRetriever retriever = new CogninoteDocumentRetriever(
+                new KnowledgeContextProvider(
+                        new FakeKnowledgeStore(false, hitWithoutOptionalMetadata("chunk-null")),
+                        new FakeDocumentRepository()
+                ),
+                "如何打包？",
+                SearchMode.KEYWORD,
+                3
         );
 
-        AgentChatStream stream = agent.stream(new AgentRequest(
-                "request-2",
-                "Launch4j 是什么？",
-                5,
+        List<Document> documents = retriever.retrieve(new Query("ignored by cogninote retriever"));
+
+        assertThat(documents).singleElement().satisfies(document -> {
+            assertThat(document.getMetadata()).doesNotContainKeys("heading", "pageNumber");
+            assertThat(document.getMetadata().values()).doesNotContainNull();
+        });
+    }
+
+    @Test
+    void explicitCancelPersistsPartialAssistantMessageAsStopped() {
+        AgentFixture fixture = new AgentFixture(
+                new FakeKnowledgeStore(false),
+                Flux.concat(Flux.just("半截"), Flux.never())
+        );
+
+        AgentChatStream stream = fixture.agent.stream(new AgentRequest(
+                "request-4",
+                "请长篇回答",
+                3,
                 SearchMode.KEYWORD,
-                "conversation-2",
+                "conversation-4",
                 true
         ));
         List<String> received = new ArrayList<>();
 
         Disposable subscription = stream.answer().subscribe(received::add);
+        stream.onCancel().run();
         subscription.dispose();
 
         assertThat(received).containsExactly("半截");
-        assertThat(memory.assistantMessages).isEmpty();
-    }
-
-    private static CogninoteChatAgent newAgent(KnowledgeStore knowledgeStore, ChatPromptProperties promptProperties) {
-        return newAgent(
-                knowledgeStore,
-                promptProperties,
-                new FakeAiRuntimeFactory(),
-                new NoopConversationMemoryPort()
-        );
-    }
-
-    private static CogninoteChatAgent newAgent(
-            KnowledgeStore knowledgeStore,
-            ChatPromptProperties promptProperties,
-            AiRuntimeFactory aiRuntimeFactory,
-            ConversationMemoryPort conversationMemoryPort
-    ) {
-        ModelConfigRepository repository = new ModelConfigRepository(null) {
-            @Override
-            public Optional<ModelConfig> findActive(ModelConfigRole role) {
-                long now = System.currentTimeMillis();
-                return Optional.of(new ModelConfig(
-                        ModelConfigDefaults.ACTIVE_CHAT_CONFIG_ID,
-                        ModelConfigRole.CHAT,
-                        ModelConfigDefaults.PROVIDER,
-                        ModelConfigDefaults.DISPLAY_NAME,
-                        ModelConfigDefaults.BASE_URL,
-                        "sk-test",
-                        ModelConfigDefaults.CHAT_MODEL,
-                        null,
-                        ModelConfigDefaults.TEMPERATURE,
-                        ModelConfigDefaults.TOP_K,
-                        true,
-                        now,
-                        now
-                ));
-            }
-        };
-        return new CogninoteChatAgent(
-                new ModelConfigService(repository),
-                aiRuntimeFactory,
-                new KnowledgeContextProvider(knowledgeStore, new FakeDocumentRepository(), promptProperties),
-                new PromptAssembler(promptProperties),
-                conversationMemoryPort
-        );
+        List<ChatMessage> messages = fixture.chatSessionRepository.findMessages("conversation-4");
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(1).status()).isEqualTo(ChatMessageStatus.STOPPED);
+        assertThat(messages.get(1).content()).isEqualTo("半截");
     }
 
     private static ChatPromptProperties defaultPromptProperties() {
@@ -222,16 +196,12 @@ class CogninoteChatAgentTests {
                 new ChatPromptProperties.Rag(
                         """
                                 你是 CogniNote Agent 的本地知识库问答助手。
-                                你必须只基于提供的知识库上下文回答，不要编造未出现的信息。
-                                如果上下文不足以回答，明确说明：当前知识库中没有足够依据。
-                                回答中必须用 [1]、[2] 这样的编号标注引用来源。
+                                请使用清晰的 Markdown 回答。
+                                开启知识库时必须用 [1]、[2] 标注引用来源。
                                 """,
                         """
                                 用户问题：
                                 {question}
-
-                                知识库上下文：
-                                {context}
 
                                 请给出简洁、可验证的中文回答。
                                 """,
@@ -256,12 +226,97 @@ class CogninoteChatAgentTests {
         );
     }
 
-    private static class FakeKnowledgeStore implements KnowledgeStore {
+    private static SearchHitResponse hitWithoutOptionalMetadata(String chunkId) {
+        return new SearchHitResponse(
+                chunkId,
+                "doc-1",
+                "packaging.md",
+                "D:/notes/packaging.md",
+                null,
+                null,
+                "CogniNote 使用 Launch4j 生成 Windows EXE。",
+                1.0,
+                1.0,
+                null
+        );
+    }
+
+    private static final class AgentFixture {
+        private final FakeKnowledgeStore knowledgeStore;
+        private final RecordingAiRuntime runtime;
+        private final ChatSessionRepository chatSessionRepository;
+        private final ChatSessionService chatSessionService;
+        private final CogninoteChatAgent agent;
+
+        private AgentFixture(FakeKnowledgeStore knowledgeStore, Flux<String> answer) {
+            this.knowledgeStore = knowledgeStore;
+            this.runtime = new RecordingAiRuntime(answer);
+            JdbcTemplate jdbcTemplate = sqliteJdbcTemplate();
+            new DatabaseSchemaInitializer(jdbcTemplate).initialize();
+            ModelConfigRepository modelConfigRepository = new ModelConfigRepository(jdbcTemplate);
+            modelConfigRepository.save(activeChatConfig());
+            this.chatSessionRepository = new ChatSessionRepository(jdbcTemplate);
+            ChatMemoryProperties memoryProperties = new ChatMemoryProperties(6000, 8, 40);
+            TokenEstimator tokenEstimator = new TokenEstimator();
+            this.chatSessionService = new ChatSessionService(
+                    chatSessionRepository,
+                    new RagSourcesJsonCodec(new ObjectMapper()),
+                    tokenEstimator,
+                    memoryProperties
+            );
+            this.agent = new CogninoteChatAgent(
+                    new ModelConfigService(modelConfigRepository),
+                    new FakeAiRuntimeFactory(runtime),
+                    new KnowledgeContextProvider(knowledgeStore, new FakeDocumentRepository()),
+                    new PromptAssembler(defaultPromptProperties()),
+                    chatSessionService,
+                    new CogninoteMemoryAdvisor(new ConversationMemorySnapshotService(
+                            chatSessionRepository,
+                            memoryProperties
+                    ))
+            );
+        }
+
+        private static JdbcTemplate sqliteJdbcTemplate() {
+            SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+                    "jdbc:sqlite::memory:",
+                    true
+            );
+            return new JdbcTemplate(dataSource);
+        }
+
+        private static ModelConfig activeChatConfig() {
+            long now = System.currentTimeMillis();
+            return new ModelConfig(
+                    ModelConfigDefaults.ACTIVE_CHAT_CONFIG_ID,
+                    ModelConfigRole.CHAT,
+                    ModelConfigDefaults.PROVIDER,
+                    ModelConfigDefaults.CHAT_DISPLAY_NAME,
+                    ModelConfigDefaults.BASE_URL,
+                    "sk-test",
+                    ModelConfigDefaults.CHAT_MODEL,
+                    null,
+                    ModelConfigDefaults.TEMPERATURE,
+                    ModelConfigDefaults.TOP_K,
+                    true,
+                    now,
+                    now
+            );
+        }
+    }
+
+    private static final class FakeKnowledgeStore implements KnowledgeStore {
         private final boolean failHybrid;
+        private final SearchHitResponse hit;
         private final List<SearchMode> seenModes = new ArrayList<>();
 
         private FakeKnowledgeStore(boolean failHybrid) {
+            this(failHybrid, hit("chunk-1"));
+        }
+
+        private FakeKnowledgeStore(boolean failHybrid, SearchHitResponse hit) {
             this.failHybrid = failHybrid;
+            this.hit = hit;
         }
 
         @Override
@@ -283,7 +338,7 @@ class CogninoteChatAgentTests {
             if (failHybrid && request.modeOrDefault() == SearchMode.HYBRID) {
                 throw new EmbeddingUnavailableException("hybrid search is unavailable");
             }
-            return new SearchResponse(request.query(), request.modeOrDefault(), List.of(hit("chunk-1")));
+            return new SearchResponse(request.query(), request.modeOrDefault(), List.of(hit));
         }
 
         @Override
@@ -297,29 +352,16 @@ class CogninoteChatAgentTests {
         }
     }
 
-    private static class FakeAiRuntimeFactory implements AiRuntimeFactory {
-        private final Flux<String> stream;
+    private static final class FakeAiRuntimeFactory implements AiRuntimeFactory {
+        private final RecordingAiRuntime runtime;
 
-        private FakeAiRuntimeFactory() {
-            this(Flux.just("答案片段"));
-        }
-
-        private FakeAiRuntimeFactory(Flux<String> stream) {
-            this.stream = stream;
+        private FakeAiRuntimeFactory(RecordingAiRuntime runtime) {
+            this.runtime = runtime;
         }
 
         @Override
         public AiChatRuntime chatRuntime(ModelConfig config) {
-            return new AiChatRuntime() {
-                @Override
-                public Flux<String> stream(Prompt prompt) {
-                    return stream;
-                }
-
-                @Override
-                public void testConnection(Prompt prompt) {
-                }
-            };
+            return runtime;
         }
 
         @Override
@@ -328,27 +370,42 @@ class CogninoteChatAgentTests {
         }
     }
 
-    private static class RecordingConversationMemoryPort implements ConversationMemoryPort {
-        private final List<String> userMessages = new ArrayList<>();
-        private final List<String> assistantMessages = new ArrayList<>();
+    private static final class RecordingAiRuntime implements AiChatRuntime {
+        private final Flux<String> stream;
+        private String lastSystemPrompt;
+        private String lastUserMessage;
+        private List<Advisor> lastAdvisors = List.of();
+        private Map<String, Object> lastAdvisorParams = Map.of();
 
-        @Override
-        public List<Message> loadRecentMessages(String conversationId, int maxMessages) {
-            return List.of();
+        private RecordingAiRuntime(Flux<String> stream) {
+            this.stream = stream;
         }
 
         @Override
-        public void saveUserMessage(String conversationId, String content) {
-            userMessages.add(content);
+        public Flux<String> stream(Prompt prompt) {
+            return stream;
         }
 
         @Override
-        public void saveAssistantMessage(String conversationId, String content) {
-            assistantMessages.add(content);
+        public Flux<String> stream(
+                String systemPrompt,
+                String userMessage,
+                List<Advisor> advisors,
+                Map<String, Object> advisorParams
+        ) {
+            this.lastSystemPrompt = systemPrompt;
+            this.lastUserMessage = userMessage;
+            this.lastAdvisors = advisors == null ? List.of() : List.copyOf(advisors);
+            this.lastAdvisorParams = advisorParams == null ? Map.of() : Map.copyOf(advisorParams);
+            return stream;
+        }
+
+        @Override
+        public void testConnection(Prompt prompt) {
         }
     }
 
-    private static class FakeDocumentRepository extends DocumentRepository {
+    private static final class FakeDocumentRepository extends DocumentRepository {
 
         private FakeDocumentRepository() {
             super(null);

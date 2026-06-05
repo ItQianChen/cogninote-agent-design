@@ -36,7 +36,7 @@ function updateTopK(event) {
 <template>
   <div class="composer-settings-popover">
     <div class="composer-settings__summary">
-      <span>{{ useKnowledgeBase ? '使用知识库' : '纯对话待接入' }}</span>
+      <span>{{ useKnowledgeBase ? '使用知识库' : '纯模型对话' }}</span>
       <span>{{ activeModeLabel }}</span>
       <span>Top K {{ topK }}</span>
     </div>

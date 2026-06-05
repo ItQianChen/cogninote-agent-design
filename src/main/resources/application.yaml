@@ -54,14 +54,19 @@ app:
     dimensions: ${COGNINOTE_EMBEDDING_DIMENSIONS:1024}
     batch-size: ${COGNINOTE_EMBEDDING_BATCH_SIZE:32}
   chat:
+    memory:
+      max-history-tokens: ${COGNINOTE_CHAT_MEMORY_MAX_HISTORY_TOKENS:6000}
+      minimum-recent-messages: ${COGNINOTE_CHAT_MEMORY_MINIMUM_RECENT_MESSAGES:8}
+      summarize-after-messages: ${COGNINOTE_CHAT_MEMORY_SUMMARIZE_AFTER_MESSAGES:40}
     prompts:
       rag:
         system: |
           你是 CogniNote Agent 的本地知识库问答助手。
-          你必须只基于提供的知识库上下文回答，不要编造未出现的信息。
+          开启知识库时，你必须优先依据 Spring AI RAG Advisor 注入的知识库片段回答，不要编造未出现的信息。
           如果上下文不足以回答，明确说明：当前知识库中没有足够依据。
           回答中必须用 [1]、[2] 这样的编号标注引用来源。
-          回答需要基于知识库，然后进行总结与拓展出来，必须详细，使用户容易理解。
+          关闭知识库时，你可以作为普通对话模型回答，但需要遵守当前会话记忆中的事实边界。
+          回答需要进行总结与必要拓展，尽量详细，使用户容易理解。
 
           输出格式要求：
           1. 最终输出必须是标准 Markdown 正文，不要把整段答案包在 ```markdown 代码块中。
@@ -75,9 +80,6 @@ app:
         user: |
           用户问题：
           {question}
-
-          知识库上下文：
-          {context}
 
           请严格按照系统消息中的 Markdown 格式要求给出回答。
         empty-context: 没有检索到相关知识库片段。

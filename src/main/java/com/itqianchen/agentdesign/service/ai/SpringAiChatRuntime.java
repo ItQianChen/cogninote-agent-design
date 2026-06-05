@@ -2,6 +2,10 @@ package com.itqianchen.agentdesign.service.ai;
 
 import com.itqianchen.agentdesign.domain.ai.AiChatRuntime;
 import com.itqianchen.agentdesign.domain.model.ModelConfigurationException;
+import java.util.List;
+import java.util.Map;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -26,6 +30,33 @@ final class SpringAiChatRuntime implements AiChatRuntime {
                         sink.next(text);
                     }
                 });
+    }
+
+    @Override
+    public Flux<String> stream(
+            String systemPrompt,
+            String userMessage,
+            List<Advisor> advisors,
+            Map<String, Object> advisorParams
+    ) {
+        ChatClient.ChatClientRequestSpec spec = ChatClient.builder(chatModel)
+                .build()
+                .prompt()
+                .system(systemPrompt)
+                .user(userMessage);
+        if ((advisors != null && !advisors.isEmpty()) || (advisorParams != null && !advisorParams.isEmpty())) {
+            spec = spec.advisors(advisor -> {
+                if (advisors != null && !advisors.isEmpty()) {
+                    advisor.advisors(advisors);
+                }
+                if (advisorParams != null && !advisorParams.isEmpty()) {
+                    advisor.params(advisorParams);
+                }
+            });
+        }
+        return spec.stream()
+                .content()
+                .filter(text -> text != null && !text.isEmpty());
     }
 
     @Override

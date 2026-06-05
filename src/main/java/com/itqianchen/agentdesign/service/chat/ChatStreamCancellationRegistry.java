@@ -16,8 +16,12 @@ public class ChatStreamCancellationRegistry {
     private final Map<String, Long> pendingCancellations = new ConcurrentHashMap<>();
 
     public synchronized StreamCancellation register(String requestId) {
+        return register(requestId, null);
+    }
+
+    public synchronized StreamCancellation register(String requestId, Runnable onCancel) {
         cleanupExpiredPendingCancellations();
-        StreamCancellation cancellation = new StreamCancellation();
+        StreamCancellation cancellation = new StreamCancellation(onCancel);
         if (requestId == null || requestId.isBlank()) {
             cancellation.dispose();
             return cancellation;
@@ -72,6 +76,15 @@ public class ChatStreamCancellationRegistry {
 
         private final AtomicReference<Disposable> subscription = new AtomicReference<>();
         private final AtomicBoolean disposed = new AtomicBoolean(false);
+        private final Runnable onCancel;
+
+        public StreamCancellation() {
+            this(null);
+        }
+
+        public StreamCancellation(Runnable onCancel) {
+            this.onCancel = onCancel;
+        }
 
         public void attach(Disposable actualSubscription) {
             if (actualSubscription == null) {
@@ -98,6 +111,9 @@ public class ChatStreamCancellationRegistry {
             Disposable actualSubscription = subscription.getAndSet(null);
             if (actualSubscription != null && !actualSubscription.isDisposed()) {
                 actualSubscription.dispose();
+            }
+            if (onCancel != null) {
+                onCancel.run();
             }
         }
 
