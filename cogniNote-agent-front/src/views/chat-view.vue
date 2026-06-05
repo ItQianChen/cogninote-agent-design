@@ -1,5 +1,5 @@
 <script setup>
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent, nextTick, ref, watch } from 'vue'
 import { LoaderCircle, Send, SlidersHorizontal, Trash2 } from 'lucide-vue-next'
 import ChatSettingsPopover from '../components/chat-settings-popover.vue'
 import SourceList from '../components/source-list.vue'
@@ -11,6 +11,7 @@ const chatStore = useChatStore()
 const modelConfigStore = useModelConfigStore()
 const AiMarkdownRenderer = defineAsyncComponent(() => import('../components/ai-markdown-renderer.vue'))
 const isComposerSettingsOpen = ref(false)
+const messageStreamRef = ref(null)
 const composerActionTitle = computed(() => (chatStore.isStreaming ? '停止对话' : '发送信息'))
 const activeModelSummary = computed(() => {
   const chat = modelConfigStore.activeChatConfig?.modelName || '未配置对话模型'
@@ -24,6 +25,16 @@ function handleComposerAction() {
   }
 }
 
+function handleDraftKeydown(event) {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) {
+    return
+  }
+  event.preventDefault()
+  if (chatStore.canSend) {
+    chatStore.streamChat()
+  }
+}
+
 function clearMessages() {
   if (!chatStore.hasMessages || chatStore.isStreaming) {
     return
@@ -33,6 +44,37 @@ function clearMessages() {
     chatStore.clearActiveMessages()
   }
 }
+
+async function scrollMessagesToBottom() {
+  await nextTick()
+  applyMessageScrollBottom()
+  window.requestAnimationFrame(() => {
+    applyMessageScrollBottom()
+    window.setTimeout(applyMessageScrollBottom, 80)
+  })
+}
+
+function applyMessageScrollBottom() {
+  const stream = messageStreamRef.value
+  if (stream) {
+    stream.scrollTop = stream.scrollHeight
+  }
+}
+
+watch(
+  () => [
+    chatStore.activeSessionId,
+    chatStore.isLoadingActiveSession,
+    chatStore.activeMessages.length,
+    chatStore.activeMessages.at(-1)?.content.length || 0
+  ],
+  () => {
+    if (!chatStore.isLoadingActiveSession) {
+      scrollMessagesToBottom()
+    }
+  },
+  { flush: 'post' }
+)
 </script>
 
 <template>
@@ -59,7 +101,7 @@ function clearMessages() {
       </div>
     </header>
 
-    <section class="message-stream" aria-live="polite">
+    <section ref="messageStreamRef" class="message-stream" aria-live="polite">
       <div v-if="!chatStore.hasMessages" class="empty-chat">
         <p class="eyebrow">开始一次对话</p>
         <h3>可以直接问，也可以带知识库问。</h3>
@@ -102,6 +144,7 @@ function clearMessages() {
           rows="3"
           :placeholder="chatStore.useKnowledgeBase ? '向知识库提问...' : '直接和模型对话...'"
           :disabled="chatStore.isStreaming"
+          @keydown="handleDraftKeydown"
         ></textarea>
 
         <div class="composer-side-actions">
