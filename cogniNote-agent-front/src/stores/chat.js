@@ -13,6 +13,7 @@ import {
 
 const DEFAULT_RETRIEVAL_MODE = 'HYBRID'
 const DEFAULT_TOP_K = 8
+const POST_ERROR_REFRESH_DELAYS = [600, 1800, 4200, 9000, 18000, 36000]
 
 let localIdSeed = 0
 
@@ -96,6 +97,12 @@ function createLocalMessage(role, content = '') {
     status: role === 'assistant' ? 'streaming' : 'done',
     createdAt: Date.now()
   }, role)
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
 }
 
 export const useChatStore = defineStore('chat', () => {
@@ -311,7 +318,10 @@ export const useChatStore = defineStore('chat', () => {
         await refreshActiveSession()
         await refreshSessionList()
       } else {
+        const failedSessionId = streamingContext.value?.sessionId || session.id
+        const failedRequestId = streamingContext.value?.requestId || requestId
         markAssistantError(err.message || '模型返回错误')
+        void refreshSessionAfterStreamError(failedSessionId, failedRequestId)
       }
     } finally {
       isStreaming.value = false
@@ -394,9 +404,51 @@ export const useChatStore = defineStore('chat', () => {
     if (!activeSessionId.value) {
       return
     }
-    const detail = normalizeSession(await getChatSession(activeSessionId.value))
+    await refreshSessionById(activeSessionId.value)
+  }
+
+  async function refreshSessionById(sessionId, options = {}) {
+    if (!sessionId) {
+      return false
+    }
+    const detail = normalizeSession(await getChatSession(sessionId))
+    if (options.requiredAssistantRequestId && !hasAssistantMessage(detail, options.requiredAssistantRequestId)) {
+      return false
+    }
     upsertSession(detail)
-    applySessionOptions(detail)
+    if (activeSessionId.value === sessionId) {
+      applySessionOptions(detail)
+    }
+    return true
+  }
+
+  async function refreshSessionAfterStreamError(sessionId, requestId) {
+    if (!sessionId || !requestId) {
+      return
+    }
+    for (const waitMs of POST_ERROR_REFRESH_DELAYS) {
+      await delay(waitMs)
+      if (isStreaming.value) {
+        continue
+      }
+      try {
+        const refreshed = await refreshSessionById(sessionId, {
+          requiredAssistantRequestId: requestId
+        })
+        if (refreshed) {
+          await refreshSessionList().catch(() => {})
+          return
+        }
+      } catch {
+        // 错误态气泡已经展示给用户；后台同步失败不应再覆盖当前可见错误。
+      }
+    }
+  }
+
+  function hasAssistantMessage(session, requestId) {
+    return session.messages.some((message) =>
+      message.role === 'assistant' && message.requestId === requestId
+    )
   }
 
   async function refreshSessionList() {
