@@ -19,6 +19,7 @@ use tauri::{
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
 const APP_NAME: &str = "CogniNote";
+const DESKTOP_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg(windows)]
 const BACKEND_RESOURCE_DIR: &str = "backend/CogniNoteBackend";
 #[cfg(target_os = "macos")]
@@ -56,8 +57,15 @@ impl Drop for BackendProcess {
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .invoke_handler(tauri::generate_handler![pick_knowledge_folder])
         .setup(setup_desktop)
         .on_window_event(|window, event| {
@@ -65,8 +73,14 @@ pub fn run() {
                 shutdown_backend(&window.app_handle());
             }
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("failed to run CogniNote desktop shell");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { .. } = event {
+            shutdown_backend(app_handle);
+        }
+    });
 }
 
 #[tauri::command]
@@ -91,6 +105,7 @@ fn start_backend_and_open_window(app: &mut App) -> Result<(), String> {
     let port = select_available_port()?;
     let backend_exe = resolve_backend_exe(app)?;
     let log_path = prepare_backend_log_path()?;
+    append_desktop_startup_log(app, &backend_exe, port, &log_path);
     let child = spawn_backend(&backend_exe, port, &log_path)?;
 
     if let Err(error) = wait_until_backend_ready(port) {
@@ -195,7 +210,7 @@ fn spawn_backend(backend_exe: &Path, port: u16, log_path: &Path) -> Result<Child
     append_log_line(
         log_path,
         &format!(
-            "\n==== Starting backend: {} on port {} ====",
+            "==== Starting backend executable: {} on port {} ====",
             backend_exe.display(),
             port
         ),
@@ -213,6 +228,28 @@ fn spawn_backend(backend_exe: &Path, port: u16, log_path: &Path) -> Result<Child
     command
         .spawn()
         .map_err(|error| format!("无法启动后端进程：{error}"))
+}
+
+fn append_desktop_startup_log(app: &App, backend_exe: &Path, port: u16, log_path: &Path) {
+    let package_info = app.package_info();
+    let app_version = package_info.version.to_string();
+    let resource_dir = backend_exe
+        .parent()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| "-".to_string());
+    append_log_line(
+        log_path,
+        &format!(
+            "\n==== CogniNote desktop startup: desktopVersion={} packageVersion={} currentExe={} backendResourceDir={} selectedPort={} ====",
+            DESKTOP_VERSION,
+            app_version,
+            std::env::current_exe()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|_| "-".to_string()),
+            resource_dir,
+            port
+        ),
+    );
 }
 
 fn configure_backend_process_window(command: &mut Command) {

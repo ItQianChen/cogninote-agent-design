@@ -266,7 +266,7 @@ APPLE_PROVIDER_SHORT_NAME
 
 `APPLE_PROVIDER_SHORT_NAME` 仅在 Apple 账号存在多个 provider 时需要。除了 `APPLE_PROVIDER_SHORT_NAME`，其它 macOS Secrets 必须全部配置才会进入 signed 模式；全部为空时进入 unsigned 测试模式；配置不完整会失败。signed 模式会对 `.app` 和 `.dmg` 分别执行 `codesign`、`notarytool`、`stapler` 和 `spctl` 验证，并上传公证日志。
 
-unsigned macOS 包仅用于技术测试。下载后普通用户可能看到“无法验证开发者”或“已损坏，无法打开”，需要右键打开、系统设置放行或 `xattr -cr` 才能运行；这不是普通用户分发包。
+unsigned macOS 包仅用于技术测试。即使从 GitHub Release 直接下载，macOS 也会给文件附加 quarantine；Gatekeeper 最终检查的是挂载后或复制后的 `.app`，不是只检查 `.dmg`。因此只对 DMG 执行 `xattr` 不保证能运行，普通用户分发必须使用 signed、notarized、stapled DMG。
 
 macOS artifacts：
 
@@ -291,16 +291,16 @@ release_tag = v0.1.1-test.1
 
 `release_tag` 留空时，unsigned 构建默认发布到 `v0.1.1-test.1`，signed 构建默认发布到 `v0.1.1`。unsigned Release 会标记为 pre-release。Windows 和 macOS 可以分别运行 workflow，并使用同一个 `release_tag`，后运行的平台会把自己的资产追加到同一个 Release 中。
 
-Release 上传的是真实安装文件，不是 Actions artifact 外层 zip：
+Release 上传的是真实安装文件，不是 Actions artifact 外层 zip。普通用户优先下载 signed 资产；unsigned 资产只给开发者做技术测试：
 
 ```text
 CogniNote-0.1.1-windows-x64-unsigned-installer.exe
 CogniNote-0.1.1-windows-x64-unsigned-portable.zip
-CogniNote-0.1.1-macos-arm64-unsigned.dmg
-CogniNote-0.1.1-macos-arm64-unsigned.app.zip
+CogniNote-0.1.1-macos-arm64-signed.dmg
+CogniNote-0.1.1-macos-arm64-signed.app.zip
 ```
 
-给测试用户分发时，优先发送 Release 页面里的 `.exe` 或 `.dmg` 下载链接，避免从微信等聊天工具转发后额外叠加隔离属性。
+给测试用户分发时，优先发送 Release 页面里的 `.exe` 或 signed `.dmg` 下载链接。macOS unsigned DMG 不适合普通用户分发。
 
 ## Windows 运行和验收
 
@@ -323,6 +323,10 @@ CogniNote-0.1.1-macos-arm64-unsigned.app.zip
 - Tauri 会在 `18080-18120` 中选择可用端口，并把端口通过 `COGNINOTE_PORT` 注入后端。
 - 桌面窗口加载 `http://127.0.0.1:{port}/`，前端 `/api` 相对路径继续同源工作。
 - 关闭窗口后，Tauri 会终止后端进程。
+- 第二次启动应用时会聚焦已有窗口，避免旧实例仍运行时误以为新版已启动。
+- 安装器会在升级或卸载前尝试关闭 `CogniNote.exe`、`cogninote-agent.exe` 和 `CogniNoteBackend.exe`。
+- 安装前会清理旧安装目录里的 `backend/`，避免后端 app-image 资源残留。
+- 卸载后会清理常见桌面和开始菜单快捷方式残留，但不会删除 `%APPDATA%\CogniNote` 用户数据。
 
 日志路径：
 
@@ -346,6 +350,12 @@ $env:COGNINOTE_LOG_FILE='D:\temp\cogninote-app.log'
 ```
 
 卸载桌面应用不应删除该用户数据目录。
+
+如需彻底清理测试数据，请先确认不再需要知识库、聊天记录和模型配置，再手动删除：
+
+```powershell
+Remove-Item -LiteralPath "$env:APPDATA\CogniNote" -Recurse -Force
+```
 
 ## macOS 运行和验收
 
@@ -383,6 +393,15 @@ open ./cogniNote-agent-front/src-tauri/target/release/bundle/dmg/CogniNote_0.1.1
 ```
 
 本地脚本默认产物未签名、未公证，Gatekeeper 可能拦截运行。普通用户安装请使用 GitHub Actions 签名、公证后的 DMG；下载后应可直接拖入 Applications 并打开。
+
+macOS 升级时请把 DMG 内的 `CogniNote.app` 拖入 `/Applications` 并选择替换旧版本，不要直接从 DMG 挂载目录运行。若是 unsigned 技术测试包，拖入 `/Applications` 后再清理 app 的 quarantine：
+
+```bash
+sudo xattr -dr com.apple.quarantine /Applications/CogniNote.app
+open /Applications/CogniNote.app
+```
+
+如果 signed DMG 仍提示“已损坏，无法打开”，优先检查 workflow 的 `CogniNote-0.1.1-macos-notarization-logs`、`spctl` 输出，以及 `desktop-backend.log` 中的实际 app 路径。
 
 ## 图标更新
 

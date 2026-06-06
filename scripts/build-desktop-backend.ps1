@@ -164,6 +164,12 @@ try {
         throw "jpackage did not generate backend launcher: $backendExe"
     }
 
+    Get-ChildItem -LiteralPath $backendImageDir -Recurse -Force | ForEach-Object {
+        if ($_.Attributes -band [System.IO.FileAttributes]::ReadOnly) {
+            $_.Attributes = $_.Attributes -band (-bnot [System.IO.FileAttributes]::ReadOnly)
+        }
+    }
+
     Write-Host "Backend app-image generated: $backendImageDir"
 } finally {
     Pop-Location

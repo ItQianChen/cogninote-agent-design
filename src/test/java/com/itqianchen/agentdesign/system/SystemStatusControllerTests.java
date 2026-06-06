@@ -25,6 +25,7 @@ class SystemStatusControllerTests {
         assertThat(response.version()).isEqualTo("0.0.1-SNAPSHOT");
         assertThat(response.status()).isEqualTo("UP");
         assertThat(response.dataDir()).contains("target");
+        assertThat(response.desktopMode()).isFalse();
     }
 }
 

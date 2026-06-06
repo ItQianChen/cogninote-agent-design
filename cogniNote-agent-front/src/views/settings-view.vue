@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, ChevronUp } from 'lucide-vue-next'
 import KnowledgeFolderPanel from '../components/knowledge-folder-panel.vue'
 import KnowledgeSearchPanel from '../components/knowledge-search-panel.vue'
@@ -11,6 +11,9 @@ import { useSystemStore } from '../stores/system'
 import { THEME_OPTIONS, useThemeStore } from '../stores/theme'
 
 const GITHUB_URL = 'https://github.com/ItQianChen/cogninote-agent-design'
+const FRONTEND_VERSION = typeof __COGNINOTE_FRONTEND_VERSION__ === 'string'
+  ? __COGNINOTE_FRONTEND_VERSION__
+  : '-'
 
 const systemStore = useSystemStore()
 const searchStore = useSearchStore()
@@ -21,6 +24,7 @@ const activeItem = ref('system-theme')
 const pageRef = ref(null)
 const contentRef = ref(null)
 const showBackToTop = ref(false)
+const desktopVersion = ref('-')
 
 const sidebarGroups = [
   {
@@ -63,7 +67,10 @@ const embeddingReady = computed(() => {
 
 const systemDescriptions = computed(() => [
   { label: '应用', value: systemStore.status?.appName || '-' },
-  { label: '版本', value: systemStore.status?.version || '-' },
+  { label: '后端版本', value: systemStore.status?.version || '-' },
+  { label: '前端版本', value: FRONTEND_VERSION },
+  { label: '桌面壳版本', value: desktopVersion.value },
+  { label: '桌面模式', value: systemStore.status?.desktopMode ? '是' : '否' },
   { label: '状态', value: systemStore.status?.status || '-' },
   { label: '后端连接', value: systemStore.connectionLabel },
   { label: '数据目录', value: systemStore.status?.dataDir || '-', mono: true },
@@ -77,6 +84,10 @@ watch(activeItem, (item) => {
   contentRef.value?.scrollTo({ top: 0 })
   loadActiveItemData(item)
 }, { immediate: true })
+
+onMounted(() => {
+  loadDesktopVersion()
+})
 
 function isItemActive(itemId) {
   return activeItem.value === itemId
@@ -97,6 +108,15 @@ function handleSettingsScroll(event) {
 function scrollSettingsToTop() {
   pageRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
   contentRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function loadDesktopVersion() {
+  try {
+    const { getVersion } = await import('@tauri-apps/api/app')
+    desktopVersion.value = await getVersion()
+  } catch {
+    desktopVersion.value = '-'
+  }
 }
 
 async function loadActiveItemData(item) {

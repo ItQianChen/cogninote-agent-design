@@ -11,6 +11,7 @@ public class SystemStatusService {
 
     private final AppStorageInitializer storageInitializer;
     private final String version;
+    private final boolean desktopMode;
 
     public SystemStatusService(
             AppStorageInitializer storageInitializer,
@@ -18,6 +19,7 @@ public class SystemStatusService {
     ) {
         this.storageInitializer = storageInitializer;
         this.version = version;
+        this.desktopMode = Boolean.parseBoolean(System.getenv().getOrDefault("COGNINOTE_DESKTOP", "false"));
     }
 
     public SystemStatusResponse status() {
@@ -25,7 +27,8 @@ public class SystemStatusService {
                 "CogniNote Agent",
                 version,
                 STATUS_UP,
-                storageInitializer.appStorage().baseDir().toString()
+                storageInitializer.appStorage().baseDir().toString(),
+                desktopMode
         );
     }
 }

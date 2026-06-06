@@ -1,4 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
+import { readFileSync } from 'node:fs'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -7,8 +8,13 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
+const packageJson = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __COGNINOTE_FRONTEND_VERSION__: JSON.stringify(packageJson.version)
+  },
   plugins: [
     vue(),
     vueDevTools(),

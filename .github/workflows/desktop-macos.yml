@@ -138,14 +138,20 @@ jobs:
           set -euo pipefail
           APP_PATH="$(find cogniNote-agent-front/src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -type d | head -n 1)"
           DMG_PATH="$(find cogniNote-agent-front/src-tauri/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -type f | head -n 1)"
+          BACKEND_APP_PATH="$APP_PATH/Contents/Resources/backend/CogniNoteBackend.app"
           if [[ -z "$APP_PATH" || -z "$DMG_PATH" ]]; then
             echo "macOS .app or .dmg artifact was not generated." >&2
+            exit 1
+          fi
+          if [[ ! -d "$BACKEND_APP_PATH" ]]; then
+            echo "Nested backend app was not bundled: $BACKEND_APP_PATH" >&2
             exit 1
           fi
 
           mkdir -p artifacts/macos
           APP_NOTARY_ZIP="$RUNNER_TEMP/CogniNote-${COGNINOTE_DESKTOP_VERSION}-macos-arm64.notary.zip"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$BACKEND_APP_PATH"
           ditto -c -k --keepParent "$APP_PATH" "$APP_NOTARY_ZIP"
 
           xcrun notarytool submit "$APP_NOTARY_ZIP" \
@@ -156,6 +162,7 @@ jobs:
           xcrun stapler staple "$APP_PATH"
           xcrun stapler validate "$APP_PATH"
           spctl -a -vvv -t exec "$APP_PATH"
+          spctl -a -vvv -t exec "$BACKEND_APP_PATH"
 
           xcrun notarytool submit "$DMG_PATH" \
             --apple-id "$APPLE_ID" \
@@ -249,7 +256,7 @@ jobs:
             "- DMG installer: CogniNote-${version}-macos-arm64-${suffix}.dmg" \
             "- App bundle zip: CogniNote-${version}-macos-arm64-${suffix}.app.zip" \
             "" \
-            "Unsigned macOS builds are for technical testing only. If Gatekeeper reports that the app is damaged or cannot be verified, use signed and notarized assets for ordinary-user distribution when an Apple Developer certificate is available." \
+            "Unsigned macOS builds are for technical testing only and are not ordinary-user installers. Use signed, notarized and stapled DMG assets for distribution." \
             > "$notes_path"
 
           if ! gh release view "$tag" >/dev/null 2>&1; then

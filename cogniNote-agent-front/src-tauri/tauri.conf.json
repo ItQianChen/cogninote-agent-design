@@ -31,6 +31,7 @@
       },
       "nsis": {
         "installerIcon": "icons/icon.ico",
+        "installerHooks": "windows/hooks.nsh",
         "installMode": "currentUser",
         "displayLanguageSelector": false
       }

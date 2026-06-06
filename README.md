@@ -115,6 +115,8 @@ cogniNote-agent-front/src-tauri/target/release/bundle/nsis/CogniNote_0.1.1_x64-s
 
 手动触发 workflow 时可设置 `publish_release=true`，把真实安装包 `.exe` 和便携包 `.zip` 发布到 GitHub Release；`release_tag` 留空时，unsigned 构建默认发布到 `v0.1.1-test.1`，signed 构建默认发布到 `v0.1.1`。
 
+Windows 安装器会在升级或卸载前尝试关闭旧主程序和 `CogniNoteBackend.exe`，并清理旧安装目录里的 backend 资源和常见快捷方式残留。卸载默认保留 `%APPDATA%\CogniNote` 用户数据。
+
 ### 构建 macOS 桌面应用
 
 macOS 和 Windows 打包链路分开维护。请在 Apple Silicon Mac 上执行：
@@ -132,9 +134,9 @@ cogniNote-agent-front/src-tauri/target/release/bundle/dmg/CogniNote_0.1.1_aarch6
 
 注意：`target/desktop-macos/backend/CogniNoteBackend.app` 只是 macOS 后端 app-image，不是最终桌面应用入口。
 
-macOS 可以在 GitHub Actions `Desktop macOS` workflow 构建。未配置 Apple Developer 证书时会上传 `CogniNote-0.1.1-macos-arm64-unsigned-*` 测试 artifacts，普通用户可能遇到 Gatekeeper 拦截；配置 Developer ID 和公证 Secrets 后会上传 `signed` artifacts，避免下载后出现“已损坏，无法打开”的常见拦截。
+macOS 可以在 GitHub Actions `Desktop macOS` workflow 构建。未配置 Apple Developer 证书时会上传 `CogniNote-0.1.1-macos-arm64-unsigned-*` 技术测试 artifacts；普通用户分发必须使用配置 Developer ID 和公证 Secrets 后生成的 signed artifacts，避免 GitHub 下载后被 Gatekeeper 判定“已损坏，无法打开”。
 
-手动触发 workflow 时可设置 `publish_release=true`，把真实 `.dmg` 和 `.app.zip` 发布到 GitHub Release；`release_tag` 留空时，unsigned 构建默认发布到 `v0.1.1-test.1`，signed 构建默认发布到 `v0.1.1`。给测试用户分发时优先发 Release 下载链接，不建议用微信直接转发 `.dmg`。
+手动触发 workflow 时可设置 `publish_release=true`，把真实 `.dmg` 和 `.app.zip` 发布到 GitHub Release；`release_tag` 留空时，unsigned 构建默认发布到 `v0.1.1-test.1`，signed 构建默认发布到 `v0.1.1`。macOS 升级时应把 `CogniNote.app` 拖入 `/Applications` 并替换旧版本，不要直接从 DMG 挂载目录运行。
 
 ## 使用流程
 
@@ -231,12 +233,13 @@ bash ./scripts/build-desktop-app-macos.sh --skip-tests
 | [API 参考](docs/api-reference.md) | REST API、统一响应格式、SSE 事件和流式取消接口 |
 | [模型配置指南](docs/model-configuration-guide.md) | DashScope 与 OpenAI-compatible 配置方式 |
 | [桌面构建指南](docs/desktop-build-guide.md) | PowerShell 脚本、Tauri 打包、产物和故障排查 |
+| [阶段 19：桌面安装升级计划](docs/phase-19-desktop-install-upgrade-reliability-plan.md) | macOS/Windows 安装、卸载、升级可靠性 |
 | [可维护性重构计划](docs/maintainability-refactor-plan.md) | 前后端分层、统一响应和注释规范 |
 
 
 ## 开发状态
 
-当前项目已完成文档摄入、Lucene 搜索、模型配置、RAG 对话、路由式多智能体对话、模式隔离聊天记忆、智能体模型运行时重构、AI 流式 Markdown 渲染、SQLite 聊天记忆、纯模型对话、空白保真的 SSE 流式输出、流式截断识别与错误状态同步、MyBatis 统一数据访问层、Windows 桌面打包、macOS Apple Silicon 独立打包链路，以及 `0.1.1` 双平台 unsigned/signed CI 打包链路的主要闭环。仍需重点补齐：
+当前项目已完成文档摄入、Lucene 搜索、模型配置、RAG 对话、路由式多智能体对话、模式隔离聊天记忆、智能体模型运行时重构、AI 流式 Markdown 渲染、SQLite 聊天记忆、纯模型对话、空白保真的 SSE 流式输出、流式截断识别与错误状态同步、MyBatis 统一数据访问层、Windows 桌面打包、macOS Apple Silicon 独立打包链路、`0.1.1` 双平台 unsigned/signed CI 打包链路，以及桌面安装/卸载/升级可靠性修复的主要闭环。仍需重点补齐：
 
 - API Key 本地加密或凭据管理。
 - 桌面会话令牌保护。

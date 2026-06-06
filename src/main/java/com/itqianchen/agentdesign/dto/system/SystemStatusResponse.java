@@ -4,7 +4,8 @@ public record SystemStatusResponse(
         String appName,
         String version,
         String status,
-        String dataDir
+        String dataDir,
+        boolean desktopMode
 ) {
 }
 

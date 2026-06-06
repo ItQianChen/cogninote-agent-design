@@ -953,6 +953,15 @@ POST   /api/chat/stream/{requestId}/cancel
 - `chat_messages.agent_type` 标记消息所属 Agent，schema 初始化负责旧库补列
 - 跨 Agent assistant 历史只作为带边界说明的参考注入，避免关闭知识库后继续执行 RAG 拒答规则
 
+### Milestone 19：桌面安装、卸载与升级可靠性
+
+- macOS unsigned 包降级为技术测试 artifact，普通用户分发以 signed、notarized、stapled DMG 为准
+- macOS CI signed 模式验证主 app、嵌套后端 app 和 DMG 的签名、公证、staple 与 Gatekeeper 状态
+- Tauri 桌面壳增加 single-instance，第二次启动会聚焦现有窗口
+- Tauri 启动日志记录桌面壳版本、包版本、实际启动路径、后端资源路径和端口
+- Windows NSIS 安装/卸载钩子负责关闭旧主程序和后端进程，并清理旧安装目录中的 backend 资源和常见快捷方式残留
+- 设置中心系统信息显示后端版本、前端版本、桌面壳版本和桌面模式，便于确认用户实际启动的新旧版本
+
 ## 12. 后续版本规划
 
 ### v0.2
