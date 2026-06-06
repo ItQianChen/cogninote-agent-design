@@ -90,7 +90,7 @@
     </select>
 
     <insert id="insertSession">
-        INSERT INTO chat_sessions (
+        INSERT OR IGNORE INTO chat_sessions (
             id, title, summary, summary_message_sequence, use_knowledge_base,
             retrieval_mode, top_k, deleted, created_at, updated_at
         )

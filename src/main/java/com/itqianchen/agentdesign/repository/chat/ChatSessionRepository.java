@@ -60,8 +60,13 @@ public class ChatSessionRepository {
                 now,
                 now
         );
-        chatSessionMapper.insertSession(session);
-        return session;
+        if (chatSessionMapper.insertSession(session) > 0) {
+            return session;
+        }
+        return findById(session.id())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Chat session id already exists but is not active: " + session.id()
+                ));
     }
 
     public ChatSession ensureSession(
@@ -82,7 +87,9 @@ public class ChatSessionRepository {
              * SSE meta 会把 conversationId 提前返回给前端。首次发送时必须用同一个
              * id 创建 SQLite 会话，否则前端持有的会话 id 与落库消息会分叉。
              */
-            return create(conversationId, fallbackTitle, useKnowledgeBase, mode, topK, now);
+            ChatSession session = create(conversationId, fallbackTitle, useKnowledgeBase, mode, topK, now);
+            updateOptions(conversationId, null, useKnowledgeBase, mode, topK, now);
+            return findById(conversationId).orElse(session);
         }
         return create(fallbackTitle, useKnowledgeBase, mode, topK, now);
     }

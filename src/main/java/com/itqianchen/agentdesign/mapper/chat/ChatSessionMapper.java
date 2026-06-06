@@ -13,7 +13,7 @@ public interface ChatSessionMapper {
 
     List<ChatSession> findById(@Param("id") String id);
 
-    void insertSession(ChatSession session);
+    int insertSession(ChatSession session);
 
     void updateOptions(
             @Param("id") String id,
