@@ -1,6 +1,6 @@
 {
   "name": "cogninote-agent-front",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
-    "desktop:build:macos": "tauri build --config src-tauri/tauri.macos.conf.json --bundles app,dmg --no-sign"
+    "desktop:build:macos": "tauri build --config src-tauri/tauri.macos.conf.json --bundles app,dmg --no-sign",
+    "desktop:build:macos:signed": "tauri build --bundles app,dmg"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.0",

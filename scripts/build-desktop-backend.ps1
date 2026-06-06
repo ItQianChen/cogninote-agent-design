@@ -54,7 +54,7 @@ function Resolve-JdkHome {
 $JdkHome = Resolve-JdkHome $JdkHome
 $javaExe = Join-Path $JdkHome 'bin\java.exe'
 $jpackageExe = Join-Path $JdkHome 'bin\jpackage.exe'
-$jarName = 'cogninote-agent-design-0.0.1-SNAPSHOT.jar'
+$jarName = 'cogninote-agent-design.jar'
 $jarPath = Join-Path $projectRoot "target\$jarName"
 $desktopBackendDir = Join-Path $projectRoot 'target\desktop\backend'
 $backendImageDir = Join-Path $desktopBackendDir 'CogniNoteBackend'

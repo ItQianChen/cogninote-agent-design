@@ -13,7 +13,7 @@
 
     <groupId>com.itqianchen</groupId>
     <artifactId>cogninote-agent-design</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.1.0</version>
     <name>cogninote-agent-design</name>
     <description>CogniNote Agent local knowledge base application</description>
 
@@ -116,6 +116,7 @@
     </dependencies>
 
     <build>
+        <finalName>cogninote-agent-design</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -3,11 +3,16 @@ set -euo pipefail
 
 SKIP_TESTS=false
 JDK_HOME_ARG=""
+SIGN_BUILD=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-tests)
       SKIP_TESTS=true
+      shift
+      ;;
+    --sign)
+      SIGN_BUILD=true
       shift
       ;;
     --jdk-home)
@@ -61,7 +66,32 @@ trap restore_tauri_config EXIT
 # macOS bundle config, temporarily swap the active config during the build and
 # restore the Windows config immediately afterwards.
 cp "$TAURI_MACOS_CONFIG" "$TAURI_CONFIG"
-npm --prefix cogniNote-agent-front run desktop:build:macos
+if [[ "$SIGN_BUILD" == "true" ]]; then
+  if [[ -z "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+    echo "APPLE_SIGNING_IDENTITY is required for signed macOS builds." >&2
+    exit 1
+  fi
+
+  # The checked-in macOS config stays secret-free. During signed CI builds, write
+  # the Developer ID identity only into the temporary active Tauri config that is
+  # restored at process exit.
+  node - "$TAURI_CONFIG" <<'NODE'
+const fs = require('fs');
+const configPath = process.argv[2];
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+config.bundle ??= {};
+config.bundle.macOS ??= {};
+config.bundle.macOS.signingIdentity = process.env.APPLE_SIGNING_IDENTITY;
+if (process.env.APPLE_PROVIDER_SHORT_NAME) {
+  config.bundle.macOS.providerShortName = process.env.APPLE_PROVIDER_SHORT_NAME;
+}
+fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+NODE
+
+  npm --prefix cogniNote-agent-front run desktop:build:macos:signed
+else
+  npm --prefix cogniNote-agent-front run desktop:build:macos
+fi
 
 echo
 echo "macOS desktop build finished. Check cogniNote-agent-front/src-tauri/target/release/bundle/."

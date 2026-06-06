@@ -3,6 +3,10 @@ name: Desktop macOS
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  COGNINOTE_DESKTOP_VERSION: 0.1.0
+
 jobs:
   build-macos:
     name: Build macOS Apple Silicon desktop package
@@ -32,29 +36,157 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix cogniNote-agent-front ci
 
-      - name: Build macOS desktop package
-        run: bash ./scripts/build-desktop-app-macos.sh --skip-tests
+      - name: Resolve macOS signing mode
+        id: macos-signing
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          required=(
+            MACOS_CERTIFICATE_P12_BASE64
+            MACOS_CERTIFICATE_PASSWORD
+            MACOS_SIGNING_IDENTITY
+            APPLE_ID
+            APPLE_APP_SPECIFIC_PASSWORD
+            APPLE_TEAM_ID
+          )
+
+          configured=0
+          missing=()
+          for name in "${required[@]}"; do
+            if [[ -n "${!name:-}" ]]; then
+              configured=$((configured + 1))
+            else
+              missing+=("$name")
+            fi
+          done
+
+          if [[ "$configured" -eq "${#required[@]}" ]]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "artifact_suffix=signed" >> "$GITHUB_OUTPUT"
+            echo "macOS signing and notarization secrets found; building signed distribution artifacts."
+          elif [[ "$configured" -eq 0 ]]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "artifact_suffix=unsigned" >> "$GITHUB_OUTPUT"
+            echo "macOS signing secrets are not configured; building unsigned test artifacts."
+          else
+            printf 'Incomplete macOS signing secret configuration. Missing: %s\n' "${missing[*]}" >&2
+            echo 'Configure all required macOS secrets, or leave all of them empty for an unsigned test build.' >&2
+            exit 1
+          fi
+
+      - name: Import Developer ID certificate
+        if: steps.macos-signing.outputs.signed == 'true'
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/cogninote-signing.keychain-db"
+          CERTIFICATE_PATH="$RUNNER_TEMP/cogninote-developer-id.p12"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+
+          echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 -D > "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Build signed macOS desktop package
+        if: steps.macos-signing.outputs.signed == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
+        run: |
+          set -euo pipefail
+          bash ./scripts/build-desktop-app-macos.sh --skip-tests --sign
+
+      - name: Build unsigned macOS desktop package
+        if: steps.macos-signing.outputs.signed == 'false'
+        run: |
+          set -euo pipefail
+          bash ./scripts/build-desktop-app-macos.sh --skip-tests
+
+      - name: Verify and notarize macOS artifacts
+        if: steps.macos-signing.outputs.signed == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find cogniNote-agent-front/src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          DMG_PATH="$(find cogniNote-agent-front/src-tauri/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -type f | head -n 1)"
+          if [[ -z "$APP_PATH" || -z "$DMG_PATH" ]]; then
+            echo "macOS .app or .dmg artifact was not generated." >&2
+            exit 1
+          fi
+
+          mkdir -p artifacts/macos
+          APP_NOTARY_ZIP="$RUNNER_TEMP/CogniNote-${COGNINOTE_DESKTOP_VERSION}-macos-arm64.notary.zip"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          ditto -c -k --keepParent "$APP_PATH" "$APP_NOTARY_ZIP"
+
+          xcrun notarytool submit "$APP_NOTARY_ZIP" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait | tee artifacts/macos/notary-app.log
+          xcrun stapler staple "$APP_PATH"
+          xcrun stapler validate "$APP_PATH"
+          spctl -a -vvv -t exec "$APP_PATH"
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait | tee artifacts/macos/notary-dmg.log
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+          spctl -a -vvv -t install "$DMG_PATH"
+
+      - name: Report unsigned macOS artifacts
+        if: steps.macos-signing.outputs.signed == 'false'
+        run: |
+          echo 'Unsigned macOS artifacts were generated for testing only.'
+          echo 'Downloaded apps may require right-click Open or xattr -cr, and are not suitable for ordinary-user distribution.'
 
       - name: Archive macOS app bundle
         run: |
+          set -euo pipefail
           APP_PATH="$(find cogniNote-agent-front/src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -type d | head -n 1)"
           if [[ -z "$APP_PATH" ]]; then
             echo "macOS .app bundle was not generated." >&2
             exit 1
           fi
           mkdir -p artifacts/macos
-          ditto -c -k --keepParent "$APP_PATH" artifacts/macos/CogniNote.app.zip
+          ditto -c -k --keepParent "$APP_PATH" "artifacts/macos/CogniNote-${COGNINOTE_DESKTOP_VERSION}-macos-arm64-${{ steps.macos-signing.outputs.artifact_suffix }}.app.zip"
 
       - name: Upload macOS app artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CogniNote-macos-app
-          path: artifacts/macos/CogniNote.app.zip
+          name: CogniNote-0.1.0-macos-arm64-${{ steps.macos-signing.outputs.artifact_suffix }}-app
+          path: artifacts/macos/CogniNote-0.1.0-macos-arm64-${{ steps.macos-signing.outputs.artifact_suffix }}.app.zip
           if-no-files-found: error
 
       - name: Upload macOS dmg artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CogniNote-macos-dmg
+          name: CogniNote-0.1.0-macos-arm64-${{ steps.macos-signing.outputs.artifact_suffix }}-dmg
           path: cogniNote-agent-front/src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+      - name: Upload macOS notarization logs
+        if: steps.macos-signing.outputs.signed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CogniNote-0.1.0-macos-notarization-logs
+          path: artifacts/macos/notary-*.log
           if-no-files-found: error

@@ -3,6 +3,10 @@ name: Desktop Windows
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  COGNINOTE_DESKTOP_VERSION: 0.1.0
+
 jobs:
   build-windows:
     name: Build Windows desktop package
@@ -30,20 +34,92 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Resolve Windows signing mode
+        id: windows-signing
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX_BASE64)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)
+          if ($hasCertificate -xor $hasPassword) {
+            throw 'Configure both WINDOWS_CERTIFICATE_PFX_BASE64 and WINDOWS_CERTIFICATE_PASSWORD, or leave both empty for an unsigned test build.'
+          }
+
+          if ($hasCertificate -and $hasPassword) {
+            'require_signing=true' >> $env:GITHUB_OUTPUT
+            'artifact_suffix=signed' >> $env:GITHUB_OUTPUT
+            Write-Host 'Windows signing secrets found; building signed distribution artifacts.'
+          } else {
+            'require_signing=false' >> $env:GITHUB_OUTPUT
+            'artifact_suffix=unsigned' >> $env:GITHUB_OUTPUT
+            Write-Host 'Windows signing secrets are not configured; building unsigned test artifacts.'
+          }
+
       - name: Build Windows desktop package
         shell: pwsh
+        env:
+          COGNINOTE_REQUIRE_WINDOWS_SIGNING: ${{ steps.windows-signing.outputs.require_signing }}
+          WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: .\scripts\build-desktop-app.ps1 -SkipTests
+
+      - name: Sign final Windows artifacts
+        if: steps.windows-signing.outputs.artifact_suffix == 'signed'
+        shell: pwsh
+        env:
+          COGNINOTE_REQUIRE_WINDOWS_SIGNING: true
+          WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $artifacts = @(
+            Get-ChildItem -LiteralPath 'cogniNote-agent-front/src-tauri/target/release' -Filter '*.exe' -File
+            Get-ChildItem -LiteralPath 'cogniNote-agent-front/src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File
+          )
+          if (-not $artifacts) {
+            throw 'Windows exe artifacts were not generated.'
+          }
+          foreach ($artifact in $artifacts) {
+            .\scripts\sign-windows-artifact.ps1 -FilePath $artifact.FullName
+          }
+
+      - name: Verify Windows signatures
+        if: steps.windows-signing.outputs.artifact_suffix == 'signed'
+        shell: pwsh
+        run: |
+          $artifacts = @(
+            Get-ChildItem -LiteralPath 'cogniNote-agent-front/src-tauri/target/release' -Filter '*.exe' -File
+            Get-ChildItem -LiteralPath 'cogniNote-agent-front/src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File
+          )
+          if (-not $artifacts) {
+            throw 'Windows exe artifacts were not generated.'
+          }
+          foreach ($artifact in $artifacts) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $artifact.FullName
+            if ($signature.Status -ne 'Valid') {
+              throw "Invalid signature for $($artifact.FullName): $($signature.Status)"
+            }
+            Write-Host "Valid signature: $($artifact.FullName)"
+          }
+
+      - name: Report unsigned Windows artifacts
+        if: steps.windows-signing.outputs.artifact_suffix == 'unsigned'
+        shell: pwsh
+        run: |
+          Write-Host 'Unsigned Windows artifacts were generated for testing only.'
+          Write-Host 'Users may see SmartScreen / Unknown Publisher prompts during installation.'
 
       - name: Upload Windows executable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CogniNote-windows-exe
+          name: CogniNote-0.1.0-windows-x64-${{ steps.windows-signing.outputs.artifact_suffix }}-exe
           path: cogniNote-agent-front/src-tauri/target/release/*.exe
           if-no-files-found: error
 
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CogniNote-windows-installer
+          name: CogniNote-0.1.0-windows-x64-${{ steps.windows-signing.outputs.artifact_suffix }}-installer
           path: cogniNote-agent-front/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error

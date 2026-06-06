@@ -657,7 +657,7 @@ CogninoteMemoryAdvisor 注入会话摘要和最近原文消息
 
 ## 9. 打包方案
 
-第六阶段已完成 Windows 桌面打包。第十四阶段新增 macOS Apple Silicon 独立打包链路。两个平台的 Tauri 配置、脚本和后端 app-image 输出目录分开维护，不把平台差异塞进同一份 bundle 配置或总脚本。
+第六阶段已完成 Windows 桌面打包。第十四阶段新增 macOS Apple Silicon 独立打包链路。第十五阶段把双平台桌面包升级为 `0.1.0` CI 双模式链路：无证书时产出 unsigned 测试包；配置完整证书后，Windows 使用 Authenticode 签名和时间戳，macOS 使用 Developer ID 签名、公证和 staple。两个平台的 Tauri 配置、脚本和后端 app-image 输出目录分开维护，不把平台差异塞进同一份 bundle 配置或总脚本。
 
 Windows 打包链路：
 
@@ -673,6 +673,8 @@ jpackage 生成后端 app-image
 Tauri 打包桌面壳和后端资源目录
   ↓
 生成 Windows 安装包
+  ↓
+CI 无证书时上传 unsigned 测试包；有证书时签名 release exe 和 NSIS installer
 ```
 
 macOS 打包链路：
@@ -689,6 +691,8 @@ jpackage 生成 macOS 后端 CogniNoteBackend.app
 Tauri 使用 tauri.macos.conf.json 打包桌面壳和后端资源目录
   ↓
 生成 macOS .app / .dmg
+  ↓
+CI 无证书时上传 unsigned 测试包；有证书时公证并 staple .app / .dmg
 ```
 
 启动逻辑：
@@ -703,6 +707,8 @@ Tauri 使用 tauri.macos.conf.json 打包桌面壳和后端资源目录
 注意：`jpackage --type app-image` 的产物依赖完整 app-image 目录，不能只复制启动器。Windows 后端资源目录是 `target/desktop/backend/CogniNoteBackend/`，启动器是 `CogniNoteBackend.exe`；macOS 后端资源目录是 `target/desktop-macos/backend/CogniNoteBackend.app/`，启动器是 `Contents/MacOS/CogniNoteBackend`。
 
 桌面构建和运行脚本统一放在项目根目录 `scripts/` 下。Windows 使用 `.ps1`，macOS 使用 `.sh`。具体命令、执行策略处理、产物路径和常见故障排查见 `docs/desktop-build-guide.md`。
+
+后端 Jar 使用稳定文件名 `target/cogninote-agent-design.jar`，避免分发版本升级后桌面脚本仍引用旧 `SNAPSHOT` 文件名。GitHub Actions 中 Windows 和 macOS workflow 仍然手动触发；证书材料只来自 Secrets，不进入仓库。未配置证书时 CI 仍会产出明确标记为 `unsigned` 的测试 artifacts。
 
 macOS 桌面版运行时显式注入：
 
@@ -879,6 +885,22 @@ POST   /api/chat/stream/{requestId}/cancel
 - RAG 从手动 `{context}` 拼接改为 `CogninoteDocumentRetriever` + Spring AI `RetrievalAugmentationAdvisor`
 - `useKnowledgeBase=false` 只挂会话记忆 Advisor；`useKnowledgeBase=true` 同时挂记忆和 RAG Advisor
 - 用户显式停止保存部分 assistant 为 `STOPPED`；普通 SSE 断开继续生成并保存完整回答
+
+### Milestone 14：macOS Apple Silicon 独立打包
+
+- 新增 macOS 独立 Tauri 配置、Shell 脚本和 GitHub Actions workflow
+- macOS 后端 app-image 输出到 `target/desktop-macos/backend/CogniNoteBackend.app/`
+- macOS bundle 只产出 `.app` 和 `.dmg`，不复用 Windows NSIS 配置
+- Tauri 启动逻辑按平台定位 Windows exe 或 macOS `.app/Contents/MacOS` 后端启动器
+- macOS 桌面版数据和日志写入 `~/Library/Application Support/CogniNote/`
+
+### Milestone 15：0.1.0 桌面 CI 双模式分发
+
+- 版本统一到 `0.1.0`，后端 Jar 使用稳定文件名
+- Windows CI 无证书时上传 unsigned 测试包，有 PFX Secret 时对 release exe 和 NSIS installer 做 Authenticode 签名
+- macOS CI 无证书时上传 unsigned 测试包，有 Developer ID 证书时签名、公证并 staple `.app` / `.dmg`
+- 双平台 workflow artifacts 使用 `0.1.0`、平台、架构和 `unsigned` / `signed` 命名
+- 文档补充 GitHub Secrets、Gatekeeper、SmartScreen 和安装验收说明
 
 ## 12. 后续版本规划
 

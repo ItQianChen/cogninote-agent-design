@@ -1,6 +1,6 @@
 [package]
 name = "cogninote-agent"
-version = "0.0.1"
+version = "0.1.0"
 description = "CogniNote Agent desktop shell"
 authors = ["CogniNote Agent"]
 edition = "2021"
@@ -15,4 +15,3 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
-

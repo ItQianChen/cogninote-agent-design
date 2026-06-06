@@ -32,7 +32,7 @@ bash "$SCRIPT_DIR/verify-desktop-toolchain-macos.sh"
 
 cd "$PROJECT_ROOT"
 
-JAR_NAME="cogninote-agent-design-0.0.1-SNAPSHOT.jar"
+JAR_NAME="cogninote-agent-design.jar"
 JAR_PATH="$PROJECT_ROOT/target/$JAR_NAME"
 DESKTOP_BACKEND_DIR="$PROJECT_ROOT/target/desktop-macos/backend"
 BACKEND_IMAGE_DIR="$DESKTOP_BACKEND_DIR/CogniNoteBackend.app"
