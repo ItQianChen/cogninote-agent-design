@@ -14,7 +14,8 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
     private static final Map<String, String> ALLOWED_COLUMN_MIGRATIONS = Map.of(
             "documents.knowledge_folder_id", "TEXT",
             "model_config.display_name", "TEXT NOT NULL DEFAULT 'DashScope'",
-            "model_config.base_url", "TEXT NOT NULL DEFAULT 'https://dashscope.aliyuncs.com/api/v1'"
+            "model_config.base_url", "TEXT NOT NULL DEFAULT 'https://dashscope.aliyuncs.com/api/v1'",
+            "chat_messages.agent_type", "TEXT"
     );
 
     private final DatabaseSchemaMapper databaseSchemaMapper;
@@ -42,6 +43,7 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
         databaseSchemaMapper.createModelConfigsTable();
         databaseSchemaMapper.createChatSessionsTable();
         databaseSchemaMapper.createChatMessagesTable();
+        addColumnIfMissing("chat_messages", "agent_type", "TEXT");
         databaseSchemaMapper.createKnowledgeFoldersPathIndex();
         databaseSchemaMapper.createKnowledgeFoldersEnabledIndex();
         databaseSchemaMapper.createDocumentsKnowledgeFolderIdIndex();
@@ -63,11 +65,21 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
         }
         List<Map<String, Object>> columns = databaseSchemaMapper.tableInfo(tableName);
         boolean exists = columns.stream()
-                .map(column -> String.valueOf(column.get("name")))
-                .anyMatch(columnName::equalsIgnoreCase);
+                .map(DatabaseSchemaInitializer::sqliteColumnName)
+                .anyMatch(existingColumn -> existingColumn != null && columnName.equalsIgnoreCase(existingColumn));
         if (!exists) {
             databaseSchemaMapper.addColumn(tableName, columnName, definition);
         }
+    }
+
+    private static String sqliteColumnName(Map<String, Object> column) {
+        for (Map.Entry<String, Object> entry : column.entrySet()) {
+            if ("name".equalsIgnoreCase(entry.getKey())) {
+                Object value = entry.getValue();
+                return value == null ? null : String.valueOf(value);
+            }
+        }
+        return null;
     }
 
     private void migrateLegacyModelConfigIfNeeded() {

@@ -4,6 +4,7 @@ import com.itqianchen.agentdesign.domain.chat.ChatMessage;
 import com.itqianchen.agentdesign.domain.chat.ChatMessageRole;
 import com.itqianchen.agentdesign.domain.chat.ChatMessageStatus;
 import com.itqianchen.agentdesign.domain.chat.ChatSession;
+import com.itqianchen.agentdesign.domain.agent.AgentType;
 import com.itqianchen.agentdesign.domain.search.SearchMode;
 import com.itqianchen.agentdesign.dto.chat.ChatSessionResponse;
 import com.itqianchen.agentdesign.mapper.chat.ChatSessionMapper;
@@ -143,6 +144,7 @@ public class ChatSessionRepository {
             String content,
             ChatMessageStatus status,
             String requestId,
+            AgentType agentType,
             SearchMode retrievalMode,
             String sourcesJson,
             int tokenEstimate,
@@ -157,6 +159,7 @@ public class ChatSessionRepository {
                 content,
                 status,
                 requestId,
+                agentType,
                 retrievalMode,
                 sourcesJson,
                 tokenEstimate,

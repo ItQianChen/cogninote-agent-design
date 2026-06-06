@@ -4,7 +4,7 @@
 
 第十一阶段聚焦重构智能体执行管线和模型调用层，不做聊天记忆持久化。原第十一阶段的 SQLite 聊天记忆继续顺延；第十二阶段改做 AI 流式 Markdown 渲染重构，SQLite 聊天记忆顺延为第十三阶段。
 
-实施状态：已落地。当前 `/api/chat/stream` 已调整为 `ChatController -> AgentExecutionService -> CogninoteChatAgent -> AiRuntimeFactory`，OpenAI-compatible Chat / Embedding 已迁移到 Spring AI OpenAI Runtime，旧自研 OpenAI-compatible HTTP client 与旧 `LlmGateway` / `RagChatService` 兼容层已删除。第十二阶段在此基础上补充了流式 Markdown 输出约束：Spring AI 流式 chunk 必须保留空格和换行，SSE mapper 负责显式取消注册和 event-stream 错误兜底。
+实施状态：已落地。第十一阶段最初以单一 `CogninoteChatAgent` 承接对话编排；第十八阶段后，当前 `/api/chat/stream` 的真实链路已经升级为 `ChatController -> AgentExecutionService -> ChatAgentRouter -> GeneralChatAgent / KnowledgeBaseChatAgent -> AiRuntimeFactory`。OpenAI-compatible Chat / Embedding 已迁移到 Spring AI OpenAI Runtime，旧自研 OpenAI-compatible HTTP client 与旧 `LlmGateway` / `RagChatService` 兼容层已删除。第十二阶段在此基础上补充了流式 Markdown 输出约束：Spring AI 流式 chunk 必须保留空格和换行，SSE mapper 负责显式取消注册和 event-stream 错误兜底。
 
 当前代码已经能完成 RAG 对话，但模型调用层的职责混在一起：
 
@@ -81,7 +81,10 @@ src/main/java/com/itqianchen/agentdesign/
       AiRuntimeFactory.java
   service/
     agent/
-      CogninoteChatAgent.java
+      ChatAgentRouter.java
+      AbstractChatAgent.java
+      GeneralChatAgent.java
+      KnowledgeBaseChatAgent.java
       AgentExecutionService.java
       KnowledgeContextProvider.java
       PromptAssembler.java
@@ -100,10 +103,15 @@ src/main/java/com/itqianchen/agentdesign/
   - 只接收 `ChatStreamRequest`。
   - 调用 `AgentExecutionService.stream(request)`。
   - 使用 `ChatSseEventMapper` 输出 SSE。
-- `service.agent.CogninoteChatAgent`
-  - 编排一次对话。
-  - 决定是否使用知识库、是否注入记忆、使用哪个 active Chat 配置。
-  - 返回内部事件流。
+- `service.agent.ChatAgentRouter`
+  - 根据 `AgentRequest.useKnowledgeBase` 路由到普通对话或知识库 Agent。
+  - 当前不引入 LLM 意图识别路由，避免额外延迟和不确定性。
+- `service.agent.AbstractChatAgent`
+  - 抽取 active Chat 配置、会话更新、消息落库、流式保存、停止保存、错误保存和日志。
+- `service.agent.GeneralChatAgent`
+  - 执行普通对话，只挂 `CogninoteMemoryAdvisor`，不检索知识库。
+- `service.agent.KnowledgeBaseChatAgent`
+  - 执行知识库对话，挂会话记忆和 `RetrievalAugmentationAdvisor`。
 - `service.agent.KnowledgeContextProvider`
   - 负责调用 `KnowledgeStore.search(...)`、Embedding 降级、来源补全和 context 字符预算。
   - 不直接构造查询向量；向量生成保留在 `LuceneKnowledgeStore` 经由 `EmbeddingGateway` 调用 active `EMBEDDING` runtime 的链路中。
@@ -160,13 +168,11 @@ ChatController
   ↓
 AgentExecutionService
   ↓
-CogninoteChatAgent
-  ├─ 读取 active CHAT 配置
-  ├─ 读取当前请求设置
-  ├─ KnowledgeContextProvider 调用 KnowledgeStore 检索知识库
-  │    └─ 向量/混合模式由 LuceneKnowledgeStore 通过 EmbeddingGateway 生成查询向量
-  ├─ PromptAssembler 组装 messages
-  └─ AiChatRuntime.stream(...)
+ChatAgentRouter
+  ├─ useKnowledgeBase=false -> GeneralChatAgent
+  │    └─ 普通对话 prompt + CogninoteMemoryAdvisor
+  └─ useKnowledgeBase=true/null -> KnowledgeBaseChatAgent
+       └─ RAG prompt + CogninoteMemoryAdvisor + RetrievalAugmentationAdvisor
        ↓
 AgentEvent(meta/delta/error/done)
   ↓
@@ -286,7 +292,7 @@ done
 
 ### 第三组：Agent 执行
 
-- 新增 `CogninoteChatAgent`，承接原 RAG 对话编排职责。
+- 第十一阶段新增过单一 `CogninoteChatAgent`，承接原 RAG 对话编排职责；第十八阶段已替换为 `ChatAgentRouter + AbstractChatAgent + GeneralChatAgent + KnowledgeBaseChatAgent`。
 - 将 Prompt 构造拆到 `PromptAssembler`。
 - 将原 `searchWithFallback()`、`hydrateSources()`、`buildContext()` 拆到 `KnowledgeContextProvider`，并保留 `KnowledgeStore` / `EmbeddingGateway` 负责查询向量生成的职责边界。
 - 第十三阶段后，旧的空记忆接口已删除，聊天记忆由 `SQLiteChatMemory`、`ConversationMemorySnapshotService` 和 `CogninoteMemoryAdvisor` 承接。

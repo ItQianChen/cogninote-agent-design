@@ -1,5 +1,6 @@
 package com.itqianchen.agentdesign.service.chat;
 
+import com.itqianchen.agentdesign.domain.agent.AgentType;
 import com.itqianchen.agentdesign.domain.chat.ChatMessage;
 import com.itqianchen.agentdesign.domain.chat.ChatMessageRole;
 import com.itqianchen.agentdesign.domain.chat.ChatMessageStatus;
@@ -63,6 +64,7 @@ public class SQLiteChatMemory implements ChatMemory {
                 message.getText(),
                 ChatMessageStatus.DONE,
                 null,
+                AgentType.GENERAL_CHAT,
                 null,
                 null,
                 tokenEstimator.estimate(message.getText()),

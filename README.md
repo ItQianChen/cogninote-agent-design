@@ -228,7 +228,7 @@ bash ./scripts/build-desktop-app-macos.sh --skip-tests
 
 ## 开发状态
 
-当前项目已完成文档摄入、Lucene 搜索、模型配置、RAG 对话、智能体模型运行时重构、AI 流式 Markdown 渲染、SQLite 聊天记忆、纯模型对话、空白保真的 SSE 流式输出、MyBatis 统一数据访问层、Windows 桌面打包、macOS Apple Silicon 独立打包链路，以及 `0.1.0` 双平台 unsigned/signed CI 打包链路的主要闭环。仍需重点补齐：
+当前项目已完成文档摄入、Lucene 搜索、模型配置、RAG 对话、路由式多智能体对话、模式隔离聊天记忆、智能体模型运行时重构、AI 流式 Markdown 渲染、SQLite 聊天记忆、纯模型对话、空白保真的 SSE 流式输出、MyBatis 统一数据访问层、Windows 桌面打包、macOS Apple Silicon 独立打包链路，以及 `0.1.0` 双平台 unsigned/signed CI 打包链路的主要闭环。仍需重点补齐：
 
 - API Key 本地加密或凭据管理。
 - 桌面会话令牌保护。

@@ -1,5 +1,6 @@
 package com.itqianchen.agentdesign.domain.chat;
 
+import com.itqianchen.agentdesign.domain.agent.AgentType;
 import com.itqianchen.agentdesign.domain.search.SearchMode;
 
 public record ChatMessage(
@@ -10,6 +11,7 @@ public record ChatMessage(
         String content,
         ChatMessageStatus status,
         String requestId,
+        AgentType agentType,
         SearchMode retrievalMode,
         String sourcesJson,
         int tokenEstimate,

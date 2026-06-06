@@ -4,7 +4,7 @@
 
 第十三阶段实现聊天记忆持久化，并把当前手动拼接 `{context}` 的 RAG Prompt 改为 Spring AI `ChatClient + Advisor` 风格调用。
 
-实施状态：已落地。SQLite 现在保存会话与消息全量历史；前端会话列表、历史详情、新建、切换、重命名、删除和清空消息都以后端 API 为事实来源。RAG 增强由 `CogninoteDocumentRetriever` 挂到 Spring AI `RetrievalAugmentationAdvisor`，聊天记忆由 `SQLiteChatMemory`、`ConversationMemorySnapshotService` 和 `CogninoteMemoryAdvisor` 承接。
+实施状态：已落地。SQLite 现在保存会话与消息全量历史；前端会话列表、历史详情、新建、切换、重命名、删除和清空消息都以后端 API 为事实来源。RAG 增强由 `CogninoteDocumentRetriever` 挂到 Spring AI `RetrievalAugmentationAdvisor`，聊天记忆由 `SQLiteChatMemory`、`ConversationMemorySnapshotService` 和 `CogninoteMemoryAdvisor` 承接。第十八阶段后，对话执行入口已从单一 Agent 升级为 `ChatAgentRouter + GeneralChatAgent + KnowledgeBaseChatAgent`，并通过 `chat_messages.agent_type` 隔离普通对话和知识库模式的记忆污染。
 
 本阶段明确不使用“固定最近 20 条消息”作为记忆策略。SQLite 保存全量会话历史；模型输入采用“会话摘要 + token 预算内最近原文消息”的分层记忆，避免长会话几十条消息后丢失早期关键上下文。
 
@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     content TEXT NOT NULL,
     status TEXT NOT NULL,
     request_id TEXT,
+    agent_type TEXT,
     retrieval_mode TEXT,
     sources_json TEXT,
     token_estimate INTEGER NOT NULL DEFAULT 0,
@@ -110,6 +111,8 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     FOREIGN KEY (conversation_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
 );
 ```
+
+`agent_type` 是第十八阶段新增字段。旧 SQLite 文件启动时由 schema 初始化自动补列；旧 assistant 消息读取时会按 `retrieval_mode` 推断 Agent，旧 user 消息按中性历史处理。
 
 ## Runtime Flow
 
@@ -120,12 +123,15 @@ ChatController
   ↓
 AgentExecutionService
   ↓
-CogninoteChatAgent
-  ├─ ensureSession + appendUserMessage
-  ├─ active CHAT runtime
-  ├─ CogninoteMemoryAdvisor
-  ├─ useKnowledgeBase=false -> pure chat
-  └─ useKnowledgeBase=true
+ChatAgentRouter
+  ├─ useKnowledgeBase=false -> GeneralChatAgent
+  │    ├─ ensureSession + appendUserMessage
+  │    ├─ active CHAT runtime
+  │    └─ CogninoteMemoryAdvisor
+  └─ useKnowledgeBase=true/null -> KnowledgeBaseChatAgent
+       ├─ ensureSession + appendUserMessage
+       ├─ active CHAT runtime
+       ├─ CogninoteMemoryAdvisor
        └─ CogninoteDocumentRetriever + RetrievalAugmentationAdvisor
   ↓
 Spring AI stream()

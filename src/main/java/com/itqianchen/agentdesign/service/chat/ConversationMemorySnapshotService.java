@@ -2,14 +2,10 @@ package com.itqianchen.agentdesign.service.chat;
 
 import com.itqianchen.agentdesign.domain.chat.ChatMemoryProperties;
 import com.itqianchen.agentdesign.domain.chat.ChatMessage;
-import com.itqianchen.agentdesign.domain.chat.ChatMessageRole;
 import com.itqianchen.agentdesign.domain.chat.ChatSession;
 import com.itqianchen.agentdesign.repository.chat.ChatSessionRepository;
 import java.util.ArrayList;
 import java.util.List;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -46,7 +42,7 @@ public class ConversationMemorySnapshotService {
         int lastSequence = selected.isEmpty() ? session.summaryMessageSequence() : selected.getLast().sequence();
         return new ConversationMemorySnapshot(
                 session.summary(),
-                selected.stream().map(ConversationMemorySnapshotService::toSpringMessage).toList(),
+                selected.stream().map(ConversationMemorySnapshotService::toMemoryEntry).toList(),
                 lastSequence
         );
     }
@@ -74,10 +70,12 @@ public class ConversationMemorySnapshotService {
         return List.copyOf(selected);
     }
 
-    private static Message toSpringMessage(ChatMessage message) {
-        if (message.role() == ChatMessageRole.ASSISTANT) {
-            return new AssistantMessage(message.content());
-        }
-        return new UserMessage(message.content());
+    private static ConversationMemoryEntry toMemoryEntry(ChatMessage message) {
+        return new ConversationMemoryEntry(
+                message.agentType(),
+                message.role(),
+                message.content(),
+                message.retrievalMode()
+        );
     }
 }

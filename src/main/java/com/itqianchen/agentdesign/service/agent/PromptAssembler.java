@@ -1,5 +1,6 @@
 package com.itqianchen.agentdesign.service.agent;
 
+import com.itqianchen.agentdesign.domain.agent.AgentType;
 import com.itqianchen.agentdesign.domain.chat.ChatPromptProperties;
 import org.springframework.stereotype.Service;
 
@@ -12,13 +13,17 @@ public class PromptAssembler {
         this.promptProperties = promptProperties;
     }
 
-    public String systemPrompt() {
-        return promptProperties.rag().system();
+    public String systemPrompt(AgentType agentType) {
+        return agentType == AgentType.GENERAL_CHAT
+                ? promptProperties.general().system()
+                : promptProperties.rag().system();
     }
 
-    public String userPrompt(String question) {
-        return promptProperties.rag().user()
-                .replace("{question}", question);
+    public String userPrompt(AgentType agentType, String question) {
+        String template = agentType == AgentType.GENERAL_CHAT
+                ? promptProperties.general().user()
+                : promptProperties.rag().user();
+        return template.replace("{question}", question);
     }
 
     public String emptyContextPrompt() {

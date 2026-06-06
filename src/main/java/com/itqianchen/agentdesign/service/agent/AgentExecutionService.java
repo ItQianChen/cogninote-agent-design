@@ -8,13 +8,14 @@ import org.springframework.stereotype.Service;
 @Service
 public class AgentExecutionService {
 
-    private final CogninoteChatAgent cogninoteChatAgent;
+    private final ChatAgentRouter chatAgentRouter;
 
-    public AgentExecutionService(CogninoteChatAgent cogninoteChatAgent) {
-        this.cogninoteChatAgent = cogninoteChatAgent;
+    public AgentExecutionService(ChatAgentRouter chatAgentRouter) {
+        this.chatAgentRouter = chatAgentRouter;
     }
 
     public AgentChatStream stream(ChatStreamRequest request) {
-        return cogninoteChatAgent.stream(AgentRequest.from(request));
+        AgentRequest agentRequest = AgentRequest.from(request);
+        return chatAgentRouter.stream(agentRequest);
     }
 }

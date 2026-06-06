@@ -44,7 +44,8 @@
 - 检查流式生成时不闪烁、不整段跳动，消息气泡宽度不被表格或代码撑破。
 - 后端流式链路改动需要覆盖：Spring AI 空白 chunk 不被丢弃、SSE 取消注册、`text/event-stream` 异常不再尝试写 JSON。
 - 实现阶段已验证：
-  - `mvn "-Dtest=SpringAiChatRuntimeTests,ChatControllerTests,CogninoteChatAgentTests" test`
+  - 第十二阶段当时验证过 `CogninoteChatAgentTests`；第十八阶段后对应测试已改为 `ChatAgentRouterTests`
+  - `mvn "-Dtest=SpringAiChatRuntimeTests,ChatControllerTests,ChatAgentRouterTests" test`
   - `npm --prefix cogniNote-agent-front run build`
 - 不做桌面整包验证。
 

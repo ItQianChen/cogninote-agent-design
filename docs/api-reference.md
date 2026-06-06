@@ -535,11 +535,12 @@ data: {"message":"..."}
 meta -> delta -> done
 ```
 
-异常时输出 `error`。如果 `HYBRID` 或 `VECTOR` 因 Embedding 不可用失败，RAG 服务会自动降级到 `KEYWORD`，并在 `meta.retrievalMode` 中返回实际检索模式。`useKnowledgeBase=false` 时不挂 RAG Advisor，`retrievalMode` 为 `null`、`sources` 为空，只注入会话记忆。
+异常时输出 `error`。如果 `HYBRID` 或 `VECTOR` 因 Embedding 不可用失败，RAG 服务会自动降级到 `KEYWORD`，并在 `meta.retrievalMode` 中返回实际检索模式。`useKnowledgeBase=false` 时路由到 `GENERAL_CHAT` 普通对话 Agent，不挂 RAG Advisor，`retrievalMode` 为 `null`、`sources` 为空，只注入模式隔离后的会话记忆。`useKnowledgeBase=true` 或省略时路由到 `KNOWLEDGE_BASE` 知识库 Agent。
 
 重要约束：
 
 - SQLite 会保存全量会话历史。模型输入由“会话摘要 + token 预算内最近原文消息”组成；默认至少保留最近 8 条原文消息，但不会把固定条数作为唯一记忆策略。
+- 同一会话可以在普通对话和知识库模式之间切换。后端会用 `agent_type` 标记消息，并在模型输入里隔离跨 Agent 历史：上一种 Agent 的拒答规则、引用规则和系统规则不能覆盖当前 Agent。
 - RAG 不再手动把 `{context}` 拼进 user prompt。知识库片段通过 Spring AI `RetrievalAugmentationAdvisor` 和 `CogninoteDocumentRetriever` 注入。
 - Spring AI `Document.metadata` 不允许出现 `null`。后端转换 RAG sources 时会省略缺失的 `heading/pageNumber` 等可选字段，前端仍以 SSE `meta.sources` 作为引用来源展示事实来源。
 - `delta.text` 是模型原始流式文本增量，可能只包含一个空格、换行或缩进。客户端和服务端都不能对它做 `trim()`、`trimStart()` 或 `isBlank()` 过滤，否则 Markdown 标题、列表、代码块和表格可能被破坏。

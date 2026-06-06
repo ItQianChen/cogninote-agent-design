@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itqianchen.agentdesign.domain.agent.AgentChatStream;
 import com.itqianchen.agentdesign.domain.agent.AgentRequest;
+import com.itqianchen.agentdesign.domain.agent.AgentType;
 import com.itqianchen.agentdesign.domain.ai.AiChatRuntime;
 import com.itqianchen.agentdesign.domain.ai.AiEmbeddingRuntime;
 import com.itqianchen.agentdesign.domain.ai.AiRuntimeFactory;
@@ -33,9 +34,11 @@ import com.itqianchen.agentdesign.metadata.DatabaseSchemaInitializer;
 import com.itqianchen.agentdesign.repository.chat.ChatSessionRepository;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.repository.model.ModelConfigRepository;
-import com.itqianchen.agentdesign.service.agent.CogninoteChatAgent;
+import com.itqianchen.agentdesign.service.agent.ChatAgentRouter;
+import com.itqianchen.agentdesign.service.agent.GeneralChatAgent;
 import com.itqianchen.agentdesign.service.agent.CogninoteDocumentRetriever;
 import com.itqianchen.agentdesign.service.agent.KnowledgeContextProvider;
+import com.itqianchen.agentdesign.service.agent.KnowledgeBaseChatAgent;
 import com.itqianchen.agentdesign.service.agent.PromptAssembler;
 import com.itqianchen.agentdesign.service.chat.ChatSessionService;
 import com.itqianchen.agentdesign.service.chat.CogninoteMemoryAdvisor;
@@ -60,16 +63,19 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
-class CogninoteChatAgentTests {
+class ChatAgentRouterTests {
 
     @Test
     void promptAssemblerNoLongerRequiresManualContextPlaceholder() {
         PromptAssembler promptAssembler = new PromptAssembler(defaultPromptProperties());
 
-        assertThat(promptAssembler.systemPrompt()).contains("Markdown");
-        assertThat(promptAssembler.userPrompt("如何打包？"))
+        assertThat(promptAssembler.systemPrompt(AgentType.KNOWLEDGE_BASE)).contains("Markdown");
+        assertThat(promptAssembler.userPrompt(AgentType.KNOWLEDGE_BASE, "如何打包？"))
                 .contains("如何打包？")
                 .doesNotContain("{context}");
+        assertThat(promptAssembler.systemPrompt(AgentType.GENERAL_CHAT))
+                .contains("普通对话助手")
+                .doesNotContain("当前知识库中没有足够依据");
         assertThat(promptAssembler.emptyContextPrompt()).contains("没有检索到");
     }
 
@@ -110,6 +116,9 @@ class CogninoteChatAgentTests {
         assertThat(stream.answer().collectList().block()).containsExactly("纯对话答案");
         assertThat(fixture.knowledgeStore.seenModes).isEmpty();
         assertThat(fixture.runtime.lastAdvisors).hasSize(1);
+        assertThat(fixture.runtime.lastSystemPrompt)
+                .contains("普通对话助手")
+                .doesNotContain("知识库中没有足够依据");
 
         List<ChatMessage> messages = fixture.chatSessionRepository.findMessages("conversation-2");
         assertThat(messages)
@@ -117,6 +126,8 @@ class CogninoteChatAgentTests {
                 .containsExactly(ChatMessageRole.USER, ChatMessageRole.ASSISTANT);
         assertThat(messages.get(1).status()).isEqualTo(ChatMessageStatus.DONE);
         assertThat(messages.get(1).content()).isEqualTo("纯对话答案");
+        assertThat(messages.get(0).agentType()).isEqualTo(AgentType.GENERAL_CHAT);
+        assertThat(messages.get(1).agentType()).isEqualTo(AgentType.GENERAL_CHAT);
     }
 
     @Test
@@ -139,14 +150,52 @@ class CogninoteChatAgentTests {
                 .anySatisfy(advisor -> assertThat(advisor.getClass().getName()).contains("RetrievalAugmentationAdvisor"));
         assertThat(fixture.runtime.lastAdvisorParams)
                 .containsEntry(ChatMemory.CONVERSATION_ID, "conversation-3")
-                .containsEntry(CogninoteMemoryAdvisor.MAX_MESSAGE_SEQUENCE, 0);
+                .containsEntry(CogninoteMemoryAdvisor.MAX_MESSAGE_SEQUENCE, 0)
+                .containsEntry(CogninoteMemoryAdvisor.AGENT_TYPE, AgentType.KNOWLEDGE_BASE);
 
         List<ChatMessage> messages = fixture.chatSessionRepository.findMessages("conversation-3");
         assertThat(messages).hasSize(2);
         assertThat(messages.get(1).retrievalMode()).isEqualTo(SearchMode.KEYWORD);
+        assertThat(messages.get(1).agentType()).isEqualTo(AgentType.KNOWLEDGE_BASE);
         assertThat(fixture.chatSessionService.getSession("conversation-3").messages().get(1).sources())
                 .singleElement()
                 .satisfies(source -> assertThat(source.fileName()).isEqualTo("packaging.md"));
+    }
+
+    @Test
+    void switchingFromKnowledgeBaseToPureChatUsesGeneralPromptAndKeepsHistoryAsReferenceOnly() {
+        AgentFixture fixture = new AgentFixture(new FakeKnowledgeStore(false), Flux.just("知识库依据不足"));
+        fixture.agent.stream(new AgentRequest(
+                "request-5",
+                "知识库里有 Java 吗？",
+                3,
+                SearchMode.KEYWORD,
+                "conversation-5",
+                true
+        )).answer().collectList().block();
+
+        fixture.runtime.stream = Flux.just("Java 是一种通用编程语言。");
+        AgentChatStream pureStream = fixture.agent.stream(new AgentRequest(
+                "request-6",
+                "Java 是什么？",
+                3,
+                SearchMode.KEYWORD,
+                "conversation-5",
+                false
+        ));
+
+        assertThat(pureStream.retrievalMode()).isNull();
+        assertThat(pureStream.answer().collectList().block()).containsExactly("Java 是一种通用编程语言。");
+        assertThat(fixture.runtime.lastSystemPrompt)
+                .contains("普通对话助手")
+                .doesNotContain("当前知识库中没有足够依据");
+        assertThat(fixture.runtime.lastAdvisorParams)
+                .containsEntry(CogninoteMemoryAdvisor.AGENT_TYPE, AgentType.GENERAL_CHAT);
+
+        List<ChatMessage> messages = fixture.chatSessionRepository.findMessages("conversation-5");
+        assertThat(messages).hasSize(4);
+        assertThat(messages.get(1).agentType()).isEqualTo(AgentType.KNOWLEDGE_BASE);
+        assertThat(messages.get(3).agentType()).isEqualTo(AgentType.GENERAL_CHAT);
     }
 
     @Test
@@ -199,6 +248,16 @@ class CogninoteChatAgentTests {
 
     private static ChatPromptProperties defaultPromptProperties() {
         return new ChatPromptProperties(
+                new ChatPromptProperties.PromptTemplate(
+                        """
+                                你是 CogniNote Agent 的普通对话助手。
+                                当前不使用知识库，也不需要引用来源。
+                                """,
+                        """
+                                用户问题：
+                                {question}
+                                """
+                ),
                 new ChatPromptProperties.Rag(
                         """
                                 你是 CogniNote Agent 的本地知识库问答助手。
@@ -252,7 +311,7 @@ class CogninoteChatAgentTests {
         private final RecordingAiRuntime runtime;
         private final ChatSessionRepository chatSessionRepository;
         private final ChatSessionService chatSessionService;
-        private final CogninoteChatAgent agent;
+        private final ChatAgentRouter agent;
 
         private AgentFixture(FakeKnowledgeStore knowledgeStore, Flux<String> answer) {
             this.knowledgeStore = knowledgeStore;
@@ -272,17 +331,30 @@ class CogninoteChatAgentTests {
                     tokenEstimator,
                     memoryProperties
             );
-            this.agent = new CogninoteChatAgent(
-                    new ModelConfigService(modelConfigRepository),
-                    new FakeAiRuntimeFactory(runtime),
-                    new KnowledgeContextProvider(knowledgeStore, new FakeDocumentRepository()),
-                    new PromptAssembler(defaultPromptProperties()),
-                    chatSessionService,
-                    new CogninoteMemoryAdvisor(new ConversationMemorySnapshotService(
-                            chatSessionRepository,
-                            memoryProperties
-                    ))
-            );
+            ModelConfigService modelConfigService = new ModelConfigService(modelConfigRepository);
+            FakeAiRuntimeFactory runtimeFactory = new FakeAiRuntimeFactory(runtime);
+            PromptAssembler promptAssembler = new PromptAssembler(defaultPromptProperties());
+            CogninoteMemoryAdvisor memoryAdvisor = new CogninoteMemoryAdvisor(new ConversationMemorySnapshotService(
+                    chatSessionRepository,
+                    memoryProperties
+            ));
+            this.agent = new ChatAgentRouter(List.of(
+                    new GeneralChatAgent(
+                            modelConfigService,
+                            runtimeFactory,
+                            promptAssembler,
+                            chatSessionService,
+                            memoryAdvisor
+                    ),
+                    new KnowledgeBaseChatAgent(
+                            modelConfigService,
+                            runtimeFactory,
+                            new KnowledgeContextProvider(knowledgeStore, new FakeDocumentRepository()),
+                            promptAssembler,
+                            chatSessionService,
+                            memoryAdvisor
+                    )
+            ));
         }
 
         private static SqlSession sqliteSqlSession() {
@@ -389,7 +461,7 @@ class CogninoteChatAgentTests {
     }
 
     private static final class RecordingAiRuntime implements AiChatRuntime {
-        private final Flux<String> stream;
+        private Flux<String> stream;
         private String lastSystemPrompt;
         private String lastUserMessage;
         private List<Advisor> lastAdvisors = List.of();

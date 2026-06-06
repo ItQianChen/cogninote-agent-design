@@ -4,16 +4,34 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app.chat.prompts")
 public record ChatPromptProperties(
+        PromptTemplate general,
         Rag rag,
         ConnectionTest connectionTest
 ) {
 
     public ChatPromptProperties {
+        if (general == null) {
+            throw new IllegalArgumentException("app.chat.prompts.general must be configured");
+        }
         if (rag == null) {
             throw new IllegalArgumentException("app.chat.prompts.rag must be configured");
         }
         if (connectionTest == null) {
             throw new IllegalArgumentException("app.chat.prompts.connection-test must be configured");
+        }
+    }
+
+    public record PromptTemplate(
+            String system,
+            String user
+    ) {
+
+        public PromptTemplate {
+            requireText(system, "app.chat.prompts.*.system");
+            requireText(user, "app.chat.prompts.*.user");
+            if (!user.contains("{question}")) {
+                throw new IllegalArgumentException("app.chat.prompts.*.user must contain {question}");
+            }
         }
     }
 

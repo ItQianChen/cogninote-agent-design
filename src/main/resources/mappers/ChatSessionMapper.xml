@@ -44,6 +44,7 @@
             <arg column="content" javaType="java.lang.String"/>
             <arg column="status" javaType="com.itqianchen.agentdesign.domain.chat.ChatMessageStatus"/>
             <arg column="request_id" javaType="java.lang.String"/>
+            <arg column="agent_type" javaType="com.itqianchen.agentdesign.domain.agent.AgentType"/>
             <arg column="retrieval_mode" javaType="com.itqianchen.agentdesign.domain.search.SearchMode"/>
             <arg column="sources_json" javaType="java.lang.String"/>
             <arg column="token_estimate" javaType="_int"/>
@@ -134,7 +135,14 @@
 
     <select id="findMessages" resultMap="ChatMessageMap">
         SELECT id, conversation_id, message_sequence, role, content, status,
-               request_id, retrieval_mode, sources_json, token_estimate, created_at
+               request_id,
+               CASE
+                   WHEN agent_type IS NOT NULL THEN agent_type
+                   WHEN role = 'ASSISTANT' AND retrieval_mode IS NOT NULL THEN 'KNOWLEDGE_BASE'
+                   WHEN role = 'ASSISTANT' THEN 'GENERAL_CHAT'
+                   ELSE NULL
+               END AS agent_type,
+               retrieval_mode, sources_json, token_estimate, created_at
         FROM chat_messages
         WHERE conversation_id = #{conversationId}
         ORDER BY message_sequence ASC
@@ -148,7 +156,14 @@
 
     <select id="findMessagesAfter" resultMap="ChatMessageMap">
         SELECT id, conversation_id, message_sequence, role, content, status,
-               request_id, retrieval_mode, sources_json, token_estimate, created_at
+               request_id,
+               CASE
+                   WHEN agent_type IS NOT NULL THEN agent_type
+                   WHEN role = 'ASSISTANT' AND retrieval_mode IS NOT NULL THEN 'KNOWLEDGE_BASE'
+                   WHEN role = 'ASSISTANT' THEN 'GENERAL_CHAT'
+                   ELSE NULL
+               END AS agent_type,
+               retrieval_mode, sources_json, token_estimate, created_at
         FROM chat_messages
         WHERE conversation_id = #{conversationId} AND message_sequence > #{sequence}
         ORDER BY message_sequence ASC
@@ -163,11 +178,11 @@
     <insert id="insertMessage">
         INSERT INTO chat_messages (
             id, conversation_id, message_sequence, role, content, status,
-            request_id, retrieval_mode, sources_json, token_estimate, created_at
+            request_id, agent_type, retrieval_mode, sources_json, token_estimate, created_at
         )
         VALUES (
             #{id}, #{conversationId}, #{sequence}, #{role}, #{content}, #{status},
-            #{requestId}, #{retrievalMode}, #{sourcesJson}, #{tokenEstimate}, #{createdAt}
+            #{requestId}, #{agentType}, #{retrievalMode}, #{sourcesJson}, #{tokenEstimate}, #{createdAt}
         )
     </insert>
 

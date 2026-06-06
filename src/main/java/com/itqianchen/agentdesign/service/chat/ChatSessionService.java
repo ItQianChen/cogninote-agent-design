@@ -1,6 +1,7 @@
 package com.itqianchen.agentdesign.service.chat;
 
 import com.itqianchen.agentdesign.common.api.ResourceNotFoundException;
+import com.itqianchen.agentdesign.domain.agent.AgentType;
 import com.itqianchen.agentdesign.domain.chat.ChatMemoryProperties;
 import com.itqianchen.agentdesign.domain.chat.ChatMessage;
 import com.itqianchen.agentdesign.domain.chat.ChatMessageRole;
@@ -112,6 +113,7 @@ public class ChatSessionService {
             String conversationId,
             String content,
             String requestId,
+            AgentType agentType,
             boolean useKnowledgeBase,
             SearchMode mode,
             int topK
@@ -141,6 +143,7 @@ public class ChatSessionService {
                 content,
                 ChatMessageStatus.DONE,
                 requestId,
+                agentType,
                 null,
                 null,
                 tokenEstimator.estimate(content),
@@ -153,10 +156,11 @@ public class ChatSessionService {
             String conversationId,
             String content,
             String requestId,
+            AgentType agentType,
             SearchMode retrievalMode,
             List<RagSourceResponse> sources
     ) {
-        appendAssistant(conversationId, content, requestId, retrievalMode, sources, ChatMessageStatus.DONE);
+        appendAssistant(conversationId, content, requestId, agentType, retrievalMode, sources, ChatMessageStatus.DONE);
         refreshSummaryIfNeeded(conversationId);
     }
 
@@ -165,10 +169,11 @@ public class ChatSessionService {
             String conversationId,
             String content,
             String requestId,
+            AgentType agentType,
             SearchMode retrievalMode,
             List<RagSourceResponse> sources
     ) {
-        appendAssistant(conversationId, content, requestId, retrievalMode, sources, ChatMessageStatus.STOPPED);
+        appendAssistant(conversationId, content, requestId, agentType, retrievalMode, sources, ChatMessageStatus.STOPPED);
         refreshSummaryIfNeeded(conversationId);
     }
 
@@ -177,10 +182,11 @@ public class ChatSessionService {
             String conversationId,
             String content,
             String requestId,
+            AgentType agentType,
             SearchMode retrievalMode,
             List<RagSourceResponse> sources
     ) {
-        appendAssistant(conversationId, content, requestId, retrievalMode, sources, ChatMessageStatus.ERROR);
+        appendAssistant(conversationId, content, requestId, agentType, retrievalMode, sources, ChatMessageStatus.ERROR);
     }
 
     public ChatSession requireSession(String conversationId) {
@@ -192,6 +198,7 @@ public class ChatSessionService {
             String conversationId,
             String content,
             String requestId,
+            AgentType agentType,
             SearchMode retrievalMode,
             List<RagSourceResponse> sources,
             ChatMessageStatus status
@@ -205,6 +212,7 @@ public class ChatSessionService {
                 content,
                 status,
                 requestId,
+                agentType,
                 retrievalMode,
                 ragSourcesJsonCodec.encode(sources),
                 tokenEstimator.estimate(content),
@@ -261,10 +269,12 @@ public class ChatSessionService {
     }
 
     private static String buildExtractiveSummary(List<ChatMessage> messages) {
-        StringBuilder builder = new StringBuilder("以下是本会话较早内容的滚动摘要，按时间顺序保留关键事实：\n");
+        StringBuilder builder = new StringBuilder(
+                "以下是本会话较早内容的滚动摘要，按时间顺序保留关键事实；每条都带有当时的 Agent 模式：\n");
         for (ChatMessage message : messages) {
             String role = message.role() == ChatMessageRole.USER ? "用户" : "助手";
-            String line = "- %s：%s%n".formatted(role, compact(message.content()));
+            String agentType = message.agentType() == null ? "UNKNOWN" : message.agentType().name();
+            String line = "- [%s] %s：%s%n".formatted(agentType, role, compact(message.content()));
             if (builder.length() + line.length() > SUMMARY_MAX_CHARS) {
                 builder.append("- 更早的细节仍保存在 SQLite 原始消息中，本轮仅注入摘要视图。\n");
                 break;
