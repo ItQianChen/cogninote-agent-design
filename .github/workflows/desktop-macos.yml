@@ -9,7 +9,7 @@ on:
         type: boolean
         default: false
       release_tag:
-        description: 'Release tag. Leave empty to use v0.1.0-test.1 for unsigned or v0.1.0 for signed.'
+        description: 'Release tag. Leave empty to derive it from COGNINOTE_DESKTOP_VERSION.'
         required: false
         type: string
         default: ''
@@ -186,14 +186,14 @@ jobs:
       - name: Upload macOS app artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CogniNote-0.1.0-macos-arm64-${{ steps.macos-signing.outputs.artifact_suffix }}-app
-          path: artifacts/macos/CogniNote-0.1.0-macos-arm64-${{ steps.macos-signing.outputs.artifact_suffix }}.app.zip
+          name: CogniNote-${{ env.COGNINOTE_DESKTOP_VERSION }}-macos-arm64-${{ steps.macos-signing.outputs.artifact_suffix }}-app
+          path: artifacts/macos/CogniNote-${{ env.COGNINOTE_DESKTOP_VERSION }}-macos-arm64-${{ steps.macos-signing.outputs.artifact_suffix }}.app.zip
           if-no-files-found: error
 
       - name: Upload macOS dmg artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CogniNote-0.1.0-macos-arm64-${{ steps.macos-signing.outputs.artifact_suffix }}-dmg
+          name: CogniNote-${{ env.COGNINOTE_DESKTOP_VERSION }}-macos-arm64-${{ steps.macos-signing.outputs.artifact_suffix }}-dmg
           path: cogniNote-agent-front/src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
@@ -201,7 +201,7 @@ jobs:
         if: steps.macos-signing.outputs.signed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: CogniNote-0.1.0-macos-notarization-logs
+          name: CogniNote-${{ env.COGNINOTE_DESKTOP_VERSION }}-macos-notarization-logs
           path: artifacts/macos/notary-*.log
           if-no-files-found: error
 

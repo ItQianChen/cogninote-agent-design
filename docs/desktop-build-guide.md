@@ -2,6 +2,24 @@
 
 本指南说明如何构建 CogniNote 桌面应用。Windows 和 macOS 打包链路分开维护：Windows 继续使用 PowerShell、`tauri.conf.json` 和 NSIS；macOS 使用独立 Shell 脚本、`tauri.macos.conf.json` 和 `.app` / `.dmg`。
 
+## 发布版本号更新
+
+发布前不要对仓库做全局字符串替换。`package-lock.json` 和 `Cargo.lock` 里有大量第三方依赖版本，全局替换会把不存在的依赖版本写进锁文件，导致 `npm ci` 或 `cargo metadata` 失败。
+
+使用白名单脚本更新项目自身版本：
+
+```powershell
+.\scripts\update-release-version.ps1 0.1.1
+```
+
+脚本会更新 Maven、前端 package、Tauri、Cargo、桌面 GitHub Actions 和主要分发文档中的项目版本，并保护 `powershell-utils`、`windows-threading`、`vswhom` 等第三方锁文件版本不被误改。预览改动可先运行：
+
+```powershell
+.\scripts\update-release-version.ps1 0.1.1 -WhatIf
+```
+
+脚本默认要求工作区干净；如果确实要在已有改动上预览或更新，可加 `-AllowDirty`。
+
 ## Windows 产物说明
 
 第六阶段的桌面交付由两部分组成：

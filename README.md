@@ -88,6 +88,14 @@ java -jar target/cogninote-agent-design.jar
 
 `with-frontend` profile 会构建 Vue，并把 `cogniNote-agent-front/dist` 复制进 Spring Boot 静态资源目录。
 
+### 更新发布版本号
+
+发布前更新版本号请使用白名单脚本，避免全局替换误改第三方锁文件：
+
+```powershell
+.\scripts\update-release-version.ps1 0.1.1
+```
+
 ### 构建 Windows 桌面应用
 
 ```powershell

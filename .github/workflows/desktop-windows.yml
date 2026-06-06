@@ -9,7 +9,7 @@ on:
         type: boolean
         default: false
       release_tag:
-        description: 'Release tag. Leave empty to use v0.1.0-test.1 for unsigned or v0.1.0 for signed.'
+        description: 'Release tag. Leave empty to derive it from COGNINOTE_DESKTOP_VERSION.'
         required: false
         type: string
         default: ''
@@ -140,14 +140,14 @@ jobs:
       - name: Upload Windows portable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CogniNote-0.1.0-windows-x64-${{ steps.windows-signing.outputs.artifact_suffix }}-portable
-          path: artifacts/CogniNote-0.1.0-windows-x64-${{ steps.windows-signing.outputs.artifact_suffix }}-portable.zip
+          name: CogniNote-${{ env.COGNINOTE_DESKTOP_VERSION }}-windows-x64-${{ steps.windows-signing.outputs.artifact_suffix }}-portable
+          path: artifacts/CogniNote-${{ env.COGNINOTE_DESKTOP_VERSION }}-windows-x64-${{ steps.windows-signing.outputs.artifact_suffix }}-portable.zip
           if-no-files-found: error
 
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CogniNote-0.1.0-windows-x64-${{ steps.windows-signing.outputs.artifact_suffix }}-installer
+          name: CogniNote-${{ env.COGNINOTE_DESKTOP_VERSION }}-windows-x64-${{ steps.windows-signing.outputs.artifact_suffix }}-installer
           path: cogniNote-agent-front/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
