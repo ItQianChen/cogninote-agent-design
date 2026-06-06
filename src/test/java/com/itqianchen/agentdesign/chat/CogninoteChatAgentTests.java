@@ -26,6 +26,9 @@ import com.itqianchen.agentdesign.dto.index.RebuildIndexResponse;
 import com.itqianchen.agentdesign.dto.search.SearchHitResponse;
 import com.itqianchen.agentdesign.dto.search.SearchRequest;
 import com.itqianchen.agentdesign.dto.search.SearchResponse;
+import com.itqianchen.agentdesign.mapper.chat.ChatSessionMapper;
+import com.itqianchen.agentdesign.mapper.model.ModelConfigMapper;
+import com.itqianchen.agentdesign.mapper.schema.DatabaseSchemaMapper;
 import com.itqianchen.agentdesign.metadata.DatabaseSchemaInitializer;
 import com.itqianchen.agentdesign.repository.chat.ChatSessionRepository;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
@@ -43,14 +46,17 @@ import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import org.springframework.ai.document.Document;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.mybatis.spring.SqlSessionFactoryBean;
+import org.sqlite.SQLiteDataSource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
@@ -251,11 +257,13 @@ class CogninoteChatAgentTests {
         private AgentFixture(FakeKnowledgeStore knowledgeStore, Flux<String> answer) {
             this.knowledgeStore = knowledgeStore;
             this.runtime = new RecordingAiRuntime(answer);
-            JdbcTemplate jdbcTemplate = sqliteJdbcTemplate();
-            new DatabaseSchemaInitializer(jdbcTemplate).initialize();
-            ModelConfigRepository modelConfigRepository = new ModelConfigRepository(jdbcTemplate);
+            SqlSession sqlSession = sqliteSqlSession();
+            new DatabaseSchemaInitializer(sqlSession.getMapper(DatabaseSchemaMapper.class)).initialize();
+            ModelConfigRepository modelConfigRepository = new ModelConfigRepository(
+                    sqlSession.getMapper(ModelConfigMapper.class)
+            );
             modelConfigRepository.save(activeChatConfig());
-            this.chatSessionRepository = new ChatSessionRepository(jdbcTemplate);
+            this.chatSessionRepository = new ChatSessionRepository(sqlSession.getMapper(ChatSessionMapper.class));
             ChatMemoryProperties memoryProperties = new ChatMemoryProperties(6000, 8, 40);
             TokenEstimator tokenEstimator = new TokenEstimator();
             this.chatSessionService = new ChatSessionService(
@@ -277,12 +285,22 @@ class CogninoteChatAgentTests {
             );
         }
 
-        private static JdbcTemplate sqliteJdbcTemplate() {
-            SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
-                    "jdbc:sqlite::memory:",
-                    true
-            );
-            return new JdbcTemplate(dataSource);
+        private static SqlSession sqliteSqlSession() {
+            try {
+                SQLiteDataSource dataSource = new SQLiteDataSource();
+                dataSource.setUrl("jdbc:sqlite::memory:");
+                SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
+                factoryBean.setDataSource(dataSource);
+                factoryBean.setMapperLocations(new PathMatchingResourcePatternResolver()
+                        .getResources("classpath*:/mappers/*.xml"));
+                SqlSessionFactory factory = factoryBean.getObject();
+                if (factory == null) {
+                    throw new IllegalStateException("Failed to create test MyBatis SqlSessionFactory");
+                }
+                return factory.openSession(true);
+            } catch (Exception ex) {
+                throw new IllegalStateException("Failed to create in-memory SQLite MyBatis session", ex);
+            }
         }
 
         private static ModelConfig activeChatConfig() {

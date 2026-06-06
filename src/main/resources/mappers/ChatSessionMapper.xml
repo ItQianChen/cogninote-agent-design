@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.itqianchen.agentdesign.mapper.chat.ChatSessionMapper">
+
+    <resultMap id="ChatSessionMap" type="com.itqianchen.agentdesign.domain.chat.ChatSession">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="title" javaType="java.lang.String"/>
+            <arg column="summary" javaType="java.lang.String"/>
+            <arg column="summary_message_sequence" javaType="_int"/>
+            <arg column="use_knowledge_base" javaType="_boolean"/>
+            <arg column="retrieval_mode" javaType="com.itqianchen.agentdesign.domain.search.SearchMode"/>
+            <arg column="top_k" javaType="_int"/>
+            <arg column="deleted" javaType="_boolean"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="updated_at" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="ChatSessionSummaryRowMap" type="com.itqianchen.agentdesign.mapper.chat.ChatSessionSummaryRow">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="title" javaType="java.lang.String"/>
+            <arg column="summary" javaType="java.lang.String"/>
+            <arg column="summary_message_sequence" javaType="_int"/>
+            <arg column="use_knowledge_base" javaType="_boolean"/>
+            <arg column="retrieval_mode" javaType="com.itqianchen.agentdesign.domain.search.SearchMode"/>
+            <arg column="top_k" javaType="_int"/>
+            <arg column="deleted" javaType="_boolean"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="updated_at" javaType="_long"/>
+            <arg column="message_count" javaType="_int"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="ChatMessageMap" type="com.itqianchen.agentdesign.domain.chat.ChatMessage">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="conversation_id" javaType="java.lang.String"/>
+            <arg column="message_sequence" javaType="_int"/>
+            <arg column="role" javaType="com.itqianchen.agentdesign.domain.chat.ChatMessageRole"/>
+            <arg column="content" javaType="java.lang.String"/>
+            <arg column="status" javaType="com.itqianchen.agentdesign.domain.chat.ChatMessageStatus"/>
+            <arg column="request_id" javaType="java.lang.String"/>
+            <arg column="retrieval_mode" javaType="com.itqianchen.agentdesign.domain.search.SearchMode"/>
+            <arg column="sources_json" javaType="java.lang.String"/>
+            <arg column="token_estimate" javaType="_int"/>
+            <arg column="created_at" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="ChatSessionColumns">
+        id, title, summary, summary_message_sequence, use_knowledge_base,
+        retrieval_mode, top_k, deleted, created_at, updated_at
+    </sql>
+
+    <select id="findActiveSessions" resultMap="ChatSessionMap">
+        SELECT <include refid="ChatSessionColumns"/>
+        FROM chat_sessions
+        WHERE deleted = 0
+        ORDER BY updated_at DESC
+    </select>
+
+    <select id="findActiveSessionSummaries" resultMap="ChatSessionSummaryRowMap">
+        SELECT
+            s.id,
+            s.title,
+            s.summary,
+            s.summary_message_sequence,
+            s.use_knowledge_base,
+            s.retrieval_mode,
+            s.top_k,
+            s.deleted,
+            s.created_at,
+            s.updated_at,
+            COUNT(m.id) AS message_count
+        FROM chat_sessions s
+        LEFT JOIN chat_messages m ON m.conversation_id = s.id
+        WHERE s.deleted = 0
+        GROUP BY s.id
+        ORDER BY s.updated_at DESC
+    </select>
+
+    <select id="findById" resultMap="ChatSessionMap">
+        SELECT <include refid="ChatSessionColumns"/>
+        FROM chat_sessions
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <insert id="insertSession">
+        INSERT INTO chat_sessions (
+            id, title, summary, summary_message_sequence, use_knowledge_base,
+            retrieval_mode, top_k, deleted, created_at, updated_at
+        )
+        VALUES (
+            #{id}, #{title}, #{summary}, #{summaryMessageSequence}, #{useKnowledgeBase},
+            #{retrievalMode}, #{topK}, 0, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateOptions">
+        UPDATE chat_sessions
+        SET title = COALESCE(#{title}, title),
+            use_knowledge_base = #{useKnowledgeBase},
+            retrieval_mode = #{retrievalMode},
+            top_k = #{topK},
+            updated_at = #{updatedAt}
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <update id="updateSummary">
+        UPDATE chat_sessions
+        SET summary = #{summary}, summary_message_sequence = #{coveredSequence}, updated_at = #{updatedAt}
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <update id="softDelete">
+        UPDATE chat_sessions
+        SET deleted = 1, updated_at = #{updatedAt}
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <delete id="deleteMessages">
+        DELETE FROM chat_messages WHERE conversation_id = #{conversationId}
+    </delete>
+
+    <update id="resetSessionMessages">
+        UPDATE chat_sessions
+        SET summary = NULL, summary_message_sequence = 0, updated_at = #{updatedAt}
+        WHERE id = #{conversationId} AND deleted = 0
+    </update>
+
+    <select id="findMessages" resultMap="ChatMessageMap">
+        SELECT id, conversation_id, message_sequence, role, content, status,
+               request_id, retrieval_mode, sources_json, token_estimate, created_at
+        FROM chat_messages
+        WHERE conversation_id = #{conversationId}
+        ORDER BY message_sequence ASC
+    </select>
+
+    <select id="countMessages" resultType="_int">
+        SELECT COUNT(*)
+        FROM chat_messages
+        WHERE conversation_id = #{conversationId}
+    </select>
+
+    <select id="findMessagesAfter" resultMap="ChatMessageMap">
+        SELECT id, conversation_id, message_sequence, role, content, status,
+               request_id, retrieval_mode, sources_json, token_estimate, created_at
+        FROM chat_messages
+        WHERE conversation_id = #{conversationId} AND message_sequence > #{sequence}
+        ORDER BY message_sequence ASC
+    </select>
+
+    <select id="nextMessageSequence" resultType="_int">
+        SELECT COALESCE(MAX(message_sequence), 0) + 1
+        FROM chat_messages
+        WHERE conversation_id = #{conversationId}
+    </select>
+
+    <insert id="insertMessage">
+        INSERT INTO chat_messages (
+            id, conversation_id, message_sequence, role, content, status,
+            request_id, retrieval_mode, sources_json, token_estimate, created_at
+        )
+        VALUES (
+            #{id}, #{conversationId}, #{sequence}, #{role}, #{content}, #{status},
+            #{requestId}, #{retrievalMode}, #{sourcesJson}, #{tokenEstimate}, #{createdAt}
+        )
+    </insert>
+
+    <update id="touchSession">
+        UPDATE chat_sessions SET updated_at = #{updatedAt} WHERE id = #{conversationId}
+    </update>
+</mapper>

@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itqianchen.agentdesign.domain.search.KnowledgeStore;
+import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -20,7 +21,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -41,7 +41,7 @@ class KnowledgeFolderControllerTests {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private TestDatabaseCleaner databaseCleaner;
 
     @Autowired
     private KnowledgeStore knowledgeStore;
@@ -51,9 +51,8 @@ class KnowledgeFolderControllerTests {
 
     @BeforeEach
     void clearState() {
-        jdbcTemplate.update("DELETE FROM chunks");
-        jdbcTemplate.update("DELETE FROM documents");
-        jdbcTemplate.update("DELETE FROM knowledge_folders");
+        databaseCleaner.clearDocuments();
+        databaseCleaner.clearKnowledgeFolders();
         knowledgeStore.rebuildAll();
     }
 
@@ -142,7 +141,7 @@ class KnowledgeFolderControllerTests {
                 .andReturn();
 
         assertThat(result.getResponse().getContentAsString()).contains("parsedCount");
-        return jdbcTemplate.queryForObject("SELECT id FROM knowledge_folders LIMIT 1", String.class);
+        return databaseCleaner.findAnyKnowledgeFolderId();
     }
 
     private void searchKeyword(String query, int expectedHitCount) throws Exception {

@@ -6,13 +6,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -29,12 +29,11 @@ class ModelConfigControllerTests {
     private MockMvc mockMvc;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private TestDatabaseCleaner databaseCleaner;
 
     @BeforeEach
     void clearDatabase() {
-        jdbcTemplate.update("DELETE FROM model_configs");
-        jdbcTemplate.update("DELETE FROM model_config");
+        databaseCleaner.clearModelConfigs();
     }
 
     @Test

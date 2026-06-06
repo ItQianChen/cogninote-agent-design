@@ -1,20 +1,26 @@
 package com.itqianchen.agentdesign.metadata;
 
+import com.itqianchen.agentdesign.mapper.schema.DatabaseSchemaMapper;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
 public class DatabaseSchemaInitializer implements ApplicationListener<ApplicationReadyEvent> {
 
-    private final JdbcTemplate jdbcTemplate;
+    private static final Map<String, String> ALLOWED_COLUMN_MIGRATIONS = Map.of(
+            "documents.knowledge_folder_id", "TEXT",
+            "model_config.display_name", "TEXT NOT NULL DEFAULT 'DashScope'",
+            "model_config.base_url", "TEXT NOT NULL DEFAULT 'https://dashscope.aliyuncs.com/api/v1'"
+    );
 
-    public DatabaseSchemaInitializer(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    private final DatabaseSchemaMapper databaseSchemaMapper;
+
+    public DatabaseSchemaInitializer(DatabaseSchemaMapper databaseSchemaMapper) {
+        this.databaseSchemaMapper = databaseSchemaMapper;
     }
 
     @Override
@@ -23,153 +29,53 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
     }
 
     public void initialize() {
-        jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS knowledge_folders (
-                    id TEXT PRIMARY KEY,
-                    folder_path TEXT NOT NULL,
-                    display_name TEXT NOT NULL,
-                    recursive INTEGER NOT NULL DEFAULT 1,
-                    enabled INTEGER NOT NULL DEFAULT 1,
-                    last_ingested_at INTEGER,
-                    last_indexed_at INTEGER,
-                    created_at INTEGER NOT NULL,
-                    updated_at INTEGER NOT NULL
-                )
-                """);
-        jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS documents (
-                    id TEXT PRIMARY KEY,
-                    knowledge_folder_id TEXT,
-                    source_path TEXT NOT NULL,
-                    file_name TEXT NOT NULL,
-                    file_type TEXT NOT NULL,
-                    file_size INTEGER,
-                    last_modified INTEGER,
-                    content_hash TEXT,
-                    status TEXT NOT NULL,
-                    indexed_at INTEGER,
-                    created_at INTEGER,
-                    updated_at INTEGER
-                )
-                """);
-        jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS chunks (
-                    id TEXT PRIMARY KEY,
-                    document_id TEXT NOT NULL,
-                    chunk_index INTEGER NOT NULL,
-                    content TEXT NOT NULL,
-                    content_hash TEXT NOT NULL,
-                    page_number INTEGER,
-                    heading TEXT,
-                    token_count INTEGER,
-                    created_at INTEGER,
-                    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
-                )
-                """);
-        jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS model_config (
-                    id TEXT PRIMARY KEY,
-                    provider TEXT NOT NULL,
-                    display_name TEXT NOT NULL,
-                    base_url TEXT NOT NULL,
-                    api_key TEXT,
-                    chat_model TEXT NOT NULL,
-                    embedding_model TEXT NOT NULL,
-                    embedding_dimensions INTEGER NOT NULL,
-                    temperature REAL NOT NULL,
-                    top_k INTEGER NOT NULL,
-                    created_at INTEGER NOT NULL,
-                    updated_at INTEGER NOT NULL
-                )
-                """);
+        databaseSchemaMapper.createKnowledgeFoldersTable();
+        databaseSchemaMapper.createDocumentsTable();
+        databaseSchemaMapper.createChunksTable();
+        databaseSchemaMapper.createLegacyModelConfigTable();
         // 旧版本数据库中已经存在 model_config 时，CREATE TABLE 不会补列。
         // 这里显式做轻量迁移，保证用户本地 SQLite 能跟随阶段升级继续使用。
         addColumnIfMissing("documents", "knowledge_folder_id", "TEXT");
         addColumnIfMissing("model_config", "display_name", "TEXT NOT NULL DEFAULT 'DashScope'");
         addColumnIfMissing("model_config", "base_url",
                 "TEXT NOT NULL DEFAULT 'https://dashscope.aliyuncs.com/api/v1'");
-        jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS model_configs (
-                    id TEXT PRIMARY KEY,
-                    role TEXT NOT NULL,
-                    provider TEXT NOT NULL,
-                    display_name TEXT NOT NULL,
-                    base_url TEXT NOT NULL,
-                    api_key TEXT,
-                    model_name TEXT NOT NULL,
-                    embedding_dimensions INTEGER,
-                    temperature REAL,
-                    default_top_k INTEGER,
-                    is_active INTEGER NOT NULL DEFAULT 0,
-                    created_at INTEGER NOT NULL,
-                    updated_at INTEGER NOT NULL
-                )
-                """);
-        jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS chat_sessions (
-                    id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    summary TEXT,
-                    summary_message_sequence INTEGER NOT NULL DEFAULT 0,
-                    use_knowledge_base INTEGER NOT NULL DEFAULT 1,
-                    retrieval_mode TEXT NOT NULL DEFAULT 'HYBRID',
-                    top_k INTEGER NOT NULL DEFAULT 8,
-                    deleted INTEGER NOT NULL DEFAULT 0,
-                    created_at INTEGER NOT NULL,
-                    updated_at INTEGER NOT NULL
-                )
-                """);
-        jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS chat_messages (
-                    id TEXT PRIMARY KEY,
-                    conversation_id TEXT NOT NULL,
-                    message_sequence INTEGER NOT NULL,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    request_id TEXT,
-                    retrieval_mode TEXT,
-                    sources_json TEXT,
-                    token_estimate INTEGER NOT NULL DEFAULT 0,
-                    created_at INTEGER NOT NULL,
-                    FOREIGN KEY (conversation_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
-                )
-                """);
-        jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_folders_path ON knowledge_folders(folder_path)");
-        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_folders_enabled ON knowledge_folders(enabled)");
-        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_documents_knowledge_folder_id ON documents(knowledge_folder_id)");
-        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_documents_updated_at ON documents(updated_at DESC)");
-        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id)");
-        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_model_configs_role ON model_configs(role)");
-        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_model_configs_role_active ON model_configs(role, is_active)");
-        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated_at ON chat_sessions(deleted, updated_at DESC)");
-        jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_messages_sequence ON chat_messages(conversation_id, message_sequence)");
-        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id, created_at)");
+        databaseSchemaMapper.createModelConfigsTable();
+        databaseSchemaMapper.createChatSessionsTable();
+        databaseSchemaMapper.createChatMessagesTable();
+        databaseSchemaMapper.createKnowledgeFoldersPathIndex();
+        databaseSchemaMapper.createKnowledgeFoldersEnabledIndex();
+        databaseSchemaMapper.createDocumentsKnowledgeFolderIdIndex();
+        databaseSchemaMapper.createDocumentsUpdatedAtIndex();
+        databaseSchemaMapper.createChunksDocumentIdIndex();
+        databaseSchemaMapper.createModelConfigsRoleIndex();
+        databaseSchemaMapper.createModelConfigsRoleActiveIndex();
+        databaseSchemaMapper.createChatSessionsUpdatedAtIndex();
+        databaseSchemaMapper.createChatMessagesSequenceIndex();
+        databaseSchemaMapper.createChatMessagesConversationIdIndex();
         migrateLegacyModelConfigIfNeeded();
     }
 
     private void addColumnIfMissing(String tableName, String columnName, String definition) {
-        List<Map<String, Object>> columns = jdbcTemplate.queryForList("PRAGMA table_info(" + tableName + ")");
+        String migrationKey = tableName + "." + columnName;
+        String allowedDefinition = ALLOWED_COLUMN_MIGRATIONS.get(migrationKey);
+        if (!definition.equals(allowedDefinition)) {
+            throw new IllegalArgumentException("Unsupported column migration: " + migrationKey);
+        }
+        List<Map<String, Object>> columns = databaseSchemaMapper.tableInfo(tableName);
         boolean exists = columns.stream()
                 .map(column -> String.valueOf(column.get("name")))
                 .anyMatch(columnName::equalsIgnoreCase);
         if (!exists) {
-            jdbcTemplate.execute("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + definition);
+            databaseSchemaMapper.addColumn(tableName, columnName, definition);
         }
     }
 
     private void migrateLegacyModelConfigIfNeeded() {
-        Number existingRows = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM model_configs", Number.class);
-        if (existingRows != null && existingRows.longValue() > 0) {
+        if (databaseSchemaMapper.countModelConfigs() > 0) {
             return;
         }
 
-        List<Map<String, Object>> legacyRows = jdbcTemplate.queryForList("""
-                SELECT provider, display_name, base_url, api_key, chat_model, embedding_model,
-                       embedding_dimensions, temperature, top_k, created_at, updated_at
-                FROM model_config
-                WHERE id = 'active'
-                """);
+        List<Map<String, Object>> legacyRows = databaseSchemaMapper.findLegacyActiveModelConfig();
         Map<String, Object> legacy = legacyRows.isEmpty() ? Map.of() : legacyRows.getFirst();
         long now = System.currentTimeMillis();
         long createdAt = longValue(legacy.get("created_at"), now);
@@ -226,13 +132,7 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
             long createdAt,
             long updatedAt
     ) {
-        jdbcTemplate.update("""
-                        INSERT INTO model_configs (
-                            id, role, provider, display_name, base_url, api_key, model_name,
-                            embedding_dimensions, temperature, default_top_k, is_active, created_at, updated_at
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                        """,
+        databaseSchemaMapper.insertInitialModelConfig(
                 id == null || id.isBlank() ? UUID.randomUUID().toString() : id,
                 role,
                 provider,
@@ -268,5 +168,3 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
         return value instanceof Number number ? number.doubleValue() : defaultValue;
     }
 }
-
-

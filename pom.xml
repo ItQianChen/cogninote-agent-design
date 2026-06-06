@@ -23,6 +23,7 @@
         <node.version>v20.19.6</node.version>
         <npm.version>10.8.2</npm.version>
         <sqlite-jdbc.version>3.53.0.0</sqlite-jdbc.version>
+        <mybatis-spring-boot.version>3.0.5</mybatis-spring-boot.version>
         <poi.version>5.5.1</poi.version>
         <pdfbox.version>3.0.7</pdfbox.version>
         <lucene.version>10.4.0</lucene.version>
@@ -57,6 +58,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+            <version>${mybatis-spring-boot.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

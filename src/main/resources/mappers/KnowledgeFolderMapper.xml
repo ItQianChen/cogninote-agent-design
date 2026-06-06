@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.itqianchen.agentdesign.mapper.knowledge.KnowledgeFolderMapper">
+
+    <resultMap id="KnowledgeFolderMap" type="com.itqianchen.agentdesign.domain.knowledge.KnowledgeFolder">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="folder_path" javaType="java.lang.String"/>
+            <arg column="display_name" javaType="java.lang.String"/>
+            <arg column="recursive" javaType="_boolean"/>
+            <arg column="enabled" javaType="_boolean"/>
+            <arg column="last_ingested_at" javaType="java.lang.Long"/>
+            <arg column="last_indexed_at" javaType="java.lang.Long"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="updated_at" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="KnowledgeFolderSummaryRowMap" type="com.itqianchen.agentdesign.mapper.knowledge.KnowledgeFolderSummaryRow">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="folder_path" javaType="java.lang.String"/>
+            <arg column="display_name" javaType="java.lang.String"/>
+            <arg column="recursive" javaType="_boolean"/>
+            <arg column="enabled" javaType="_boolean"/>
+            <arg column="last_ingested_at" javaType="java.lang.Long"/>
+            <arg column="last_indexed_at" javaType="java.lang.Long"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="updated_at" javaType="_long"/>
+            <arg column="document_count" javaType="_int"/>
+            <arg column="parsed_count" javaType="_int"/>
+            <arg column="failed_count" javaType="_int"/>
+            <arg column="chunk_count" javaType="_int"/>
+            <arg column="unindexed_count" javaType="_int"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findAllSummaries" resultMap="KnowledgeFolderSummaryRowMap">
+        SELECT
+            f.id,
+            f.folder_path,
+            f.display_name,
+            f.recursive,
+            f.enabled,
+            f.last_ingested_at,
+            f.last_indexed_at,
+            f.created_at,
+            f.updated_at,
+            COUNT(d.id) AS document_count,
+            COALESCE(SUM(CASE WHEN d.status = 'PARSED' THEN 1 ELSE 0 END), 0) AS parsed_count,
+            COALESCE(SUM(CASE WHEN d.status = 'FAILED' THEN 1 ELSE 0 END), 0) AS failed_count,
+            COALESCE(SUM(CASE WHEN d.status = 'PARSED' THEN d.chunk_count ELSE 0 END), 0) AS chunk_count,
+            COALESCE(SUM(CASE WHEN d.status = 'PARSED' AND d.indexed_at IS NULL THEN 1 ELSE 0 END), 0) AS unindexed_count
+        FROM knowledge_folders f
+        LEFT JOIN (
+            SELECT d.*, COUNT(c.id) AS chunk_count
+            FROM documents d
+            LEFT JOIN chunks c ON c.document_id = d.id
+            GROUP BY d.id
+        ) d ON d.knowledge_folder_id = f.id
+        GROUP BY f.id
+        ORDER BY f.updated_at DESC
+    </select>
+
+    <select id="findById" resultMap="KnowledgeFolderMap">
+        SELECT id, folder_path, display_name, recursive, enabled,
+               last_ingested_at, last_indexed_at, created_at, updated_at
+        FROM knowledge_folders
+        WHERE id = #{id}
+    </select>
+
+    <select id="findByFolderPath" resultMap="KnowledgeFolderMap">
+        SELECT id, folder_path, display_name, recursive, enabled,
+               last_ingested_at, last_indexed_at, created_at, updated_at
+        FROM knowledge_folders
+        WHERE folder_path = #{folderPath}
+    </select>
+
+    <insert id="upsert">
+        INSERT INTO knowledge_folders (
+            id, folder_path, display_name, recursive, enabled,
+            last_ingested_at, last_indexed_at, created_at, updated_at
+        )
+        VALUES (
+            #{id}, #{folderPath}, #{displayName}, #{recursive}, #{enabled},
+            #{lastIngestedAt}, #{lastIndexedAt}, #{createdAt}, #{updatedAt}
+        )
+        ON CONFLICT(folder_path) DO UPDATE SET
+            display_name = excluded.display_name,
+            recursive = excluded.recursive,
+            enabled = excluded.enabled,
+            last_ingested_at = excluded.last_ingested_at,
+            last_indexed_at = excluded.last_indexed_at,
+            updated_at = excluded.updated_at
+    </insert>
+
+    <update id="updateEnabled">
+        UPDATE knowledge_folders
+        SET enabled = #{enabled}, updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="markIngested">
+        UPDATE knowledge_folders
+        SET last_ingested_at = #{timestamp}, updated_at = #{timestamp}
+        WHERE id = #{id}
+    </update>
+
+    <update id="markIndexed">
+        UPDATE knowledge_folders
+        SET last_indexed_at = #{timestamp}, updated_at = #{timestamp}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM knowledge_folders WHERE id = #{id}
+    </delete>
+</mapper>

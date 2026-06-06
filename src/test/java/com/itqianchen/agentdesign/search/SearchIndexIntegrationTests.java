@@ -11,6 +11,7 @@ import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.domain.document.KnowledgeDocument;
 import com.itqianchen.agentdesign.domain.search.KnowledgeStore;
+import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,7 +21,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -46,15 +46,14 @@ class SearchIndexIntegrationTests {
     private KnowledgeStore knowledgeStore;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private TestDatabaseCleaner databaseCleaner;
 
     @TempDir
     private Path tempDir;
 
     @BeforeEach
     void clearState() {
-        jdbcTemplate.update("DELETE FROM chunks");
-        jdbcTemplate.update("DELETE FROM documents");
+        databaseCleaner.clearDocuments();
         knowledgeStore.rebuildAll();
     }
 

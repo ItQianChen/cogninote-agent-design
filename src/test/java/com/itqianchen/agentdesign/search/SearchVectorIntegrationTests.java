@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
 import com.itqianchen.agentdesign.domain.search.EmbeddingGateway;
 import com.itqianchen.agentdesign.domain.search.KnowledgeStore;
+import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -21,7 +22,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -44,15 +44,14 @@ class SearchVectorIntegrationTests {
     private KnowledgeStore knowledgeStore;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private TestDatabaseCleaner databaseCleaner;
 
     @TempDir
     private Path tempDir;
 
     @BeforeEach
     void clearState() {
-        jdbcTemplate.update("DELETE FROM chunks");
-        jdbcTemplate.update("DELETE FROM documents");
+        databaseCleaner.clearDocuments();
         knowledgeStore.rebuildAll();
     }
 

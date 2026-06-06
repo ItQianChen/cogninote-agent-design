@@ -5,44 +5,35 @@ import com.itqianchen.agentdesign.domain.chat.ChatMessageRole;
 import com.itqianchen.agentdesign.domain.chat.ChatMessageStatus;
 import com.itqianchen.agentdesign.domain.chat.ChatSession;
 import com.itqianchen.agentdesign.domain.search.SearchMode;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import com.itqianchen.agentdesign.dto.chat.ChatSessionResponse;
+import com.itqianchen.agentdesign.mapper.chat.ChatSessionMapper;
+import com.itqianchen.agentdesign.mapper.chat.ChatSessionSummaryRow;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class ChatSessionRepository {
 
-    private final JdbcTemplate jdbcTemplate;
+    private final ChatSessionMapper chatSessionMapper;
 
-    public ChatSessionRepository(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    public ChatSessionRepository(ChatSessionMapper chatSessionMapper) {
+        this.chatSessionMapper = chatSessionMapper;
     }
 
     public List<ChatSession> findActiveSessions() {
-        return jdbcTemplate.query("""
-                        SELECT *
-                        FROM chat_sessions
-                        WHERE deleted = 0
-                        ORDER BY updated_at DESC
-                        """,
-                (rs, rowNum) -> mapSession(rs)
-        );
+        return chatSessionMapper.findActiveSessions();
+    }
+
+    public List<ChatSessionResponse> findActiveSessionSummaries() {
+        return chatSessionMapper.findActiveSessionSummaries().stream()
+                .map(ChatSessionRepository::toSummaryResponse)
+                .toList();
     }
 
     public Optional<ChatSession> findById(String id) {
-        List<ChatSession> sessions = jdbcTemplate.query("""
-                        SELECT *
-                        FROM chat_sessions
-                        WHERE id = ? AND deleted = 0
-                        """,
-                (rs, rowNum) -> mapSession(rs),
-                id
-        );
-        return sessions.stream().findFirst();
+        return chatSessionMapper.findById(id).stream().findFirst();
     }
 
     public ChatSession create(String title, boolean useKnowledgeBase, SearchMode mode, int topK, long now) {
@@ -69,23 +60,7 @@ public class ChatSessionRepository {
                 now,
                 now
         );
-        jdbcTemplate.update("""
-                        INSERT INTO chat_sessions (
-                            id, title, summary, summary_message_sequence, use_knowledge_base,
-                            retrieval_mode, top_k, deleted, created_at, updated_at
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-                        """,
-                session.id(),
-                session.title(),
-                session.summary(),
-                session.summaryMessageSequence(),
-                session.useKnowledgeBase() ? 1 : 0,
-                session.retrievalMode().name(),
-                session.topK(),
-                session.createdAt(),
-                session.updatedAt()
-        );
+        chatSessionMapper.insertSession(session);
         return session;
     }
 
@@ -120,95 +95,39 @@ public class ChatSessionRepository {
             int topK,
             long updatedAt
     ) {
-        jdbcTemplate.update("""
-                        UPDATE chat_sessions
-                        SET title = COALESCE(?, title),
-                            use_knowledge_base = ?,
-                            retrieval_mode = ?,
-                            top_k = ?,
-                            updated_at = ?
-                        WHERE id = ? AND deleted = 0
-                        """,
+        chatSessionMapper.updateOptions(
+                id,
                 title == null || title.isBlank() ? null : title.trim(),
-                useKnowledgeBase ? 1 : 0,
+                useKnowledgeBase,
                 (mode == null ? SearchMode.HYBRID : mode).name(),
                 normalizeTopK(topK),
-                updatedAt,
-                id
+                updatedAt
         );
     }
 
     public void updateSummary(String id, String summary, int coveredSequence, long updatedAt) {
-        jdbcTemplate.update("""
-                        UPDATE chat_sessions
-                        SET summary = ?, summary_message_sequence = ?, updated_at = ?
-                        WHERE id = ? AND deleted = 0
-                        """,
-                summary,
-                coveredSequence,
-                updatedAt,
-                id
-        );
+        chatSessionMapper.updateSummary(id, summary, coveredSequence, updatedAt);
     }
 
     public boolean softDelete(String id, long updatedAt) {
-        return jdbcTemplate.update("""
-                        UPDATE chat_sessions
-                        SET deleted = 1, updated_at = ?
-                        WHERE id = ? AND deleted = 0
-                        """,
-                updatedAt,
-                id
-        ) > 0;
+        return chatSessionMapper.softDelete(id, updatedAt) > 0;
     }
 
     public void clearMessages(String conversationId, long updatedAt) {
-        jdbcTemplate.update("DELETE FROM chat_messages WHERE conversation_id = ?", conversationId);
-        jdbcTemplate.update("""
-                        UPDATE chat_sessions
-                        SET summary = NULL, summary_message_sequence = 0, updated_at = ?
-                        WHERE id = ? AND deleted = 0
-                        """,
-                updatedAt,
-                conversationId
-        );
+        chatSessionMapper.deleteMessages(conversationId);
+        chatSessionMapper.resetSessionMessages(conversationId, updatedAt);
     }
 
     public List<ChatMessage> findMessages(String conversationId) {
-        return jdbcTemplate.query("""
-                        SELECT *
-                        FROM chat_messages
-                        WHERE conversation_id = ?
-                        ORDER BY message_sequence ASC
-                        """,
-                (rs, rowNum) -> mapMessage(rs),
-                conversationId
-        );
+        return chatSessionMapper.findMessages(conversationId);
     }
 
     public int countMessages(String conversationId) {
-        Integer count = jdbcTemplate.queryForObject("""
-                        SELECT COUNT(*)
-                        FROM chat_messages
-                        WHERE conversation_id = ?
-                        """,
-                Integer.class,
-                conversationId
-        );
-        return count == null ? 0 : count;
+        return chatSessionMapper.countMessages(conversationId);
     }
 
     public List<ChatMessage> findMessagesAfter(String conversationId, int sequence) {
-        return jdbcTemplate.query("""
-                        SELECT *
-                        FROM chat_messages
-                        WHERE conversation_id = ? AND message_sequence > ?
-                        ORDER BY message_sequence ASC
-                        """,
-                (rs, rowNum) -> mapMessage(rs),
-                conversationId,
-                sequence
-        );
+        return chatSessionMapper.findMessagesAfter(conversationId, sequence);
     }
 
     public ChatMessage appendMessage(
@@ -222,18 +141,11 @@ public class ChatSessionRepository {
             int tokenEstimate,
             long createdAt
     ) {
-        Integer nextSequence = jdbcTemplate.queryForObject("""
-                        SELECT COALESCE(MAX(message_sequence), 0) + 1
-                        FROM chat_messages
-                        WHERE conversation_id = ?
-                        """,
-                Integer.class,
-                conversationId
-        );
+        int nextSequence = chatSessionMapper.nextMessageSequence(conversationId);
         ChatMessage message = new ChatMessage(
                 UUID.randomUUID().toString(),
                 conversationId,
-                nextSequence == null ? 1 : nextSequence,
+                nextSequence,
                 role,
                 content,
                 status,
@@ -243,59 +155,25 @@ public class ChatSessionRepository {
                 tokenEstimate,
                 createdAt
         );
-        jdbcTemplate.update("""
-                        INSERT INTO chat_messages (
-                            id, conversation_id, message_sequence, role, content, status,
-                            request_id, retrieval_mode, sources_json, token_estimate, created_at
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                message.id(),
-                message.conversationId(),
-                message.sequence(),
-                message.role().name(),
-                message.content(),
-                message.status().name(),
-                message.requestId(),
-                message.retrievalMode() == null ? null : message.retrievalMode().name(),
-                message.sourcesJson(),
-                message.tokenEstimate(),
-                message.createdAt()
-        );
-        jdbcTemplate.update("UPDATE chat_sessions SET updated_at = ? WHERE id = ?", createdAt, conversationId);
+        chatSessionMapper.insertMessage(message);
+        chatSessionMapper.touchSession(conversationId, createdAt);
         return message;
     }
 
-    private static ChatSession mapSession(ResultSet rs) throws SQLException {
-        return new ChatSession(
-                rs.getString("id"),
-                rs.getString("title"),
-                rs.getString("summary"),
-                rs.getInt("summary_message_sequence"),
-                rs.getInt("use_knowledge_base") == 1,
-                SearchMode.valueOf(rs.getString("retrieval_mode")),
-                rs.getInt("top_k"),
-                rs.getInt("deleted") == 1,
-                rs.getLong("created_at"),
-                rs.getLong("updated_at")
+    private static ChatSessionResponse toSummaryResponse(ChatSessionSummaryRow row) {
+        ChatSession session = new ChatSession(
+                row.id(),
+                row.title(),
+                row.summary(),
+                row.summaryMessageSequence(),
+                row.useKnowledgeBase(),
+                row.retrievalMode(),
+                row.topK(),
+                row.deleted(),
+                row.createdAt(),
+                row.updatedAt()
         );
-    }
-
-    private static ChatMessage mapMessage(ResultSet rs) throws SQLException {
-        String retrievalMode = rs.getString("retrieval_mode");
-        return new ChatMessage(
-                rs.getString("id"),
-                rs.getString("conversation_id"),
-                rs.getInt("message_sequence"),
-                ChatMessageRole.valueOf(rs.getString("role")),
-                rs.getString("content"),
-                ChatMessageStatus.valueOf(rs.getString("status")),
-                rs.getString("request_id"),
-                retrievalMode == null ? null : SearchMode.valueOf(retrievalMode),
-                rs.getString("sources_json"),
-                rs.getInt("token_estimate"),
-                rs.getLong("created_at")
-        );
+        return ChatSessionResponse.summary(session, row.messageCount());
     }
 
     private static int normalizeTopK(int topK) {

@@ -40,12 +40,7 @@ public class ChatSessionService {
     }
 
     public List<ChatSessionResponse> listSessions() {
-        return chatSessionRepository.findActiveSessions().stream()
-                .map(session -> ChatSessionResponse.summary(
-                        session,
-                        chatSessionRepository.countMessages(session.id())
-                ))
-                .toList();
+        return chatSessionRepository.findActiveSessionSummaries();
     }
 
     @Transactional

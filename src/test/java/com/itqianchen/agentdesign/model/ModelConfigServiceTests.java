@@ -10,11 +10,11 @@ import com.itqianchen.agentdesign.domain.model.ModelConfigurationException;
 import com.itqianchen.agentdesign.domain.model.ModelProvider;
 import com.itqianchen.agentdesign.dto.model.ModelConfigRequest;
 import com.itqianchen.agentdesign.service.model.ModelConfigService;
+import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
@@ -29,12 +29,11 @@ class ModelConfigServiceTests {
     private ModelConfigService modelConfigService;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private TestDatabaseCleaner databaseCleaner;
 
     @BeforeEach
     void clearDatabase() {
-        jdbcTemplate.update("DELETE FROM model_configs");
-        jdbcTemplate.update("DELETE FROM model_config");
+        databaseCleaner.clearModelConfigs();
     }
 
     @Test

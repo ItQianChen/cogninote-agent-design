@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.itqianchen.agentdesign.mapper.schema.DatabaseSchemaMapper">
+
+    <update id="createKnowledgeFoldersTable">
+        CREATE TABLE IF NOT EXISTS knowledge_folders (
+            id TEXT PRIMARY KEY,
+            folder_path TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            recursive INTEGER NOT NULL DEFAULT 1,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            last_ingested_at INTEGER,
+            last_indexed_at INTEGER,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+    </update>
+
+    <update id="createDocumentsTable">
+        CREATE TABLE IF NOT EXISTS documents (
+            id TEXT PRIMARY KEY,
+            knowledge_folder_id TEXT,
+            source_path TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            file_type TEXT NOT NULL,
+            file_size INTEGER,
+            last_modified INTEGER,
+            content_hash TEXT,
+            status TEXT NOT NULL,
+            indexed_at INTEGER,
+            created_at INTEGER,
+            updated_at INTEGER
+        )
+    </update>
+
+    <update id="createChunksTable">
+        CREATE TABLE IF NOT EXISTS chunks (
+            id TEXT PRIMARY KEY,
+            document_id TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            page_number INTEGER,
+            heading TEXT,
+            token_count INTEGER,
+            created_at INTEGER,
+            FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+        )
+    </update>
+
+    <update id="createLegacyModelConfigTable">
+        CREATE TABLE IF NOT EXISTS model_config (
+            id TEXT PRIMARY KEY,
+            provider TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            base_url TEXT NOT NULL,
+            api_key TEXT,
+            chat_model TEXT NOT NULL,
+            embedding_model TEXT NOT NULL,
+            embedding_dimensions INTEGER NOT NULL,
+            temperature REAL NOT NULL,
+            top_k INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+    </update>
+
+    <update id="createModelConfigsTable">
+        CREATE TABLE IF NOT EXISTS model_configs (
+            id TEXT PRIMARY KEY,
+            role TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            base_url TEXT NOT NULL,
+            api_key TEXT,
+            model_name TEXT NOT NULL,
+            embedding_dimensions INTEGER,
+            temperature REAL,
+            default_top_k INTEGER,
+            is_active INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+    </update>
+
+    <update id="createChatSessionsTable">
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            summary TEXT,
+            summary_message_sequence INTEGER NOT NULL DEFAULT 0,
+            use_knowledge_base INTEGER NOT NULL DEFAULT 1,
+            retrieval_mode TEXT NOT NULL DEFAULT 'HYBRID',
+            top_k INTEGER NOT NULL DEFAULT 8,
+            deleted INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+    </update>
+
+    <update id="createChatMessagesTable">
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id TEXT PRIMARY KEY,
+            conversation_id TEXT NOT NULL,
+            message_sequence INTEGER NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            status TEXT NOT NULL,
+            request_id TEXT,
+            retrieval_mode TEXT,
+            sources_json TEXT,
+            token_estimate INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY (conversation_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+        )
+    </update>
+
+    <select id="tableInfo" resultType="map">
+        PRAGMA table_info(${tableName})
+    </select>
+
+    <update id="addColumn">
+        ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}
+    </update>
+
+    <update id="createKnowledgeFoldersPathIndex">
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_folders_path ON knowledge_folders(folder_path)
+    </update>
+
+    <update id="createKnowledgeFoldersEnabledIndex">
+        CREATE INDEX IF NOT EXISTS idx_knowledge_folders_enabled ON knowledge_folders(enabled)
+    </update>
+
+    <update id="createDocumentsKnowledgeFolderIdIndex">
+        CREATE INDEX IF NOT EXISTS idx_documents_knowledge_folder_id ON documents(knowledge_folder_id)
+    </update>
+
+    <update id="createDocumentsUpdatedAtIndex">
+        CREATE INDEX IF NOT EXISTS idx_documents_updated_at ON documents(updated_at DESC)
+    </update>
+
+    <update id="createChunksDocumentIdIndex">
+        CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id)
+    </update>
+
+    <update id="createModelConfigsRoleIndex">
+        CREATE INDEX IF NOT EXISTS idx_model_configs_role ON model_configs(role)
+    </update>
+
+    <update id="createModelConfigsRoleActiveIndex">
+        CREATE INDEX IF NOT EXISTS idx_model_configs_role_active ON model_configs(role, is_active)
+    </update>
+
+    <update id="createChatSessionsUpdatedAtIndex">
+        CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated_at ON chat_sessions(deleted, updated_at DESC)
+    </update>
+
+    <update id="createChatMessagesSequenceIndex">
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_messages_sequence ON chat_messages(conversation_id, message_sequence)
+    </update>
+
+    <update id="createChatMessagesConversationIdIndex">
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id, created_at)
+    </update>
+
+    <select id="countModelConfigs" resultType="_long">
+        SELECT COUNT(*) FROM model_configs
+    </select>
+
+    <select id="findLegacyActiveModelConfig" resultType="map">
+        SELECT provider, display_name, base_url, api_key, chat_model, embedding_model,
+               embedding_dimensions, temperature, top_k, created_at, updated_at
+        FROM model_config
+        WHERE id = 'active'
+    </select>
+
+    <insert id="insertInitialModelConfig">
+        INSERT INTO model_configs (
+            id, role, provider, display_name, base_url, api_key, model_name,
+            embedding_dimensions, temperature, default_top_k, is_active, created_at, updated_at
+        )
+        VALUES (
+            #{id}, #{role}, #{provider}, #{displayName}, #{baseUrl}, #{apiKey}, #{modelName},
+            #{embeddingDimensions}, #{temperature}, #{defaultTopK}, 1, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+</mapper>

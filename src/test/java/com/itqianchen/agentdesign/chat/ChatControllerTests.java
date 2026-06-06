@@ -8,12 +8,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.itqianchen.agentdesign.domain.ai.AiChatRuntime;
 import com.itqianchen.agentdesign.domain.ai.AiEmbeddingRuntime;
 import com.itqianchen.agentdesign.domain.ai.AiRuntimeFactory;
+import com.itqianchen.agentdesign.domain.document.DocumentStatus;
+import com.itqianchen.agentdesign.domain.document.FileType;
+import com.itqianchen.agentdesign.domain.document.KnowledgeChunk;
+import com.itqianchen.agentdesign.domain.document.KnowledgeDocument;
 import com.itqianchen.agentdesign.domain.model.ModelConfig;
 import com.itqianchen.agentdesign.domain.model.ModelConfigDefaults;
 import com.itqianchen.agentdesign.domain.search.EmbeddingGateway;
 import com.itqianchen.agentdesign.domain.search.KnowledgeStore;
 import com.itqianchen.agentdesign.dto.model.ModelConfigRequest;
+import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.service.model.ModelConfigService;
+import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -30,7 +36,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -53,7 +58,10 @@ class ChatControllerTests {
     private ModelConfigService modelConfigService;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private DocumentRepository documentRepository;
+
+    @Autowired
+    private TestDatabaseCleaner databaseCleaner;
 
     @Autowired
     private KnowledgeStore knowledgeStore;
@@ -63,12 +71,7 @@ class ChatControllerTests {
 
     @BeforeEach
     void clearState() {
-        jdbcTemplate.update("DELETE FROM chat_messages");
-        jdbcTemplate.update("DELETE FROM chat_sessions");
-        jdbcTemplate.update("DELETE FROM chunks");
-        jdbcTemplate.update("DELETE FROM documents");
-        jdbcTemplate.update("DELETE FROM model_configs");
-        jdbcTemplate.update("DELETE FROM model_config");
+        databaseCleaner.clearAll();
     }
 
     @Test
@@ -125,32 +128,21 @@ class ChatControllerTests {
 
     private void insertParsedDocument() {
         long now = System.currentTimeMillis();
-        jdbcTemplate.update("""
-                        INSERT INTO documents (
-                            id, source_path, file_name, file_type, file_size, last_modified,
-                            content_hash, status, indexed_at, created_at, updated_at
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
+        documentRepository.upsertDocument(new KnowledgeDocument(
                 "doc-1",
                 tempDir.resolve("packaging.md").toString(),
                 "packaging.md",
-                "MARKDOWN",
+                FileType.MARKDOWN,
                 10,
                 now,
                 "hash",
-                "PARSED",
+                DocumentStatus.PARSED,
                 now,
                 now,
-                now
-        );
-        jdbcTemplate.update("""
-                        INSERT INTO chunks (
-                            id, document_id, chunk_index, content, content_hash,
-                            page_number, heading, token_count, created_at
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
+                now,
+                1
+        ));
+        documentRepository.replaceChunks("doc-1", List.of(new KnowledgeChunk(
                 "chunk-1",
                 "doc-1",
                 0,
@@ -160,7 +152,7 @@ class ChatControllerTests {
                 "Packaging",
                 12,
                 now
-        );
+        )));
     }
 
     @TestConfiguration

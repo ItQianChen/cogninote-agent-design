@@ -98,6 +98,7 @@ Spring Boot 后端
   ├─ Agent Execution Service
   ├─ AI Runtime (DashScope / OpenAI-compatible)
   ├─ SQLite Chat Memory
+  ├─ Repository + MyBatis XML Mapper
   ├─ Spring AI Advisor (Memory / RAG)
   ├─ CogninoteDocumentRetriever
   ├─ Knowledge Context Provider
@@ -282,6 +283,8 @@ app:
 - `ChatSseEventMapper` 负责把内部 `AgentEvent` 映射为 SSE，并通过 `requestId` 注册显式取消能力。
 
 这次重构的边界是“整理调用层”，不是“把 RAG 强行改成 Spring AI VectorStore”。当前 Lucene + SQLite 的检索、来源展示和降级逻辑继续由 CogniNote 自己掌控。
+
+第十六阶段后，SQLite 访问统一收敛到 Repository + MyBatis XML Mapper。Service 和 Controller 仍只依赖 Repository 或业务服务，不能直接依赖 MyBatis Mapper；Mapper XML 负责承载文档、知识库目录、模型配置、聊天会话和 schema 初始化 SQL。
 
 用户在前端配置：
 
@@ -494,6 +497,8 @@ Lucene = 可重建的搜索索引
 不要只用 SQLite，因为 SQLite 不适合承担高质量全文检索、BM25 和向量召回。
 
 也不要只用 Lucene，因为 Lucene 索引更适合搜索，不适合保存模型配置、文档状态、任务状态等业务数据。
+
+第十六阶段后，SQLite 的业务读写、启动建表/补列/轻量迁移和测试清库都通过 MyBatis XML Mapper 执行。这里的“统一 MyBatis”不表示移除 JDBC 基础设施：MyBatis、`sqlite-jdbc`、`DataSource` 和 Spring 事务仍然运行在 JDBC 之上，只是不再让业务代码直接散落 `JdbcTemplate` SQL。
 
 ### 8.1 SQLite 存什么
 
@@ -901,6 +906,15 @@ POST   /api/chat/stream/{requestId}/cancel
 - macOS CI 无证书时上传 unsigned 测试包，有 Developer ID 证书时签名、公证并 staple `.app` / `.dmg`
 - 双平台 workflow artifacts 使用 `0.1.0`、平台、架构和 `unsigned` / `signed` 命名
 - 文档补充 GitHub Secrets、Gatekeeper、SmartScreen 和安装验收说明
+
+### Milestone 16：MyBatis 统一数据访问层
+
+- 引入原生 MyBatis + XML Mapper，不引入 MyBatis-Plus
+- 文档、知识库目录、模型配置、聊天会话和消息 SQL 统一迁移到 Mapper XML
+- Repository 保留为业务数据访问门面，Service/Controller 不直接依赖 Mapper
+- schema 初始化、补列、旧 `model_config` 迁移改由 MyBatis Mapper 执行
+- 测试清库改为测试专用 Mapper，生产和测试代码不再直接使用 `JdbcTemplate`
+- 会话列表聚合消息数，避免 N+1 `countMessages`；目录删除使用集合级 SQL 清理 chunk
 
 ## 12. 后续版本规划
 
