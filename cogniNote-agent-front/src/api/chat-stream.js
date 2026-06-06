@@ -55,6 +55,7 @@ async function readSseStream(body, onEvent) {
   let buffer = ''
   let eventName = 'message'
   let dataLines = []
+  let terminalEventReceived = false
 
   const dispatchEvent = () => {
     if (dataLines.length === 0) {
@@ -62,6 +63,9 @@ async function readSseStream(body, onEvent) {
       return
     }
 
+    if (eventName === 'done' || eventName === 'error') {
+      terminalEventReceived = true
+    }
     onEvent(eventName, parsePayload(dataLines.join('\n')))
     eventName = 'message'
     dataLines = []
@@ -107,6 +111,11 @@ async function readSseStream(body, onEvent) {
     handleLine(buffer.replace(/\r$/, ''))
   }
   dispatchEvent()
+  if (!terminalEventReceived) {
+    // 没有收到后端的 done/error 终止帧，说明连接中途断开或流被上游截断。
+    // 这种情况下不能把已有内容当作完整回答。
+    throw new Error('流式回答连接提前结束，当前回答可能不完整。请重试或让模型继续回答。')
+  }
 }
 
 function parsePayload(rawData) {

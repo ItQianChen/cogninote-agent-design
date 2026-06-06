@@ -311,15 +311,7 @@ export const useChatStore = defineStore('chat', () => {
         await refreshActiveSession()
         await refreshSessionList()
       } else {
-        error.value = `对话失败：${err.message}`
-        updateAssistantMessage((message) => {
-          if (message.content) {
-            message.status = 'done'
-            return
-          }
-          message.status = 'error'
-          message.content = err.message || '模型返回错误'
-        })
+        markAssistantError(err.message || '模型返回错误')
       }
     } finally {
       isStreaming.value = false
@@ -359,16 +351,27 @@ export const useChatStore = defineStore('chat', () => {
 
     if (eventName === 'error') {
       const messageText = payload.message || '模型返回错误'
-      error.value = `对话失败：${messageText}`
-      updateAssistantMessage((message) => {
-        if (message.content) {
-          message.status = 'done'
-          return
-        }
-        message.status = 'error'
-        message.content = messageText
-      })
+      markAssistantError(messageText)
     }
+  }
+
+  function markAssistantError(messageText) {
+    error.value = `对话失败：${messageText}`
+    updateAssistantMessage((message) => {
+      message.status = 'error'
+      if (message.content) {
+        message.content = appendErrorNotice(message.content, messageText)
+        return
+      }
+      message.content = messageText
+    })
+  }
+
+  function appendErrorNotice(content, messageText) {
+    if (content.includes(messageText)) {
+      return content
+    }
+    return `${content}\n\n> ${messageText}`
   }
 
   function askAboutSource(source) {

@@ -118,10 +118,11 @@ watch(
           <span>{{ message.role === 'user' ? '你' : 'CogniNote' }}</span>
           <em v-if="message.retrievalMode">{{ message.retrievalMode }}</em>
           <em v-else-if="message.status === 'streaming'">生成中</em>
+          <em v-else-if="message.status === 'error'">未完成</em>
           <em v-else-if="message.status === 'stopped'">已停止</em>
         </div>
         <AiMarkdownRenderer
-          v-if="message.role === 'assistant' && message.status !== 'error'"
+          v-if="message.role === 'assistant'"
           class="message-content"
           :content="message.content"
           empty-text="正在等待模型返回..."

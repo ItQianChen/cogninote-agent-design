@@ -3,6 +3,7 @@ package com.itqianchen.agentdesign.service.ai;
 import com.itqianchen.agentdesign.domain.ai.AiChatRuntime;
 import com.itqianchen.agentdesign.domain.model.ModelConfigurationException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
@@ -24,12 +25,7 @@ final class SpringAiChatRuntime implements AiChatRuntime {
     @Override
     public Flux<String> stream(Prompt prompt) {
         return chatModel.stream(prompt)
-                .<String>handle((response, sink) -> {
-                    String text = extractText(response);
-                    if (text != null && !text.isEmpty()) {
-                        sink.next(text);
-                    }
-                });
+                .concatMap(SpringAiChatRuntime::toTextStream);
     }
 
     @Override
@@ -55,8 +51,8 @@ final class SpringAiChatRuntime implements AiChatRuntime {
             });
         }
         return spec.stream()
-                .content()
-                .filter(text -> text != null && !text.isEmpty());
+                .chatResponse()
+                .concatMap(SpringAiChatRuntime::toTextStream);
     }
 
     @Override
@@ -75,5 +71,41 @@ final class SpringAiChatRuntime implements AiChatRuntime {
         // Spring AI/OpenAI-compatible 流可能发出只含元数据的结束片段。
         // 但空格和换行可能是独立 chunk，Markdown 语法依赖这些空白，不能用 isBlank 过滤。
         return response.getResult().getOutput().getText();
+    }
+
+    private static Flux<String> toTextStream(ChatResponse response) {
+        String text = extractText(response);
+        String finishReason = finishReason(response);
+        if (!isIncompleteFinishReason(finishReason)) {
+            return text == null || text.isEmpty() ? Flux.empty() : Flux.just(text);
+        }
+
+        ChatCompletionIncompleteException exception = new ChatCompletionIncompleteException(
+                "模型回答被提前截断，finishReason=" + finishReason + "。请提高模型输出长度上限，或让模型继续回答。"
+        );
+        if (text == null || text.isEmpty()) {
+            return Flux.error(exception);
+        }
+        // 某些 Provider 会把最后一点内容和截断原因放在同一个 chunk。
+        // 先交付已收到的文字，再把本轮流标记为未完成，避免吞掉最后一段。
+        return Flux.just(text).concatWith(Flux.error(exception));
+    }
+
+    private static String finishReason(ChatResponse response) {
+        if (response == null || response.getResult() == null || response.getResult().getMetadata() == null) {
+            return null;
+        }
+        return response.getResult().getMetadata().getFinishReason();
+    }
+
+    private static boolean isIncompleteFinishReason(String finishReason) {
+        if (finishReason == null || finishReason.isBlank()) {
+            return false;
+        }
+        String normalized = finishReason.trim().toLowerCase(Locale.ROOT);
+        return normalized.equals("length")
+                || normalized.equals("max_tokens")
+                || normalized.equals("max_completion_tokens")
+                || normalized.equals("content_filter");
     }
 }
