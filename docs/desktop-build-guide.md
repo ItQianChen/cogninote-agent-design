@@ -137,7 +137,7 @@ scripts/build-desktop-app.ps1
 
 完整桌面构建入口。它会检查工具链、构建后端 app-image，然后执行 `npm --prefix cogniNote-agent-front run desktop:build` 生成 Tauri release exe 和 NSIS 安装包。
 
-Windows Tauri 配置包含 `signCommand`。本地没有 `WINDOWS_CERTIFICATE_PFX_BASE64` 和 `WINDOWS_CERTIFICATE_PASSWORD` 时，签名脚本会跳过签名并保留未签名开发包。GitHub Actions 也支持双模式：两个 Secret 都存在时强制签名并验证；两个 Secret 都为空时继续上传 unsigned 测试包；只配置其中一个会直接失败，避免误发半配置包。
+Windows Tauri 配置默认不包含 `signCommand`，这样 unsigned 构建不会触发 Tauri 签名阶段。只有 `COGNINOTE_REQUIRE_WINDOWS_SIGNING=true` 时，脚本才会在构建期间临时注入 `signCommand`，构建结束后恢复配置。GitHub Actions 也支持双模式：两个 Secret 都存在时强制签名并验证；两个 Secret 都为空时继续上传 unsigned 测试包；只配置其中一个会直接失败，避免误发半配置包。
 
 ## macOS 构建脚本
 

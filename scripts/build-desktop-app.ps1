@@ -10,6 +10,8 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $scriptDir
 $resolvedRoot = [System.IO.Path]::GetFullPath($projectRoot)
 $tauriReleaseBackendDir = Join-Path $projectRoot 'cogniNote-agent-front\src-tauri\target\release\backend'
+$tauriConfigPath = Join-Path $projectRoot 'cogniNote-agent-front\src-tauri\tauri.conf.json'
+$tauriConfigBackupPath = $null
 
 function Test-Jdk25Home {
     param([string]$Path)
@@ -95,6 +97,47 @@ function Remove-DirectoryIfExists {
     Remove-Item -LiteralPath $Path -Recurse -Force
 }
 
+function Enable-WindowsTauriSigning {
+    if ($env:COGNINOTE_REQUIRE_WINDOWS_SIGNING -ne 'true') {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $tauriConfigPath)) {
+        throw "Tauri config not found: $tauriConfigPath"
+    }
+
+    $script:tauriConfigBackupPath = Join-Path ([System.IO.Path]::GetTempPath()) "cogninote-tauri-conf-$([System.Guid]::NewGuid()).json"
+    Copy-Item -LiteralPath $tauriConfigPath -Destination $script:tauriConfigBackupPath -Force
+
+    # Unsigned builds must not define signCommand at all, because Tauri invokes it
+    # during bundling. Signed CI builds inject it temporarily and restore the
+    # checked-in Windows config before the script exits.
+    $config = Get-Content -LiteralPath $tauriConfigPath -Raw | ConvertFrom-Json
+    if (-not $config.bundle) {
+        $config | Add-Member -MemberType NoteProperty -Name bundle -Value ([pscustomobject]@{})
+    }
+    if (-not $config.bundle.windows) {
+        $config.bundle | Add-Member -MemberType NoteProperty -Name windows -Value ([pscustomobject]@{})
+    }
+
+    $signCommand = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/sign-windows-artifact.ps1 -FilePath "%1"'
+    if ($config.bundle.windows.PSObject.Properties.Name -contains 'signCommand') {
+        $config.bundle.windows.signCommand = $signCommand
+    } else {
+        $config.bundle.windows | Add-Member -MemberType NoteProperty -Name signCommand -Value $signCommand
+    }
+
+    $config | ConvertTo-Json -Depth 32 | Set-Content -LiteralPath $tauriConfigPath -Encoding UTF8
+}
+
+function Restore-WindowsTauriConfig {
+    if (-not [string]::IsNullOrWhiteSpace($script:tauriConfigBackupPath) -and
+        (Test-Path -LiteralPath $script:tauriConfigBackupPath)) {
+        Copy-Item -LiteralPath $script:tauriConfigBackupPath -Destination $tauriConfigPath -Force
+        Remove-Item -LiteralPath $script:tauriConfigBackupPath -Force
+    }
+}
+
 Push-Location $projectRoot
 try {
     # Dot-source the verifier so the refreshed Cargo/MSVC environment remains
@@ -114,10 +157,13 @@ try {
 
     Remove-DirectoryIfExists $tauriReleaseBackendDir
 
+    Enable-WindowsTauriSigning
+
     Invoke-Native -FilePath 'npm' -ArgumentList @('--prefix', 'cogniNote-agent-front', 'run', 'desktop:build')
 
     Write-Host ''
     Write-Host 'Desktop build finished. Check cogniNote-agent-front/src-tauri/target/release/bundle/.'
 } finally {
+    Restore-WindowsTauriConfig
     Pop-Location
 }
