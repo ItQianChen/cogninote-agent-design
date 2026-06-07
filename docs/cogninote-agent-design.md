@@ -222,6 +222,15 @@ RRF K: 60
 
 `SearchHitResponse.score` 在 `HYBRID` 下表示最终 RRF 分数；`keywordScore` 和 `vectorScore` 保留原始 BM25 / Vector 分数，主要用于调试和检索测试展示。修改 Analyzer、索引文本策略、Embedding 模型或维度后必须重建 Lucene 索引；如果旧 chunks 已经被旧清洗逻辑破坏缩进，需要重新导入原始文件才能恢复代码格式。
 
+检索效果：
+
+- 中文正文：搜索 `知识库重建索引`、`桌面打包失败`、`模型配置`、`向量检索` 这类中文短语时，BM25 不再完全依赖空格或英文 token，`KEYWORD` 模式即可验证中文 Analyzer 的召回效果。
+- 代码笔记：搜索 `ChatAgentRouter`、`chat agent router`、`snake_case`、`snake case`、`fooBar`、`foo bar`、`DataIntegrityViolationException`、`ChatSessionMapper.xml` 等类名、拆分标识符、异常名和路径片段时，会同时命中代码/标识符派生字段。
+- 流程图笔记：搜索 Mermaid / PlantUML 的图类型、节点名和边关系文本，例如 `flowchart`、`sequenceDiagram`、`用户提问`、`重建索引`，可以命中对应流程图 chunk。
+- 混合排序：`HYBRID` 会让 BM25 和 Vector 各自扩大候选集后用 RRF 融合；同时被关键词和语义召回排在前面的 chunk 更容易靠前，只命中一路的 chunk 也仍有机会进入结果。
+
+边界：代码搜索不是 AST 分析器，不会跨文件推导调用关系，也不会判断代码正确性。它解决的是代码笔记、流程图和技术文档“能被搜到”的召回问题；真正展示和注入 RAG 的内容仍然是 SQLite 中保存的原文 chunk。
+
 ### 5.4 Embedding Gateway
 
 嵌入模型不放进 JVM。CogniNote 使用自己的 `EmbeddingGateway` 和 `AiEmbeddingRuntime` 隔离 provider 差异，默认推荐 DashScope `text-embedding-v4`。业务代码只区分“文档向量化”和“查询向量化”，不直接依赖 Alibaba 或 OpenAI 具体类。

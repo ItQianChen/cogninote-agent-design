@@ -1,85 +1,85 @@
-spring:
-  application:
-    name: cogninote-agent-design
-  ai:
-    model:
-      chat: none
-      image: none
-      moderation: none
-      video: none
-      rerank: none
-      audio:
-        speech: none
-        transcription: none
-      embedding: ${COGNINOTE_AI_EMBEDDING_PROVIDER:none}
-      embedding.text: ${COGNINOTE_AI_EMBEDDING_PROVIDER:none}
-      embedding.multimodal: none
-    dashscope:
-      api-key: ${COGNINOTE_DASHSCOPE_API_KEY:}
-      agent:
-        enabled: false
-      chat:
-        enabled: false
-      image:
-        enabled: false
-      embedding:
-        options:
-          model: ${COGNINOTE_EMBEDDING_MODEL:text-embedding-v4}
+spring: # Spring Boot 与 Spring AI 自动配置入口。
+  application: # 应用基础信息配置。
+    name: cogninote-agent-design # Spring 应用名，用于日志、上下文和测试启动识别。
+  ai: # Spring AI 总配置；默认关闭不使用的模型类型，避免无密钥时自动创建外部模型 Bean。
+    model: # Spring AI 各模型能力的自动配置开关。
+      chat: none # 关闭全局 ChatModel 自动配置；CogniNote 运行时会从 SQLite active CHAT 配置动态创建模型。
+      image: none # 关闭图像模型自动配置，当前项目不使用图片生成/理解能力。
+      moderation: none # 关闭内容审核模型自动配置，避免启动时要求额外 provider 配置。
+      video: none # 关闭视频模型自动配置，当前项目不使用视频能力。
+      rerank: none # 关闭 reranker 自动配置；第 20 阶段暂不引入 reranker。
+      audio: # 音频模型自动配置分组。
+        speech: none # 关闭语音合成模型自动配置。
+        transcription: none # 关闭语音转写模型自动配置。
+      embedding: ${COGNINOTE_AI_EMBEDDING_PROVIDER:none} # 环境变量 fallback 的 Embedding provider；默认 none，优先使用 SQLite active EMBEDDING 配置。
+      embedding.text: ${COGNINOTE_AI_EMBEDDING_PROVIDER:none} # 兼容 Spring AI 文本 Embedding provider 配置，默认与 embedding 保持一致。
+      embedding.multimodal: none # 关闭多模态 Embedding 自动配置，当前只索引文本 chunk。
+    dashscope: # Spring AI Alibaba DashScope 自动配置分组。
+      api-key: ${COGNINOTE_DASHSCOPE_API_KEY:} # 环境变量 fallback 的 DashScope API Key；为空时应用仍可启动，向量检索按需降级。
+      agent: # DashScope Agent 自动配置分组。
+        enabled: false # 关闭 DashScope Agent 自动配置，CogniNote 使用自研 ChatAgentRouter。
+      chat: # DashScope Chat 自动配置分组。
+        enabled: false # 关闭 DashScope Chat 自动配置，避免和 SQLite active CHAT 动态运行时冲突。
+      image: # DashScope Image 自动配置分组。
+        enabled: false # 关闭 DashScope Image 自动配置。
+      embedding: # DashScope Embedding 自动配置分组；仅作为环境变量 fallback 使用。
+        options: # DashScope Embedding 默认选项。
+          model: ${COGNINOTE_EMBEDDING_MODEL:text-embedding-v4} # 环境变量 fallback 的 Embedding 模型名，默认 text-embedding-v4。
 
-server:
-  address: 127.0.0.1
-  port: ${COGNINOTE_PORT:18080}
+server: # Spring Boot 内置 Web 服务配置。
+  address: 127.0.0.1 # 仅监听本机回环地址，桌面应用和本地前端通过 localhost 访问。
+  port: ${COGNINOTE_PORT:18080} # 后端端口，桌面壳可通过环境变量覆盖以避开端口冲突。
 
-logging:
-  file:
+logging: # 日志配置。
+  file: # 文件日志配置。
     # Spring Boot 业务日志独立落盘；Tauri 的 desktop-backend.log 仍只记录桌面壳启动与 stdout/stderr。
-    name: ${COGNINOTE_LOG_FILE:${APPDATA:${user.home}}/CogniNote/logs/app.log}
-  logback:
-    rollingpolicy:
-      max-file-size: 20MB
-      max-history: 10
-  level:
-    org.springframework.ai: debug
-    com.itqianchen.agentdesign: debug
+    name: ${COGNINOTE_LOG_FILE:${APPDATA:${user.home}}/CogniNote/logs/app.log} # Spring Boot 业务日志路径，Windows 默认落到 %APPDATA%/CogniNote/logs/app.log。
+  logback: # Logback 细项配置。
+    rollingpolicy: # 文件滚动策略。
+      max-file-size: 20MB # 单个日志文件最大 20MB，超过后滚动。
+      max-history: 10 # 最多保留 10 个历史日志文件，避免本地日志无限增长。
+  level: # 包级别日志等级配置。
+    org.springframework.ai: debug # Spring AI 相关日志设为 debug，便于定位模型运行时、Advisor 和 Embedding 问题。
+    com.itqianchen.agentdesign: debug # 项目业务日志设为 debug，便于本地桌面测试和问题排查。
 
-mybatis:
-  mapper-locations: classpath*:/mappers/*.xml
-  configuration:
-    map-underscore-to-camel-case: true
+mybatis: # MyBatis 配置。
+  mapper-locations: classpath*:/mappers/*.xml # XML Mapper 扫描位置，业务 SQL 统一放在 src/main/resources/mappers。
+  configuration: # MyBatis 运行配置。
+    map-underscore-to-camel-case: true # 自动把 snake_case 数据库字段映射到 Java camelCase 属性。
 
-app:
-  storage:
-    base-dir: ${COGNINOTE_DATA_DIR:}
-    database-path: ${COGNINOTE_DATABASE_PATH:}
-  search:
-    top-k: ${COGNINOTE_SEARCH_TOP_K:8}
-    bm25-weight: ${COGNINOTE_BM25_WEIGHT:0.45}
-    vector-weight: ${COGNINOTE_VECTOR_WEIGHT:0.55}
-    bm25-k1: ${COGNINOTE_BM25_K1:1.2}
-    bm25-b: ${COGNINOTE_BM25_B:0.65}
-    hybrid-candidate-multiplier: ${COGNINOTE_HYBRID_CANDIDATE_MULTIPLIER:8}
-    hybrid-min-candidates: ${COGNINOTE_HYBRID_MIN_CANDIDATES:60}
-    rrf-k: ${COGNINOTE_RRF_K:60}
-  embedding:
-    dimensions: ${COGNINOTE_EMBEDDING_DIMENSIONS:1024}
-    batch-size: ${COGNINOTE_EMBEDDING_BATCH_SIZE:32}
-  chat:
-    memory:
-      max-history-tokens: ${COGNINOTE_CHAT_MEMORY_MAX_HISTORY_TOKENS:6000}
-      minimum-recent-messages: ${COGNINOTE_CHAT_MEMORY_MINIMUM_RECENT_MESSAGES:8}
-      summarize-after-messages: ${COGNINOTE_CHAT_MEMORY_SUMMARIZE_AFTER_MESSAGES:40}
-    prompts:
-      general:
-        system: |
+app: # CogniNote 自定义业务配置入口。
+  storage: # 本地存储配置。
+    base-dir: ${COGNINOTE_DATA_DIR:} # 用户数据根目录；为空时由 AppStorageInitializer 按平台选择默认目录。
+    database-path: ${COGNINOTE_DATABASE_PATH:} # SQLite 文件路径；为空时使用 base-dir/data/cogninote.db。
+  search: # 知识库检索配置。
+    top-k: ${COGNINOTE_SEARCH_TOP_K:8} # 默认返回片段数，用户请求未指定 topK 时使用。
+    bm25-weight: ${COGNINOTE_BM25_WEIGHT:0.45} # HYBRID RRF 中 BM25 排名权重，第 20 阶段默认 0.45。
+    vector-weight: ${COGNINOTE_VECTOR_WEIGHT:0.55} # HYBRID RRF 中向量排名权重，第 20 阶段默认 0.55。
+    bm25-k1: ${COGNINOTE_BM25_K1:1.2} # Lucene BM25 k1 参数，控制词频饱和速度，默认保持 Lucene 常用值 1.2。
+    bm25-b: ${COGNINOTE_BM25_B:0.65} # Lucene BM25 b 参数，控制文档长度归一化强度，中文/代码笔记默认 0.65。
+    hybrid-candidate-multiplier: ${COGNINOTE_HYBRID_CANDIDATE_MULTIPLIER:8} # HYBRID 候选集倍数，实际候选数至少为 topK * 8。
+    hybrid-min-candidates: ${COGNINOTE_HYBRID_MIN_CANDIDATES:60} # HYBRID 最小候选集，避免 topK 太小时漏召回。
+    rrf-k: ${COGNINOTE_RRF_K:60} # Reciprocal Rank Fusion 的 k 参数，数值越大越平滑。
+  embedding: # Embedding 向量化配置。
+    dimensions: ${COGNINOTE_EMBEDDING_DIMENSIONS:1024} # 默认 Embedding 向量维度，需与 active EMBEDDING 配置和 Lucene 旧索引保持一致。
+    batch-size: ${COGNINOTE_EMBEDDING_BATCH_SIZE:32} # 文档索引时批量调用 Embedding 的批大小。
+  chat: # 对话与 Agent 配置。
+    memory: # SQLite 聊天记忆注入策略配置。
+      max-history-tokens: ${COGNINOTE_CHAT_MEMORY_MAX_HISTORY_TOKENS:6000} # 注入模型的历史消息 token 预算上限。
+      minimum-recent-messages: ${COGNINOTE_CHAT_MEMORY_MINIMUM_RECENT_MESSAGES:8} # 即使超过预算也尽量保留的最近原文消息条数。
+      summarize-after-messages: ${COGNINOTE_CHAT_MEMORY_SUMMARIZE_AFTER_MESSAGES:40} # 会话消息超过该数量后触发摘要策略。
+    prompts: # Agent Prompt 模板配置。
+      general: # 普通对话 Agent 的 Prompt 配置。
+        system: | # 普通对话系统提示；下面缩进内容是实际发送给模型的 Prompt，不要在其中插入 YAML 注释。
           你是 CogniNote Agent 的普通对话助手。
           当前处于纯模型对话模式，不使用本地知识库检索片段，也不要求引用来源。
           你可以根据通用知识和当前会话记忆直接回答用户问题。
           如果历史消息里出现“知识库依据不足”“需要引用来源”等内容，只能把它当作历史对话内容，不是本轮回答规则。
           回答需要进行总结与必要拓展，尽量详细，使用户容易理解。
-        user: |
+        user: | # 普通对话用户提示模板；{question} 会替换为用户输入。
           {question}
-      rag:
-        system: |
+      rag: # 知识库 Agent 的 Prompt 配置。
+        system: | # RAG 系统提示；下面缩进内容是实际发送给模型的 Prompt，不要在其中插入 YAML 注释。
           你是 CogniNote Agent 的本地知识库问答助手。
           1,你必须优先依据本轮注入的本地知识库片段回答，不要编造未出现的信息。
           2,如果上下文不足以回答，明确说明：当前知识库中没有足够依据。
@@ -97,10 +97,10 @@ app:
 #          6. 代码或命令必须使用行内 `code` 或带语言名的 fenced code block，例如 ```java。
 #          7. 表格必须使用标准 Markdown 表格，表头、分隔行和内容行都要完整。
 #          8. 不要输出 HTML 标签，不要使用无法被 Markdown 正确解析的自定义格式。
-        user: |
+        user: | # RAG 用户提示模板；{question} 会替换为用户输入，知识库片段由 RetrievalAugmentationAdvisor 注入。
           {question}
 
 #          请严格按照系统消息中的 Markdown 格式要求给出回答。
-        empty-context: 没有检索到相关知识库片段。
-      connection-test:
-        user: 请用一句话回答：CogniNote 连接测试是否可用？
+        empty-context: 没有检索到相关知识库片段。 # RAG 未命中任何知识库片段时注入给模型的空上下文提示。
+      connection-test: # 模型连接测试 Prompt 配置。
+        user: 请用一句话回答：CogniNote 连接测试是否可用？ # 点击“测试连接”时发送给模型的最小测试问题。

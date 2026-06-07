@@ -34,13 +34,13 @@ async function rebuildAllIndexes() {
       </div>
     </header>
 
-    <el-alert
-      class="settings-inline-alert retrieval-upgrade-alert"
-      type="info"
-      title="检索策略已升级：中文正文、代码块和流程图会使用新的索引策略。升级后请点击“重建全部索引”。"
-      :closable="false"
-      show-icon
-    />
+<!--    <el-alert-->
+<!--      class="settings-inline-alert retrieval-upgrade-alert"-->
+<!--      type="info"-->
+<!--      title="检索策略已升级：中文正文、代码块和流程图会使用新的索引策略。升级后请点击“重建全部索引”。"-->
+<!--      :closable="false"-->
+<!--      show-icon-->
+<!--    />-->
 
     <form class="ingest-form knowledge-folder-import" @submit.prevent="knowledgeStore.importFolder">
       <label class="field field--full">
