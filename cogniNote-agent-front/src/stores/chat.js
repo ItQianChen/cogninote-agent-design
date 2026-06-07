@@ -118,6 +118,7 @@ export const useChatStore = defineStore('chat', () => {
   const error = ref('')
   const abortController = ref(null)
   const streamingContext = ref(null)
+  const sessionScrollPositions = ref({})
 
   const activeSession = computed(() =>
     sessions.value.find((session) => session.id === activeSessionId.value) || sessions.value[0] || null
@@ -228,6 +229,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     try {
       await deleteChatSession(sessionId)
+      forgetSessionScrollPosition(sessionId)
       sessions.value = sessions.value.filter((item) => item.id !== sessionId)
       if (!sessions.value.length) {
         const created = normalizeSession(await createChatSession(defaultSessionPayload()))
@@ -388,6 +390,39 @@ export const useChatStore = defineStore('chat', () => {
     draft.value = `请解释 ${source.fileName} 中和这段内容相关的要点。`
   }
 
+  function saveSessionScrollPosition(sessionId, position) {
+    if (!sessionId || !position) {
+      return
+    }
+    sessionScrollPositions.value = {
+      ...sessionScrollPositions.value,
+      [sessionId]: {
+        scrollTop: Math.max(0, Number(position.scrollTop) || 0),
+        scrollHeight: Math.max(0, Number(position.scrollHeight) || 0),
+        clientHeight: Math.max(0, Number(position.clientHeight) || 0),
+        distanceFromBottom: Math.max(0, Number(position.distanceFromBottom) || 0),
+        anchorMessageId: String(position.anchorMessageId || ''),
+        anchorMessageIndex: Math.max(0, Number(position.anchorMessageIndex) || 0),
+        anchorOffsetTop: Number(position.anchorOffsetTop) || 0,
+        anchorProgress: Math.min(1, Math.max(0, Number(position.anchorProgress) || 0)),
+        anchorViewportRatio: Math.min(1, Math.max(0, Number(position.anchorViewportRatio) || 0))
+      }
+    }
+  }
+
+  function getSessionScrollPosition(sessionId) {
+    return sessionScrollPositions.value[sessionId] || null
+  }
+
+  function forgetSessionScrollPosition(sessionId) {
+    if (!sessionId || !sessionScrollPositions.value[sessionId]) {
+      return
+    }
+    const nextPositions = { ...sessionScrollPositions.value }
+    delete nextPositions[sessionId]
+    sessionScrollPositions.value = nextPositions
+  }
+
   function setUseKnowledgeBase(value) {
     useKnowledgeBase.value = value
   }
@@ -546,6 +581,9 @@ export const useChatStore = defineStore('chat', () => {
     error,
     canSend,
     knowledgeDisabledHint,
+    getSessionScrollPosition,
+    saveSessionScrollPosition,
+    forgetSessionScrollPosition,
     initializeSessions,
     setUseKnowledgeBase,
     setMode,

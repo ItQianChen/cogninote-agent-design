@@ -1,5 +1,5 @@
 <script setup>
-import { computed, defineAsyncComponent, nextTick, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { LoaderCircle, Send, SlidersHorizontal, Trash2 } from 'lucide-vue-next'
 import ChatSettingsPopover from '../components/chat-settings-popover.vue'
 import SourceList from '../components/source-list.vue'
@@ -12,6 +12,11 @@ const modelConfigStore = useModelConfigStore()
 const AiMarkdownRenderer = defineAsyncComponent(() => import('../components/ai-markdown-renderer.vue'))
 const isComposerSettingsOpen = ref(false)
 const messageStreamRef = ref(null)
+const isRestoringScroll = ref(false)
+const shouldFollowBottom = ref(true)
+const BOTTOM_THRESHOLD_PX = 80
+const ANCHOR_VIEWPORT_RATIO = 0.35
+let restoreRunId = 0
 const composerActionTitle = computed(() => (chatStore.isStreaming ? '停止对话' : '发送信息'))
 const activeModelSummary = computed(() => {
   const chat = modelConfigStore.activeChatConfig?.modelName || '未配置对话模型'
@@ -47,47 +52,256 @@ function clearMessages() {
 
 async function scrollMessagesToBottom() {
   await nextTick()
-  applyMessageScrollBottom()
+  applyMessageScrollBottom(true)
   window.requestAnimationFrame(() => {
-    applyMessageScrollBottom()
-    window.setTimeout(applyMessageScrollBottom, 80)
+    applyMessageScrollBottom(true)
+    window.setTimeout(() => applyMessageScrollBottom(true), 80)
   })
 }
 
-function applyMessageScrollBottom() {
+function applyMessageScrollBottom(saveAfterScroll = false) {
   const stream = messageStreamRef.value
   if (stream) {
-    stream.scrollTop = stream.scrollHeight
+    stream.scrollTop = Math.max(0, stream.scrollHeight - stream.clientHeight)
+    shouldFollowBottom.value = true
+    if (saveAfterScroll) {
+      saveCurrentSessionScrollPosition()
+    }
+  }
+}
+
+function distanceFromBottom(stream) {
+  return Math.max(0, stream.scrollHeight - stream.scrollTop - stream.clientHeight)
+}
+
+function isNearBottom(stream) {
+  return distanceFromBottom(stream) <= BOTTOM_THRESHOLD_PX
+}
+
+function saveCurrentSessionScrollPosition(sessionId = chatStore.activeSessionId) {
+  const stream = messageStreamRef.value
+  if (!stream || !sessionId) {
+    return
+  }
+  const anchor = findScrollAnchor(stream)
+  chatStore.saveSessionScrollPosition(sessionId, {
+    scrollTop: stream.scrollTop,
+    scrollHeight: stream.scrollHeight,
+    clientHeight: stream.clientHeight,
+    distanceFromBottom: distanceFromBottom(stream),
+    anchorMessageId: anchor?.messageId || '',
+    anchorMessageIndex: anchor?.messageIndex || 0,
+    anchorOffsetTop: anchor?.offsetTop || 0,
+    anchorProgress: anchor?.progress || 0,
+    anchorViewportRatio: anchor?.viewportRatio || ANCHOR_VIEWPORT_RATIO
+  })
+}
+
+function findScrollAnchor(stream) {
+  const streamRect = stream.getBoundingClientRect()
+  const viewportRatio = ANCHOR_VIEWPORT_RATIO
+  const readingLineTop = streamRect.top + stream.clientHeight * viewportRatio
+  const messages = Array.from(stream.querySelectorAll('[data-message-id]'))
+  let lastVisible = null
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index]
+    const rect = message.getBoundingClientRect()
+    if (rect.bottom < streamRect.top) {
+      continue
+    }
+    if (rect.top > streamRect.bottom) {
+      break
+    }
+
+    const progress = rect.height > 0
+      ? Math.min(1, Math.max(0, (readingLineTop - rect.top) / rect.height))
+      : 0
+    const candidate = {
+      messageId: message.dataset.messageId,
+      messageIndex: index,
+      offsetTop: rect.top - streamRect.top,
+      progress,
+      viewportRatio
+    }
+
+    if (rect.top <= readingLineTop && rect.bottom >= readingLineTop) {
+      return candidate
+    }
+    if (rect.top <= readingLineTop) {
+      lastVisible = candidate
+    }
+    if (!lastVisible && rect.top > readingLineTop) {
+      return {
+        ...candidate,
+        progress: 0
+      }
+    }
+  }
+  return lastVisible
+}
+
+function handleMessageStreamScroll() {
+  if (isRestoringScroll.value) {
+    return
+  }
+  const stream = messageStreamRef.value
+  shouldFollowBottom.value = stream ? isNearBottom(stream) : true
+  saveCurrentSessionScrollPosition()
+}
+
+function resolveSessionScrollTop(stream, savedPosition) {
+  const bottomTop = Math.max(0, stream.scrollHeight - stream.clientHeight)
+  if (!savedPosition) {
+    return bottomTop
+  }
+  if (savedPosition.distanceFromBottom <= BOTTOM_THRESHOLD_PX) {
+    return bottomTop
+  }
+  const anchorTop = resolveAnchorScrollTop(stream, savedPosition)
+  if (anchorTop != null) {
+    return Math.min(Math.max(0, anchorTop), bottomTop)
+  }
+  return Math.min(Math.max(0, savedPosition.scrollTop), bottomTop)
+}
+
+function resolveAnchorScrollTop(stream, savedPosition) {
+  const anchor = findSavedAnchorElement(stream, savedPosition)
+  if (!anchor) {
+    return null
+  }
+  const anchorRect = anchor.getBoundingClientRect()
+  if (anchorRect.height <= 0) {
+    return null
+  }
+  const streamTop = stream.getBoundingClientRect().top
+  const anchorTop = anchorRect.top - streamTop
+  const progressTop = anchorTop + anchorRect.height * savedPosition.anchorProgress
+  const viewportTop = stream.clientHeight * (savedPosition.anchorViewportRatio || ANCHOR_VIEWPORT_RATIO)
+  return stream.scrollTop + progressTop - viewportTop
+}
+
+function findSavedAnchorElement(stream, savedPosition) {
+  if (savedPosition.anchorMessageId) {
+    const anchor = stream.querySelector(`[data-message-id="${CSS.escape(savedPosition.anchorMessageId)}"]`)
+    if (anchor) {
+      return anchor
+    }
+  }
+  const messages = Array.from(stream.querySelectorAll('[data-message-id]'))
+  return messages[savedPosition.anchorMessageIndex] || null
+}
+
+async function restoreSessionScroll(sessionId) {
+  if (!sessionId) {
+    return
+  }
+  const runId = ++restoreRunId
+  await nextTick()
+  const savedPosition = chatStore.getSessionScrollPosition(sessionId)
+  const applyRestore = () => {
+    const stream = messageStreamRef.value
+    if (!stream || runId !== restoreRunId || chatStore.activeSessionId !== sessionId) {
+      return false
+    }
+    stream.scrollTop = resolveSessionScrollTop(stream, savedPosition)
+    return true
+  }
+
+  isRestoringScroll.value = true
+  applyRestore()
+  window.requestAnimationFrame(() => {
+    applyRestore()
+    window.setTimeout(() => {
+      const restored = applyRestore()
+      if (restored && messageStreamRef.value) {
+        shouldFollowBottom.value = isNearBottom(messageStreamRef.value)
+        saveCurrentSessionScrollPosition(sessionId)
+      }
+      if (runId === restoreRunId) {
+        isRestoringScroll.value = false
+      }
+    }, 80)
+  })
+}
+
+function getActiveMessageScrollSignature() {
+  const lastMessage = chatStore.activeMessages.at(-1)
+  return {
+    sessionId: chatStore.activeSessionId,
+    loading: chatStore.isLoadingActiveSession,
+    messageCount: chatStore.activeMessages.length,
+    lastMessageId: lastMessage?.id || '',
+    lastContentLength: lastMessage?.content?.length || 0,
+    lastStatus: lastMessage?.status || '',
+    lastSourceCount: lastMessage?.sources?.length || 0
   }
 }
 
 watch(
-  () => [
-    chatStore.activeSessionId,
-    chatStore.isLoadingActiveSession,
-    chatStore.activeMessages.length,
-    chatStore.activeMessages.at(-1)?.content.length || 0
-  ],
-  () => {
-    if (!chatStore.isLoadingActiveSession) {
+  () => chatStore.activeSessionId,
+  (sessionId, previousSessionId) => {
+    if (previousSessionId && previousSessionId !== sessionId) {
+      saveCurrentSessionScrollPosition(previousSessionId)
+    }
+    shouldFollowBottom.value = true
+  }
+)
+
+watch(
+  () => [chatStore.activeSessionId, chatStore.isLoadingActiveSession],
+  ([sessionId, isLoading]) => {
+    if (sessionId && !isLoading) {
+      restoreSessionScroll(sessionId)
+    }
+  },
+  { flush: 'post', immediate: true }
+)
+
+watch(
+  getActiveMessageScrollSignature,
+  (current, previous) => {
+    if (!current.sessionId || current.loading || previous?.sessionId !== current.sessionId) {
+      return
+    }
+
+    const hasNewMessage = current.messageCount > (previous?.messageCount || 0)
+    const hasLastMessageChanged = current.lastMessageId !== previous?.lastMessageId
+      || current.lastContentLength !== previous?.lastContentLength
+      || current.lastStatus !== previous?.lastStatus
+      || current.lastSourceCount !== previous?.lastSourceCount
+
+    if (hasNewMessage) {
       scrollMessagesToBottom()
+      return
+    }
+
+    if (hasLastMessageChanged && shouldFollowBottom.value) {
+      scrollMessagesToBottom()
+      return
+    }
+
+    if (hasLastMessageChanged) {
+      saveCurrentSessionScrollPosition(current.sessionId)
     }
   },
   { flush: 'post' }
 )
+
+onBeforeUnmount(() => {
+  saveCurrentSessionScrollPosition()
+})
 </script>
 
 <template>
   <section class="conversation-page">
     <header class="conversation-header">
       <div>
-        <p class="eyebrow">对话</p>
         <h2>{{ chatStore.activeSession?.title || '新对话' }}</h2>
       </div>
       <div class="conversation-meta">
         <span>{{ chatStore.useKnowledgeBase ? '知识库已启用' : '纯模型对话' }}</span>
         <span>{{ chatStore.mode }}</span>
-        <span>{{ activeModelSummary }}</span>
+        <span class="conversation-meta__model">{{ activeModelSummary }}</span>
         <button
           class="conversation-action-button"
           type="button"
@@ -101,7 +315,7 @@ watch(
       </div>
     </header>
 
-    <section ref="messageStreamRef" class="message-stream" aria-live="polite">
+    <section ref="messageStreamRef" class="message-stream" aria-live="polite" @scroll.passive="handleMessageStreamScroll">
       <div v-if="!chatStore.hasMessages" class="empty-chat">
         <p class="eyebrow">开始一次对话</p>
         <h3>可以直接问，也可以带知识库问。</h3>
@@ -111,6 +325,7 @@ watch(
       <article
         v-for="message in chatStore.activeMessages"
         :key="message.id"
+        :data-message-id="message.id"
         class="message-bubble"
         :class="[`message-bubble--${message.role}`, `message-bubble--${message.status}`]"
       >
@@ -142,7 +357,7 @@ watch(
       <div class="composer-input-row">
         <textarea
           v-model="chatStore.draft"
-          rows="3"
+          rows="1"
           :placeholder="chatStore.useKnowledgeBase ? '向知识库提问...' : '直接和模型对话...'"
           :disabled="chatStore.isStreaming"
           @keydown="handleDraftKeydown"
@@ -152,9 +367,9 @@ watch(
           <button
             class="composer-settings-button"
             type="button"
-            title="对话设置"
+            title="知识库设置"
             :aria-expanded="isComposerSettingsOpen"
-            aria-label="打开对话设置"
+            aria-label="打开知识库设置"
             @click="isComposerSettingsOpen = !isComposerSettingsOpen"
           >
             <SlidersHorizontal aria-hidden="true" />

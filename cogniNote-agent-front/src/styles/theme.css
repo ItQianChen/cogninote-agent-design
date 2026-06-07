@@ -27,7 +27,7 @@ body {
 
 .conversation-header,
 .settings-header {
-  min-height: 76px;
+  min-height: 50px;
   padding: 14px 28px;
   border-color: var(--color-border);
   background: color-mix(in srgb, var(--color-bg-elevated) 88%, transparent);
@@ -137,6 +137,10 @@ body {
   background: var(--color-success-soft);
 }
 
+.conversation-meta__model {
+  display: inline-block;
+}
+
 .status-pill--loading,
 .status-chip--skipped {
   color: var(--color-warning);
@@ -221,7 +225,7 @@ body {
 
 .composer-bar {
   border-color: var(--color-border);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 76%, transparent), var(--color-bg));
+  background: transparent;
 }
 
 .composer-input-row textarea,
@@ -231,6 +235,10 @@ body {
   border-color: var(--color-border-strong);
   color: var(--color-input-text);
   background: var(--color-input);
+}
+
+.composer-input-row textarea {
+  box-shadow: var(--shadow-soft);
 }
 
 .composer-input-row textarea::placeholder,

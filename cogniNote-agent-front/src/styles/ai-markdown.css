@@ -2,6 +2,28 @@
 
 .ai-markdown-content,
 .ai-markdown-content .markstream-vue {
+  --code-bg: #0b1117;
+  --code-fg: #d7e6ef;
+  --code-border: rgba(114, 143, 161, 0.38);
+  --code-header-bg: #111a22;
+  --code-action-fg: #9fb8c8;
+  --code-action-hover-bg: rgba(69, 185, 173, 0.14);
+  --code-action-hover-fg: #eef7fb;
+  --code-line-number: #7a8f9f;
+  --inline-code-bg: #e6f2f3;
+  --inline-code-fg: #15515d;
+  --diagram-bg: #f2f7f8;
+  --diagram-border: #c8d8df;
+  --diagram-header-bg: #e8f1f3;
+  --diagram-control-fg: #2f5968;
+  --diagram-control-disabled-fg: #4f6f7d;
+  --diagram-control-hover-fg: #123f4d;
+  --diagram-control-hover-bg: rgba(14, 116, 144, 0.12);
+  --diagram-control-active-fg: #0f5363;
+  --diagram-control-active-bg: rgba(14, 116, 144, 0.16);
+  --modal-bg: var(--color-surface);
+  --modal-fg: var(--color-text);
+  --modal-overlay: color-mix(in srgb, var(--color-bg) 82%, rgba(0, 0, 0, 0.62));
   min-width: 0;
   max-width: 100%;
   color: inherit;
@@ -14,6 +36,25 @@
 
 .ai-markdown-content .markstream-vue {
   display: block;
+}
+
+.theme-dark .ai-markdown-content,
+.theme-dark .ai-markdown-content .markstream-vue {
+  --code-line-number: #7893a6;
+  --inline-code-bg: #172631;
+  --inline-code-fg: #bde9f4;
+  --diagram-bg: #111c24;
+  --diagram-border: rgba(107, 143, 164, 0.38);
+  --diagram-header-bg: #15232d;
+  --diagram-control-fg: #b8cad6;
+  --diagram-control-disabled-fg: #7893a6;
+  --diagram-control-hover-fg: #eef7fb;
+  --diagram-control-hover-bg: rgba(69, 185, 173, 0.16);
+  --diagram-control-active-fg: #bde9f4;
+  --diagram-control-active-bg: rgba(69, 185, 173, 0.18);
+  --modal-bg: var(--color-surface);
+  --modal-fg: var(--color-text);
+  --modal-overlay: color-mix(in srgb, var(--color-bg) 76%, rgba(0, 0, 0, 0.72));
 }
 
 .ai-markdown-content .markstream-vue > :first-child {
@@ -78,8 +119,9 @@
 .ai-markdown-content code {
   padding: 2px 6px;
   border-radius: 5px;
-  color: var(--color-text-strong);
-  background: color-mix(in srgb, var(--color-input) 82%, transparent);
+  border: 1px solid var(--code-border);
+  color: var(--inline-code-fg);
+  background: var(--inline-code-bg);
   font-family: var(--font-mono);
   font-size: 0.92em;
 }
@@ -88,19 +130,150 @@
   max-width: 100%;
   overflow-x: auto;
   padding: 14px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--code-border);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-input) 92%, transparent);
+  color: var(--code-fg);
+  background: var(--code-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .ai-markdown-content pre code {
   display: block;
   min-width: max-content;
   padding: 0;
-  color: var(--color-text);
+  border: 0;
+  color: inherit;
   background: transparent;
-  line-height: 1.7;
+  line-height: 1.5;
   white-space: pre;
+}
+
+.theme-dark .ai-markdown-content code {
+  border-color: var(--code-border);
+  color: var(--inline-code-fg);
+  background: var(--inline-code-bg);
+}
+
+.theme-dark .ai-markdown-content pre {
+  border-color: var(--code-border);
+  color: var(--code-fg);
+  background: var(--code-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.theme-dark .ai-markdown-content pre code {
+  color: inherit;
+  background: transparent;
+}
+
+.ai-markdown-content .inline-code {
+  border: 1px solid var(--code-border);
+  color: var(--inline-code-fg) !important;
+  background: var(--inline-code-bg) !important;
+}
+
+.theme-dark .ai-markdown-content .inline-code {
+  border-color: var(--code-border);
+  color: var(--inline-code-fg) !important;
+  background: var(--inline-code-bg) !important;
+}
+
+.ai-markdown-content .code-block-container {
+  margin: 0 0 12px;
+  border-color: var(--code-border) !important;
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
+}
+
+.theme-dark .ai-markdown-content .code-block-container {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.ai-markdown-content .code-block-header {
+  min-width: 0;
+  border-color: var(--code-border) !important;
+  color: var(--code-action-fg) !important;
+  background: var(--code-header-bg) !important;
+}
+
+.ai-markdown-content .code-header-main,
+.ai-markdown-content .code-header-copy,
+.ai-markdown-content .code-header-title {
+  min-width: 0;
+}
+
+.ai-markdown-content .code-header-title {
+  color: var(--code-action-fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ai-markdown-content .code-action-btn {
+  color: var(--code-action-fg) !important;
+}
+
+.ai-markdown-content .code-action-btn:hover,
+.ai-markdown-content .code-action-btn:focus-visible {
+  color: var(--code-action-hover-fg) !important;
+  background: var(--code-action-hover-bg) !important;
+}
+
+.ai-markdown-content .code-block-content,
+.ai-markdown-content .code-block-render,
+.ai-markdown-content .code-fallback-plain,
+.ai-markdown-content pre[class^='language-'],
+.ai-markdown-content pre[class*=' language-'] {
+  background: var(--code-bg) !important;
+}
+
+.theme-dark .ai-markdown-content .code-block-content,
+.theme-dark .ai-markdown-content .code-block-render,
+.theme-dark .ai-markdown-content .code-fallback-plain,
+.theme-dark .ai-markdown-content pre[class^='language-'],
+.theme-dark .ai-markdown-content pre[class*=' language-'] {
+  background: var(--code-bg) !important;
+}
+
+.ai-markdown-content .code-block-content {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.theme-dark .ai-markdown-content .code-block-content {
+  box-shadow: none;
+}
+
+.ai-markdown-content .code-block-render pre,
+.ai-markdown-content .code-block-content .shiki,
+.ai-markdown-content .code-block-content .shiki code {
+  min-width: max-content;
+}
+
+.ai-markdown-content .code-block-content .shiki,
+.ai-markdown-content .code-block-content .shiki code {
+  background: transparent !important;
+}
+
+.ai-markdown-content .code-block-content .shiki {
+  margin: 0;
+  padding: 14px;
+}
+
+.ai-markdown-content .code-block-content .shiki-fallback,
+.ai-markdown-content .code-fallback-plain {
+  color: var(--code-fg);
+}
+
+.ai-markdown-content .code-fallback-plain {
+  padding: 14px;
+}
+
+.ai-markdown-content .code-more-menu {
+  border-color: var(--code-border) !important;
+  color: var(--code-fg) !important;
+  background: var(--color-surface) !important;
 }
 
 .ai-markdown-content table {
@@ -131,55 +304,274 @@
 .ai-markdown-content .mermaid-block-container {
   max-width: 100%;
   margin: 0 0 12px;
-  border-color: var(--color-border);
+  border-color: var(--diagram-border);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  background: var(--diagram-bg);
   overflow: hidden;
 }
 
 .ai-markdown-content .mermaid-block-header {
   min-width: 0;
-  border-color: var(--color-border);
-  color: var(--color-text-muted);
-  background: color-mix(in srgb, var(--color-input) 84%, transparent);
+  border-color: var(--diagram-border);
+  color: var(--code-action-fg);
+  background: var(--diagram-header-bg);
 }
 
 .ai-markdown-content .mermaid-mode-btn,
 .ai-markdown-content .mermaid-action-btn {
-  color: var(--color-text-muted);
+  color: var(--diagram-control-fg) !important;
+  font-weight: 700;
+  opacity: 1 !important;
+}
+
+.ai-markdown-content .mermaid-mode-btn svg,
+.ai-markdown-content .mermaid-action-btn svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
 }
 
 .ai-markdown-content .mermaid-mode-btn:hover,
 .ai-markdown-content .mermaid-mode-btn:focus-visible,
 .ai-markdown-content .mermaid-action-btn:hover,
 .ai-markdown-content .mermaid-action-btn:focus-visible {
-  color: var(--color-text-strong);
-  background: var(--color-accent-soft);
+  color: var(--diagram-control-hover-fg) !important;
+  background: var(--diagram-control-hover-bg) !important;
 }
 
 .ai-markdown-content .mermaid-mode-btn.is-active {
-  color: var(--color-accent-strong);
-  background: var(--color-accent-soft);
+  color: var(--diagram-control-active-fg) !important;
+  background: var(--diagram-control-active-bg) !important;
+}
+
+.ai-markdown-content .mermaid-mode-btn:disabled,
+.ai-markdown-content .mermaid-mode-btn[disabled],
+.ai-markdown-content .mermaid-action-btn:disabled,
+.ai-markdown-content .mermaid-action-btn[disabled] {
+  color: var(--diagram-control-disabled-fg) !important;
+  opacity: 1 !important;
+  background: transparent !important;
+  cursor: not-allowed;
 }
 
 .ai-markdown-content .mermaid-preview-area {
   max-width: 100%;
-  min-height: 220px;
+  min-height: 280px;
+  max-height: min(74vh, 720px);
   overflow: auto;
-  background: color-mix(in srgb, var(--color-input) 88%, transparent);
+  background: var(--diagram-bg);
+  overscroll-behavior: contain;
 }
 
 .ai-markdown-content ._mermaid {
+  width: max-content;
   min-width: 100%;
+  min-height: 100%;
 }
 
 .ai-markdown-content ._mermaid svg {
-  max-width: 100%;
+  width: auto;
+  max-width: none;
   height: auto;
+  min-width: 100%;
 }
 
 .ai-markdown-content .mermaid-block-container pre {
   margin: 0;
   border: 0;
   border-radius: 0;
+  color: var(--code-fg) !important;
+  background: var(--code-bg) !important;
+}
+
+.ai-markdown-content .mermaid-source-panel {
+  overflow: auto;
+  padding: 0;
+  background: var(--code-bg);
+}
+
+.ai-markdown-content .mermaid-source-code {
+  display: block;
+  min-width: max-content;
+  padding: 14px;
+  color: var(--code-fg);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  tab-size: 4;
+  white-space: pre;
+}
+
+.ai-markdown-content .mermaid-source-code.cogninote-mermaid-source-highlight {
+  color: var(--code-fg);
+}
+
+.ai-markdown-content .mermaid-source-code.cogninote-mermaid-source-highlight span {
+  background: transparent !important;
+  opacity: 1 !important;
+}
+
+.ai-markdown-content .mermaid-token-keyword {
+  color: #9cdcfe;
+}
+
+.ai-markdown-content .mermaid-token-section {
+  color: #c586c0;
+}
+
+.ai-markdown-content .mermaid-token-property {
+  color: #4ec9b0;
+}
+
+.ai-markdown-content .mermaid-token-identifier {
+  color: #dcdcaa;
+}
+
+.ai-markdown-content .mermaid-token-label {
+  color: #ce9178;
+}
+
+.ai-markdown-content .mermaid-token-string {
+  color: #ce9178;
+}
+
+.ai-markdown-content .mermaid-token-edge {
+  color: #d7ba7d;
+}
+
+.ai-markdown-content .mermaid-token-number {
+  color: #b5cea8;
+}
+
+.ai-markdown-content .mermaid-token-punctuation {
+  color: #d4d4d4;
+}
+
+.ai-markdown-content .mermaid-token-comment {
+  color: #6a9955;
+}
+
+.mermaid-modal-overlay {
+  --diagram-bg: #f2f7f8;
+  --diagram-border: #c8d8df;
+  --diagram-header-bg: #e8f1f3;
+  --modal-bg: var(--color-surface);
+  --modal-fg: var(--color-text);
+  --modal-overlay: color-mix(in srgb, var(--color-bg) 82%, rgba(0, 0, 0, 0.62));
+}
+
+.theme-dark .mermaid-modal-overlay,
+.markstream-vue.dark .mermaid-modal-overlay {
+  --diagram-bg: #111c24;
+  --diagram-border: rgba(107, 143, 164, 0.38);
+  --diagram-header-bg: #15232d;
+  --modal-bg: var(--color-surface);
+  --modal-fg: var(--color-text);
+  --modal-overlay: color-mix(in srgb, var(--color-bg) 76%, rgba(0, 0, 0, 0.72));
+}
+
+.mermaid-modal-overlay {
+  z-index: 1000 !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  padding: 18px !important;
+  background: var(--modal-overlay) !important;
+}
+
+.mermaid-modal-panel,
+.mermaid-modal-overlay .dialog-panel {
+  width: calc(100vw - 36px) !important;
+  height: calc(100vh - 36px) !important;
+  max-width: none !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--color-text) !important;
+  background: var(--color-surface) !important;
+}
+
+.mermaid-modal-overlay .dialog-panel > [ref],
+.mermaid-modal-overlay .dialog-panel > div:last-child,
+.mermaid-modal-panel > [ref],
+.mermaid-modal-panel > div:last-child {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  overflow: auto !important;
+  align-items: initial !important;
+  justify-content: initial !important;
+  overscroll-behavior: contain !important;
+}
+
+.mermaid-modal-panel .mermaid-preview-area,
+.mermaid-modal-panel .fullscreen,
+.mermaid-modal-overlay .dialog-panel .mermaid-preview-area,
+.mermaid-modal-overlay .dialog-panel .fullscreen {
+  position: relative !important;
+  display: block !important;
+  width: max-content !important;
+  min-width: 100% !important;
+  height: auto !important;
+  min-height: 100% !important;
+  max-height: none !important;
+  overflow: auto !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  padding: 0 !important;
+  background: var(--color-bg-elevated) !important;
+}
+
+.mermaid-modal-panel .fullscreen,
+.mermaid-modal-overlay .dialog-panel .fullscreen {
+  overflow: visible !important;
+}
+
+.mermaid-modal-panel [data-mermaid-wrapper],
+.mermaid-modal-overlay .dialog-panel [data-mermaid-wrapper] {
+  position: relative !important;
+  inset: auto !important;
+  display: block !important;
+  width: max-content !important;
+  min-width: 100% !important;
+  height: auto !important;
+  min-height: 100% !important;
+  cursor: grab;
+}
+
+.mermaid-modal-panel ._mermaid,
+.mermaid-modal-overlay .dialog-panel ._mermaid {
+  position: relative !important;
+  display: block !important;
+  width: max-content !important;
+  min-width: 100% !important;
+  height: auto !important;
+  min-height: calc(100vh - 36px) !important;
+  padding: 48px !important;
+  box-sizing: border-box !important;
+  contain: none !important;
+  content-visibility: visible !important;
+  text-align: left !important;
+}
+
+.mermaid-modal-panel ._mermaid [data-mermaid-svg-layer],
+.mermaid-modal-overlay .dialog-panel ._mermaid [data-mermaid-svg-layer] {
+  position: relative !important;
+  inset: auto !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  width: max-content !important;
+  min-width: 100% !important;
+  min-height: auto !important;
+}
+
+.mermaid-modal-panel ._mermaid svg,
+.mermaid-modal-overlay .dialog-panel ._mermaid svg {
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  margin: 0 auto !important;
+  overflow: visible !important;
 }
