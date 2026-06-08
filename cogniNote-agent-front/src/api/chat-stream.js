@@ -66,9 +66,16 @@ export function getChatSession(conversationId) {
  * 更新 update Chat Session 对应的状态。
  * <p>状态写入后需要保持控件、Store 和后端快照一致。</p>
  */
-export function updateChatSession(conversationId, payload) {
+export function updateChatSession(conversationId, payload, options = {}) {
   // 后端请求统一走 API helper，避免各组件重复处理错误。
-  return requestJson(`/api/chat/sessions/${encodeURIComponent(conversationId)}`, jsonOptions('PATCH', payload))
+  return requestJson(
+    `/api/chat/sessions/${encodeURIComponent(conversationId)}`,
+    {
+      ...jsonOptions('PATCH', payload),
+      // 会话开关这类小请求可能发生在刷新页面前，调用方可启用 keepalive 提高落库成功率。
+      ...options
+    }
+  )
 }
 
 /**

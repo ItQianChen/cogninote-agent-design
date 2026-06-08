@@ -209,6 +209,8 @@ export const useChatStore = defineStore('chat', () => {
   const abortController = ref(null)
   const streamingContext = ref(null)
   const sessionScrollPositions = ref({})
+  const pendingSessionOptionPayloads = new Map()
+  const savingSessionOptionIds = new Set()
 
   const activeSession = computed(() =>
     sessions.value.find((session) => session.id === activeSessionId.value) || sessions.value[0] || null
@@ -222,6 +224,7 @@ export const useChatStore = defineStore('chat', () => {
     set: (value) => {
       useKnowledgeBaseValue.value = normalizeKnowledgeBaseFlag(value)
       syncSessionOptions()
+      persistActiveSessionOptions()
     }
   })
   const mode = computed({
@@ -229,6 +232,7 @@ export const useChatStore = defineStore('chat', () => {
     set: (value) => {
       modeValue.value = value || DEFAULT_RETRIEVAL_MODE
       syncSessionOptions()
+      persistActiveSessionOptions()
     }
   })
   const topK = computed({
@@ -236,6 +240,7 @@ export const useChatStore = defineStore('chat', () => {
     set: (value) => {
       topKValue.value = normalizeTopK(value)
       syncSessionOptions()
+      persistActiveSessionOptions()
     }
   })
   const knowledgeDisabledHint = computed(() => '')
@@ -723,6 +728,63 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   /**
+   * 持久化当前会话的检索选项。
+   * <p>知识库开关属于会话级状态，用户切换后必须立即写库；否则刷新页面会被旧快照覆盖。</p>
+   */
+  function persistActiveSessionOptions(session = activeSession.value) {
+    if (!session?.id) {
+      return
+    }
+    pendingSessionOptionPayloads.set(session.id, sessionOptionsPayload(session))
+    void flushSessionOptions(session.id)
+  }
+
+  /**
+   * 串行保存指定会话的检索选项。
+   * <p>连续点击开关时只允许同一会话一个保存循环运行，保证最终落库的是最后一次本地状态。</p>
+   */
+  async function flushSessionOptions(sessionId) {
+    if (savingSessionOptionIds.has(sessionId)) {
+      return
+    }
+    savingSessionOptionIds.add(sessionId)
+    try {
+      while (pendingSessionOptionPayloads.has(sessionId)) {
+        const payload = pendingSessionOptionPayloads.get(sessionId)
+        pendingSessionOptionPayloads.delete(sessionId)
+        try {
+          const updated = normalizeSession(await updateChatSession(sessionId, payload, { keepalive: true }))
+          if (!pendingSessionOptionPayloads.has(sessionId)) {
+            applyPersistedSessionOptions(updated)
+          }
+        } catch (err) {
+          error.value = `保存会话设置失败：${err.message}`
+        }
+      }
+    } finally {
+      savingSessionOptionIds.delete(sessionId)
+      if (pendingSessionOptionPayloads.has(sessionId)) {
+        void flushSessionOptions(sessionId)
+      }
+    }
+  }
+
+  /**
+   * 应用后端保存后的会话快照。
+   * <p>保存期间如果又产生了新的本地修改，旧响应不回写 UI，避免开关视觉状态闪回。</p>
+   */
+  function applyPersistedSessionOptions(updated) {
+    const existing = sessions.value.find((item) => item.id === updated.id)
+    const merged = existing
+      ? { ...updated, messages: updated.messages.length ? updated.messages : existing.messages }
+      : updated
+    upsertSession(merged)
+    if (activeSessionId.value === updated.id) {
+      applySessionOptions(merged)
+    }
+  }
+
+  /**
    * 更新当前流式助手消息。
    * <p>状态写入后需要保持控件、Store 和后端快照一致。</p>
    */
@@ -802,6 +864,18 @@ export const useChatStore = defineStore('chat', () => {
   function sessionPayload(session) {
     return {
       title: session.title,
+      useKnowledgeBase: session.useKnowledgeBase,
+      mode: session.mode,
+      topK: session.topK
+    }
+  }
+
+  /**
+   * 构造会话检索选项更新载荷。
+   * <p>这里只写会话级检索配置，不携带标题，避免和重命名、首问改标题互相覆盖。</p>
+   */
+  function sessionOptionsPayload(session) {
+    return {
       useKnowledgeBase: session.useKnowledgeBase,
       mode: session.mode,
       topK: session.topK
