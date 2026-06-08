@@ -67,6 +67,7 @@ public interface DatabaseSchemaMapper {
             @Param("embeddingDimensions") Integer embeddingDimensions,
             @Param("temperature") Double temperature,
             @Param("defaultTopK") Integer defaultTopK,
+            @Param("contextWindowTokens") Integer contextWindowTokens,
             @Param("createdAt") long createdAt,
             @Param("updatedAt") long updatedAt
     );

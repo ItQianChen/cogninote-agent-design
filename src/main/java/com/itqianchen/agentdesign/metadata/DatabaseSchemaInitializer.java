@@ -15,6 +15,7 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
             "documents.knowledge_folder_id", "TEXT",
             "model_config.display_name", "TEXT NOT NULL DEFAULT 'DashScope'",
             "model_config.base_url", "TEXT NOT NULL DEFAULT 'https://dashscope.aliyuncs.com/api/v1'",
+            "model_configs.context_window_tokens", "INTEGER",
             "chat_messages.agent_type", "TEXT"
     );
 
@@ -41,6 +42,7 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
         addColumnIfMissing("model_config", "base_url",
                 "TEXT NOT NULL DEFAULT 'https://dashscope.aliyuncs.com/api/v1'");
         databaseSchemaMapper.createModelConfigsTable();
+        addColumnIfMissing("model_configs", "context_window_tokens", "INTEGER");
         databaseSchemaMapper.createChatSessionsTable();
         databaseSchemaMapper.createChatMessagesTable();
         addColumnIfMissing("chat_messages", "agent_type", "TEXT");
@@ -121,6 +123,7 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
                 null,
                 doubleObjectValue(legacy.get("temperature"), 0.7),
                 intObjectValue(legacy.get("top_k"), 8),
+                128_000,
                 createdAt,
                 updatedAt
         );
@@ -133,6 +136,7 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
                 apiKey,
                 textValue(legacy.get("embedding_model"), "text-embedding-v4"),
                 intObjectValue(legacy.get("embedding_dimensions"), 1024),
+                null,
                 null,
                 null,
                 createdAt,
@@ -151,6 +155,7 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
             Integer embeddingDimensions,
             Double temperature,
             Integer defaultTopK,
+            Integer contextWindowTokens,
             long createdAt,
             long updatedAt
     ) {
@@ -165,6 +170,7 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
                 embeddingDimensions,
                 temperature,
                 defaultTopK,
+                contextWindowTokens,
                 createdAt,
                 updatedAt
         );

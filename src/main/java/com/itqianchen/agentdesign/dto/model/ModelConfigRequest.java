@@ -17,7 +17,8 @@ public record ModelConfigRequest(
         @Min(1) @Max(8192) Integer embeddingDimensions,
         @Min(0) @Max(2) Double temperature,
         @Min(1) @Max(50) Integer topK,
-        @Min(1) @Max(50) Integer defaultTopK
+        @Min(1) @Max(50) Integer defaultTopK,
+        @Min(1024) @Max(2000000) Integer contextWindowTokens
 ) {
 }
 

@@ -332,6 +332,24 @@
   white-space: nowrap;
 }
 
+.conversation-meta__context {
+  max-width: min(42vw, 320px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-meta__context.is-warning {
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.conversation-meta__context.is-compressed,
+.conversation-meta__compressed {
+  color: #bfdbfe;
+  background: rgba(59, 130, 246, 0.16);
+}
+
 .conversation-action-button {
   width: 30px;
   height: 30px;

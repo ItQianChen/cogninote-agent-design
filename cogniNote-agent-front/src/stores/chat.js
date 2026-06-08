@@ -74,6 +74,42 @@ function normalizeMessage(message, fallbackRole = 'assistant') {
   }
 }
 
+function normalizeContextUsage(usage) {
+  if (!usage) {
+    return null
+  }
+  const contextWindowTokens = normalizeNonNegativeInteger(usage.contextWindowTokens)
+  const usedTokens = normalizeNonNegativeInteger(usage.usedTokens)
+  const usageRatio = normalizeRatio(
+    usage.usageRatio,
+    contextWindowTokens > 0 ? usedTokens / contextWindowTokens : 0
+  )
+  return {
+    contextWindowTokens,
+    usedTokens,
+    availableTokens: normalizeNonNegativeInteger(usage.availableTokens),
+    usageRatio,
+    compressed: Boolean(usage.compressed),
+    summaryTokens: normalizeNonNegativeInteger(usage.summaryTokens),
+    recentMessageTokens: normalizeNonNegativeInteger(usage.recentMessageTokens),
+    recentMessageCount: normalizeNonNegativeInteger(usage.recentMessageCount),
+    totalMessageCount: normalizeNonNegativeInteger(usage.totalMessageCount),
+    summaryMessageSequence: normalizeNonNegativeInteger(usage.summaryMessageSequence),
+    estimationMethod: String(usage.estimationMethod || '')
+  }
+}
+
+function normalizeNonNegativeInteger(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0
+}
+
+function normalizeRatio(value, fallback = 0) {
+  const parsed = Number(value)
+  const ratio = Number.isFinite(parsed) ? parsed : fallback
+  return Math.min(1, Math.max(0, ratio))
+}
+
 function normalizeSession(session) {
   return {
     id: session?.id || nextId('session'),
@@ -85,6 +121,7 @@ function normalizeSession(session) {
     mode: session?.mode || DEFAULT_RETRIEVAL_MODE,
     topK: normalizeTopK(session?.topK),
     messageCount: Number(session?.messageCount || session?.messages?.length || 0),
+    contextUsage: normalizeContextUsage(session?.contextUsage),
     messages: (session?.messages || []).map((message) => normalizeMessage(message))
   }
 }
@@ -124,6 +161,7 @@ export const useChatStore = defineStore('chat', () => {
     sessions.value.find((session) => session.id === activeSessionId.value) || sessions.value[0] || null
   )
   const activeMessages = computed(() => activeSession.value?.messages || [])
+  const activeContextUsage = computed(() => activeSession.value?.contextUsage || null)
   const hasMessages = computed(() => activeMessages.value.length > 0)
   const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.value && !!activeSession.value)
   const useKnowledgeBase = computed({
@@ -351,6 +389,7 @@ export const useChatStore = defineStore('chat', () => {
           streamingContext.value.requestId = payload.requestId
         }
       })
+      updateSessionContextUsage(payload.conversationId || activeSessionId.value, payload.contextUsage)
       return
     }
 
@@ -364,6 +403,11 @@ export const useChatStore = defineStore('chat', () => {
     if (eventName === 'error') {
       const messageText = payload.message || '模型返回错误'
       markAssistantError(messageText)
+      return
+    }
+
+    if (eventName === 'done') {
+      updateSessionContextUsage(streamingContext.value?.sessionId || activeSessionId.value, payload.contextUsage)
     }
   }
 
@@ -532,6 +576,21 @@ export const useChatStore = defineStore('chat', () => {
     session.updatedAt = Date.now()
   }
 
+  function updateSessionContextUsage(sessionId, contextUsage) {
+    const normalized = normalizeContextUsage(contextUsage)
+    if (!sessionId || !normalized) {
+      return
+    }
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) {
+      return
+    }
+    session.contextUsage = normalized
+    if (normalized.totalMessageCount > 0) {
+      session.messageCount = normalized.totalMessageCount
+    }
+  }
+
   function upsertSession(session) {
     const index = sessions.value.findIndex((item) => item.id === session.id)
     if (index >= 0) {
@@ -570,6 +629,7 @@ export const useChatStore = defineStore('chat', () => {
     activeSessionId,
     activeSession,
     activeMessages,
+    activeContextUsage,
     hasMessages,
     draft,
     useKnowledgeBase,

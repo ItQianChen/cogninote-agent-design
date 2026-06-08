@@ -79,6 +79,7 @@
             embedding_dimensions INTEGER,
             temperature REAL,
             default_top_k INTEGER,
+            context_window_tokens INTEGER,
             is_active INTEGER NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
@@ -191,11 +192,13 @@
     <insert id="insertInitialModelConfig">
         INSERT INTO model_configs (
             id, role, provider, display_name, base_url, api_key, model_name,
-            embedding_dimensions, temperature, default_top_k, is_active, created_at, updated_at
+            embedding_dimensions, temperature, default_top_k, context_window_tokens,
+            is_active, created_at, updated_at
         )
         VALUES (
             #{id}, #{role}, #{provider}, #{displayName}, #{baseUrl}, #{apiKey}, #{modelName},
-            #{embeddingDimensions}, #{temperature}, #{defaultTopK}, 1, #{createdAt}, #{updatedAt}
+            #{embeddingDimensions}, #{temperature}, #{defaultTopK}, #{contextWindowTokens},
+            1, #{createdAt}, #{updatedAt}
         )
     </insert>
 </mapper>

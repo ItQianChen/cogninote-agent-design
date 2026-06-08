@@ -45,7 +45,8 @@ public class ChatSseEventMapper {
                 stream.requestId(),
                 stream.conversationId(),
                 stream.retrievalMode(),
-                stream.sources()
+                stream.sources(),
+                stream.contextUsage()
         ));
 
         StreamCancellation cancellation = cancellationRegistry.register(stream.requestId(), stream.onCancel());
@@ -69,7 +70,7 @@ public class ChatSseEventMapper {
                             cancellationRegistry.unregister(stream.requestId(), cancellation);
                         },
                         () -> {
-                            sendSafely(emitter, completed, new AgentEvent.Done(null));
+                            sendSafely(emitter, completed, new AgentEvent.Done(null, stream.currentContextUsage()));
                             completeSafely(emitter, completed);
                             cancellationRegistry.unregister(stream.requestId(), cancellation);
                         }
@@ -145,7 +146,13 @@ public class ChatSseEventMapper {
         if (event instanceof AgentEvent.Meta meta) {
             emitter.send(SseEmitter.event()
                     .name("meta")
-                    .data(new ChatMetaEvent(meta.requestId(), meta.conversationId(), meta.retrievalMode(), meta.sources())));
+                    .data(new ChatMetaEvent(
+                            meta.requestId(),
+                            meta.conversationId(),
+                            meta.retrievalMode(),
+                            meta.sources(),
+                            meta.contextUsage()
+                    )));
             return;
         }
         if (event instanceof AgentEvent.Delta delta) {
@@ -157,7 +164,7 @@ public class ChatSseEventMapper {
         if (event instanceof AgentEvent.Done done) {
             emitter.send(SseEmitter.event()
                     .name("done")
-                    .data(new ChatDoneEvent(done.usage())));
+                    .data(new ChatDoneEvent(done.usage(), done.contextUsage())));
             return;
         }
         if (event instanceof AgentEvent.Error error) {

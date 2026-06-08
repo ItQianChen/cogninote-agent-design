@@ -69,9 +69,9 @@ app: # CogniNote 自定义业务配置入口。
       max-history-messages: ${COGNINOTE_QUERY_CONTEXTUALIZER_MAX_HISTORY_MESSAGES:6} # 补全判断最多读取的最近历史消息条数。
       max-rewritten-query-length: ${COGNINOTE_QUERY_CONTEXTUALIZER_MAX_REWRITTEN_QUERY_LENGTH:800} # 模型返回的补全检索 query 最大长度，超过则回退原问题。
     memory: # SQLite 聊天记忆注入策略配置。
-      max-history-tokens: ${COGNINOTE_CHAT_MEMORY_MAX_HISTORY_TOKENS:6000} # 注入模型的历史消息 token 预算上限。
+      max-history-tokens: ${COGNINOTE_CHAT_MEMORY_MAX_HISTORY_TOKENS:6000} # 兼容旧版本的历史消息 token 兜底；第 22 阶段起主预算来自对话模型上下文窗口。
       minimum-recent-messages: ${COGNINOTE_CHAT_MEMORY_MINIMUM_RECENT_MESSAGES:8} # 即使超过预算也尽量保留的最近原文消息条数。
-      summarize-after-messages: ${COGNINOTE_CHAT_MEMORY_SUMMARIZE_AFTER_MESSAGES:40} # 会话消息超过该数量后触发摘要策略。
+      summarize-after-messages: ${COGNINOTE_CHAT_MEMORY_SUMMARIZE_AFTER_MESSAGES:200} # 会话消息超过该数量后触发摘要兜底；token 超预算仍会提前压缩。
     prompts: # Agent Prompt 模板配置。
       general: # 普通对话 Agent 的 Prompt 配置。
         system: | # 普通对话系统提示；下面缩进内容是实际发送给模型的 Prompt，不要在其中插入 YAML 注释。

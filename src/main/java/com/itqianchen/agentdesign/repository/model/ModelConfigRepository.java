@@ -86,6 +86,7 @@ public class ModelConfigRepository {
                 config.resolvedEmbeddingDimensions(),
                 config.resolvedTemperature(),
                 config.resolvedDefaultTopK(),
+                config.contextWindowTokens(),
                 config.active(),
                 config.createdAt(),
                 config.updatedAt()

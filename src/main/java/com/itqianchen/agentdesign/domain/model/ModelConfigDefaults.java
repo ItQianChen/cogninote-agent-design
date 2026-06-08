@@ -19,6 +19,9 @@ public final class ModelConfigDefaults {
     public static final int EMBEDDING_DIMENSIONS = 1024;
     public static final double TEMPERATURE = 0.7;
     public static final int TOP_K = 8;
+    public static final int CONTEXT_WINDOW_TOKENS = 128_000;
+    public static final int MIN_CONTEXT_WINDOW_TOKENS = 1_024;
+    public static final int MAX_CONTEXT_WINDOW_TOKENS = 2_000_000;
 
     private ModelConfigDefaults() {
     }

@@ -7,13 +7,16 @@ import com.itqianchen.agentdesign.domain.chat.ChatMessage;
 import com.itqianchen.agentdesign.domain.chat.ChatMessageRole;
 import com.itqianchen.agentdesign.domain.chat.ChatMessageStatus;
 import com.itqianchen.agentdesign.domain.chat.ChatSession;
+import com.itqianchen.agentdesign.domain.model.ModelConfig;
 import com.itqianchen.agentdesign.domain.search.SearchMode;
 import com.itqianchen.agentdesign.dto.chat.ChatMessageResponse;
+import com.itqianchen.agentdesign.dto.chat.ChatContextUsageResponse;
 import com.itqianchen.agentdesign.dto.chat.ChatSessionCreateRequest;
 import com.itqianchen.agentdesign.dto.chat.ChatSessionResponse;
 import com.itqianchen.agentdesign.dto.chat.ChatSessionUpdateRequest;
 import com.itqianchen.agentdesign.dto.chat.RagSourceResponse;
 import com.itqianchen.agentdesign.repository.chat.ChatSessionRepository;
+import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,21 +30,29 @@ public class ChatSessionService {
     private final RagSourcesJsonCodec ragSourcesJsonCodec;
     private final TokenEstimator tokenEstimator;
     private final ChatMemoryProperties memoryProperties;
+    private final ChatContextUsageService contextUsageService;
+    private final ModelConfigService modelConfigService;
 
     public ChatSessionService(
             ChatSessionRepository chatSessionRepository,
             RagSourcesJsonCodec ragSourcesJsonCodec,
             TokenEstimator tokenEstimator,
-            ChatMemoryProperties memoryProperties
+            ChatMemoryProperties memoryProperties,
+            ChatContextUsageService contextUsageService,
+            ModelConfigService modelConfigService
     ) {
         this.chatSessionRepository = chatSessionRepository;
         this.ragSourcesJsonCodec = ragSourcesJsonCodec;
         this.tokenEstimator = tokenEstimator;
         this.memoryProperties = memoryProperties;
+        this.contextUsageService = contextUsageService;
+        this.modelConfigService = modelConfigService;
     }
 
     public List<ChatSessionResponse> listSessions() {
-        return chatSessionRepository.findActiveSessionSummaries();
+        return chatSessionRepository.findActiveSessionSummaries().stream()
+                .map(this::withContextUsage)
+                .toList();
     }
 
     @Transactional
@@ -54,12 +65,12 @@ public class ChatSessionService {
                 request == null || request.topK() == null ? 8 : request.topK(),
                 now
         );
-        return ChatSessionResponse.from(session, List.of());
+        return withContextUsage(ChatSessionResponse.from(session, List.of()));
     }
 
     public ChatSessionResponse getSession(String conversationId) {
         ChatSession session = requireSession(conversationId);
-        return ChatSessionResponse.from(session, messageResponses(conversationId));
+        return withContextUsage(ChatSessionResponse.from(session, messageResponses(conversationId)));
     }
 
     @Transactional
@@ -146,7 +157,7 @@ public class ChatSessionService {
                 agentType,
                 null,
                 null,
-                tokenEstimator.estimate(content),
+                estimateChatMessage(content),
                 now
         );
     }
@@ -215,7 +226,7 @@ public class ChatSessionService {
                 agentType,
                 retrievalMode,
                 ragSourcesJsonCodec.encode(sources),
-                tokenEstimator.estimate(content),
+                estimateChatMessage(content),
                 System.currentTimeMillis()
         );
     }
@@ -232,8 +243,7 @@ public class ChatSessionService {
             return;
         }
         List<ChatMessage> messages = chatSessionRepository.findMessages(conversationId);
-        if (messages.size() <= memoryProperties.resolvedSummarizeAfterMessages()
-                && totalTokens(messages) <= memoryProperties.resolvedMaxHistoryTokens()) {
+        if (!contextUsageService.shouldSummarize(session, messages)) {
             return;
         }
 
@@ -260,12 +270,17 @@ public class ChatSessionService {
         );
     }
 
-    private int totalTokens(List<ChatMessage> messages) {
-        int tokens = 0;
-        for (ChatMessage message : messages) {
-            tokens += Math.max(1, message.tokenEstimate());
-        }
-        return tokens;
+    public ChatContextUsageResponse contextUsage(String conversationId) {
+        return contextUsageService.usage(conversationId);
+    }
+
+    private ChatSessionResponse withContextUsage(ChatSessionResponse response) {
+        return response.withContextUsage(contextUsageService.usage(response.id()));
+    }
+
+    private int estimateChatMessage(String content) {
+        ModelConfig chatConfig = modelConfigService.activeChatOrDefault();
+        return tokenEstimator.estimateChatMessage(content, chatConfig);
     }
 
     private static String buildExtractiveSummary(List<ChatMessage> messages) {

@@ -16,6 +16,7 @@
             <arg column="embedding_dimensions" javaType="java.lang.Integer"/>
             <arg column="temperature" javaType="java.lang.Double"/>
             <arg column="default_top_k" javaType="java.lang.Integer"/>
+            <arg column="context_window_tokens" javaType="java.lang.Integer"/>
             <arg column="is_active" javaType="_boolean"/>
             <arg column="created_at" javaType="_long"/>
             <arg column="updated_at" javaType="_long"/>
@@ -24,7 +25,8 @@
 
     <sql id="ModelConfigColumns">
         id, role, provider, display_name, base_url, api_key, model_name,
-        embedding_dimensions, temperature, default_top_k, is_active, created_at, updated_at
+        embedding_dimensions, temperature, default_top_k, context_window_tokens,
+        is_active, created_at, updated_at
     </sql>
 
     <select id="findAll" resultMap="ModelConfigMap">
@@ -51,11 +53,13 @@
     <insert id="save">
         INSERT INTO model_configs (
             id, role, provider, display_name, base_url, api_key, model_name,
-            embedding_dimensions, temperature, default_top_k, is_active, created_at, updated_at
+            embedding_dimensions, temperature, default_top_k, context_window_tokens,
+            is_active, created_at, updated_at
         )
         VALUES (
             #{id}, #{role}, #{provider}, #{displayName}, #{baseUrl}, #{apiKey}, #{modelName},
-            #{embeddingDimensions}, #{temperature}, #{defaultTopK}, #{active}, #{createdAt}, #{updatedAt}
+            #{embeddingDimensions}, #{temperature}, #{defaultTopK}, #{contextWindowTokens},
+            #{active}, #{createdAt}, #{updatedAt}
         )
         ON CONFLICT(id) DO UPDATE SET
             role = excluded.role,
@@ -67,6 +71,7 @@
             embedding_dimensions = excluded.embedding_dimensions,
             temperature = excluded.temperature,
             default_top_k = excluded.default_top_k,
+            context_window_tokens = excluded.context_window_tokens,
             is_active = excluded.is_active,
             updated_at = excluded.updated_at
     </insert>
@@ -98,6 +103,7 @@
                NULL AS embedding_dimensions,
                temperature,
                top_k AS default_top_k,
+               128000 AS context_window_tokens,
                1 AS is_active,
                created_at,
                updated_at

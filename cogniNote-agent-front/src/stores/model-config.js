@@ -18,6 +18,9 @@ const ROLES = {
 }
 
 const FIXED_EMBEDDING_DIMENSIONS = 1024
+const DEFAULT_CONTEXT_WINDOW_TOKENS = 128000
+const MIN_CONTEXT_WINDOW_TOKENS = 1024
+const MAX_CONTEXT_WINDOW_TOKENS = 2000000
 
 export const useModelConfigStore = defineStore('modelConfig', () => {
   const providerOptions = [
@@ -47,6 +50,13 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   const isFetchingModels = ref(false)
   const isTestingModelConfig = ref(false)
   const message = ref('')
+  const contextWindowPresets = [
+    { label: '32K', value: 32000 },
+    { label: '64K', value: 64000 },
+    { label: '128K', value: DEFAULT_CONTEXT_WINDOW_TOKENS },
+    { label: '200K', value: 200000 },
+    { label: '1M', value: 1000000 }
+  ]
 
   const activeChatConfig = computed(() => activeSummary.value.chat)
   const activeEmbeddingConfig = computed(() => activeSummary.value.embedding)
@@ -299,7 +309,10 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       displayName: option.displayName,
       baseUrl: option.baseUrl,
       modelName: nextModelName,
-      embeddingDimensions: role === ROLES.EMBEDDING ? FIXED_EMBEDDING_DIMENSIONS : null
+      embeddingDimensions: role === ROLES.EMBEDDING ? FIXED_EMBEDDING_DIMENSIONS : null,
+      contextWindowTokens: role === ROLES.CHAT
+        ? normalizeContextWindowTokens(currentForm.contextWindowTokens)
+        : null
     })
     modelOptionsByRole.value[role] = []
     state.error = ''
@@ -332,8 +345,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   async function refreshActiveSummary() {
     const active = await getActiveModelConfigs()
     activeSummary.value = {
-      chat: active?.chat || null,
-      embedding: active?.embedding || null
+      chat: normalizeConfigForRole(active?.chat, ROLES.CHAT),
+      embedding: normalizeConfigForRole(active?.embedding, ROLES.EMBEDDING)
     }
   }
 
@@ -362,8 +375,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       return
     }
     activeSummary.value = {
-      chat: snapshot.active?.chat || null,
-      embedding: snapshot.active?.embedding || null
+      chat: normalizeConfigForRole(snapshot.active?.chat, ROLES.CHAT),
+      embedding: normalizeConfigForRole(snapshot.active?.embedding, ROLES.EMBEDDING)
     }
     const role = normalizeRoleValue(snapshot.role || activeRole.value)
     activeRole.value = role
@@ -398,8 +411,21 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       modelName: current.modelName.trim(),
       embeddingDimensions: role === ROLES.EMBEDDING ? FIXED_EMBEDDING_DIMENSIONS : undefined,
       temperature: role === ROLES.CHAT ? Number(current.temperature) : undefined,
-      defaultTopK: role === ROLES.CHAT ? Number(current.defaultTopK) : undefined
+      defaultTopK: role === ROLES.CHAT ? Number(current.defaultTopK) : undefined,
+      contextWindowTokens: role === ROLES.CHAT
+        ? normalizeContextWindowTokens(current.contextWindowTokens)
+        : undefined
     }
+  }
+
+  function setContextWindowTokens(value, role = activeRole.value) {
+    if (role !== ROLES.CHAT) {
+      return
+    }
+    replaceEditorForm(role, {
+      ...roleState.value[role].form,
+      contextWindowTokens: normalizeContextWindowTokens(value)
+    })
   }
 
   function autoSelectModel(role) {
@@ -463,6 +489,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     form,
     editingIdByRole,
     visibleApiKeyByRole,
+    contextWindowPresets,
     providerOptions,
     providerLabel,
     isOpenAiCompatible,
@@ -485,6 +512,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     editConfig,
     markFormTouched,
     toggleApiKeyVisible,
+    setContextWindowTokens,
+    formatContextWindowTokens,
     copyApiKey,
     fetchModels,
     saveModelConfig,
@@ -520,7 +549,8 @@ function defaultForm(role) {
     modelName: role === ROLES.CHAT ? 'qwen-plus' : 'text-embedding-v4',
     embeddingDimensions: role === ROLES.EMBEDDING ? FIXED_EMBEDDING_DIMENSIONS : null,
     temperature: role === ROLES.CHAT ? 0.7 : null,
-    defaultTopK: role === ROLES.CHAT ? 8 : null
+    defaultTopK: role === ROLES.CHAT ? 8 : null,
+    contextWindowTokens: role === ROLES.CHAT ? DEFAULT_CONTEXT_WINDOW_TOKENS : null
   }
 }
 
@@ -543,6 +573,9 @@ function formFromConfig(config) {
       : null,
     defaultTopK: role === ROLES.CHAT
       ? (config.defaultTopK ?? defaults.defaultTopK)
+      : null,
+    contextWindowTokens: role === ROLES.CHAT
+      ? normalizeContextWindowTokens(config.contextWindowTokens ?? defaults.contextWindowTokens)
       : null
   }
 }
@@ -559,7 +592,10 @@ function normalizeConfigForRole(config, role = normalizeRoleValue(config?.role))
     ...config,
     role,
     provider: normalizeProviderValue(config.provider, config.baseUrl),
-    embeddingDimensions: role === ROLES.EMBEDDING ? FIXED_EMBEDDING_DIMENSIONS : null
+    embeddingDimensions: role === ROLES.EMBEDDING ? FIXED_EMBEDDING_DIMENSIONS : null,
+    contextWindowTokens: role === ROLES.CHAT
+      ? normalizeContextWindowTokens(config.contextWindowTokens)
+      : null
   }
 }
 
@@ -575,8 +611,37 @@ function normalizeFormForRole(nextForm, role = normalizeRoleValue(nextForm?.role
     modelName: nextForm?.modelName || defaults.modelName,
     embeddingDimensions: role === ROLES.EMBEDDING ? FIXED_EMBEDDING_DIMENSIONS : null,
     temperature: role === ROLES.CHAT ? (nextForm?.temperature ?? defaults.temperature) : null,
-    defaultTopK: role === ROLES.CHAT ? (nextForm?.defaultTopK ?? defaults.defaultTopK) : null
+    defaultTopK: role === ROLES.CHAT ? (nextForm?.defaultTopK ?? defaults.defaultTopK) : null,
+    contextWindowTokens: role === ROLES.CHAT
+      ? normalizeContextWindowTokens(nextForm?.contextWindowTokens ?? defaults.contextWindowTokens)
+      : null
   }
+}
+
+function normalizeContextWindowTokens(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_CONTEXT_WINDOW_TOKENS
+  }
+  return Math.min(
+    MAX_CONTEXT_WINDOW_TOKENS,
+    Math.max(MIN_CONTEXT_WINDOW_TOKENS, Math.trunc(parsed))
+  )
+}
+
+function formatContextWindowTokens(value) {
+  const normalized = normalizeContextWindowTokens(value)
+  if (normalized >= 1000000) {
+    return `${formatCompactNumber(normalized / 1000000)}M`
+  }
+  if (normalized >= 1000) {
+    return `${formatCompactNumber(normalized / 1000)}K`
+  }
+  return String(normalized)
+}
+
+function formatCompactNumber(value) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '')
 }
 
 function normalizeProviderValue(provider, baseUrl = '') {

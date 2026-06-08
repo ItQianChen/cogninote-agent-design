@@ -47,10 +47,13 @@ class ModelConfigServiceTests {
         assertThat(chat.modelName()).isEqualTo("qwen-plus");
         assertThat(chat.resolvedTemperature()).isEqualTo(0.7);
         assertThat(chat.resolvedDefaultTopK()).isEqualTo(8);
+        assertThat(chat.resolvedContextWindowTokens()).isEqualTo(ModelConfigDefaults.CONTEXT_WINDOW_TOKENS);
 
         assertThat(embedding.role()).isEqualTo(ModelConfigRole.EMBEDDING);
         assertThat(embedding.modelName()).isEqualTo("text-embedding-v4");
         assertThat(embedding.resolvedEmbeddingDimensions()).isEqualTo(1024);
+        assertThat(embedding.contextWindowTokens()).isNull();
+        assertThat(embedding.resolvedContextWindowTokens()).isZero();
     }
 
     @Test
@@ -95,6 +98,42 @@ class ModelConfigServiceTests {
         assertThat(chat.provider()).isEqualTo(ModelProvider.OPENAI_COMPATIBLE);
         assertThat(chat.baseUrl()).isEqualTo("https://api.example.test/v1");
         assertThat(chat.modelName()).isEqualTo("gpt-4.1-mini");
+    }
+
+    @Test
+    void chatContextWindowCanBeCustomizedAndReturnedInSettings() {
+        ModelConfig chat = modelConfigService.create(chatRequest(
+                "DASHSCOPE",
+                "Chat 64K",
+                "sk-test",
+                ModelConfigDefaults.BASE_URL,
+                "qwen-plus",
+                0.7,
+                8,
+                64_000
+        ));
+
+        assertThat(chat.contextWindowTokens()).isEqualTo(64_000);
+        assertThat(modelConfigService.activeChatOrDefault().resolvedContextWindowTokens()).isEqualTo(64_000);
+        assertThat(modelConfigService.settingsSnapshot(ModelConfigRole.CHAT).selectedConfig().contextWindowTokens())
+                .isEqualTo(64_000);
+    }
+
+    @Test
+    void embeddingConfigKeepsContextWindowEmpty() {
+        ModelConfig embedding = modelConfigService.create(embeddingRequest(
+                "DASHSCOPE",
+                "Embedding A",
+                "sk-embedding",
+                ModelConfigDefaults.BASE_URL,
+                "text-embedding-v4",
+                1024
+        ));
+
+        assertThat(embedding.contextWindowTokens()).isNull();
+        assertThat(modelConfigService.settingsSnapshot(ModelConfigRole.EMBEDDING)
+                .selectedConfig()
+                .contextWindowTokens()).isNull();
     }
 
     @Test
@@ -191,7 +230,8 @@ class ModelConfigServiceTests {
                 1024,
                 0.3,
                 12,
-                null
+                null,
+                ModelConfigDefaults.CONTEXT_WINDOW_TOKENS
         ));
 
         assertThat(modelConfigService.requireActiveChatConfigured().modelName()).isEqualTo("qwen-max");
@@ -222,6 +262,20 @@ class ModelConfigServiceTests {
             double temperature,
             int topK
     ) {
+        return chatRequest(provider, displayName, apiKey, baseUrl, modelName, temperature, topK,
+                ModelConfigDefaults.CONTEXT_WINDOW_TOKENS);
+    }
+
+    private static ModelConfigRequest chatRequest(
+            String provider,
+            String displayName,
+            String apiKey,
+            String baseUrl,
+            String modelName,
+            double temperature,
+            int topK,
+            int contextWindowTokens
+    ) {
         return new ModelConfigRequest(
                 ModelConfigRole.CHAT.name(),
                 provider,
@@ -234,7 +288,8 @@ class ModelConfigServiceTests {
                 null,
                 temperature,
                 topK,
-                topK
+                topK,
+                contextWindowTokens
         );
     }
 
@@ -256,6 +311,7 @@ class ModelConfigServiceTests {
                 null,
                 modelName,
                 dimensions,
+                null,
                 null,
                 null,
                 null

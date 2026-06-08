@@ -237,6 +237,7 @@ public class ModelConfigService {
                 role == ModelConfigRole.EMBEDDING ? ModelConfigDefaults.EMBEDDING_DIMENSIONS : null,
                 role == ModelConfigRole.CHAT ? normalizeTemperature(request.temperature(), existing) : null,
                 role == ModelConfigRole.CHAT ? normalizeTopK(request.defaultTopK(), request.topK(), existing) : null,
+                role == ModelConfigRole.CHAT ? normalizeContextWindowTokens(request.contextWindowTokens(), existing) : null,
                 active,
                 existing.createdAt(),
                 now
@@ -257,7 +258,8 @@ public class ModelConfigService {
                         null,
                         request.temperature(),
                         request.topK(),
-                        request.defaultTopK()
+                        request.defaultTopK(),
+                        request.contextWindowTokens()
                 ),
                 existing,
                 existing.id(),
@@ -279,6 +281,7 @@ public class ModelConfigService {
                         request.chatModel(),
                         request.embeddingModel(),
                         request.embeddingDimensions(),
+                        null,
                         null,
                         null,
                         null
@@ -310,6 +313,7 @@ public class ModelConfigService {
                 role == ModelConfigRole.EMBEDDING ? ModelConfigDefaults.EMBEDDING_DIMENSIONS : null,
                 role == ModelConfigRole.CHAT ? ModelConfigDefaults.TEMPERATURE : null,
                 role == ModelConfigRole.CHAT ? ModelConfigDefaults.TOP_K : null,
+                role == ModelConfigRole.CHAT ? ModelConfigDefaults.CONTEXT_WINDOW_TOKENS : null,
                 active,
                 now,
                 now
@@ -335,6 +339,7 @@ public class ModelConfigService {
                 config.embeddingDimensions(),
                 config.temperature(),
                 config.defaultTopK(),
+                config.contextWindowTokens(),
                 config.active(),
                 config.createdAt(),
                 config.updatedAt()
@@ -412,6 +417,15 @@ public class ModelConfigService {
             return topK;
         }
         return existing.resolvedDefaultTopK();
+    }
+
+    private static Integer normalizeContextWindowTokens(Integer requested, ModelConfig existing) {
+        int value = requested == null ? existing.resolvedContextWindowTokens() : requested;
+        return Math.clamp(
+                value,
+                ModelConfigDefaults.MIN_CONTEXT_WINDOW_TOKENS,
+                ModelConfigDefaults.MAX_CONTEXT_WINDOW_TOKENS
+        );
     }
 
     private static String roleLabel(ModelConfigRole role) {

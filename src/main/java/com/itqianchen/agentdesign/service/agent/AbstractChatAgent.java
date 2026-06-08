@@ -7,6 +7,7 @@ import com.itqianchen.agentdesign.domain.ai.AiRuntimeFactory;
 import com.itqianchen.agentdesign.domain.chat.ChatMessage;
 import com.itqianchen.agentdesign.domain.model.ModelConfig;
 import com.itqianchen.agentdesign.domain.search.SearchMode;
+import com.itqianchen.agentdesign.dto.chat.ChatContextUsageResponse;
 import com.itqianchen.agentdesign.service.chat.ChatSessionService;
 import com.itqianchen.agentdesign.service.chat.CogninoteMemoryAdvisor;
 import com.itqianchen.agentdesign.service.model.ModelConfigService;
@@ -76,6 +77,7 @@ public abstract class AbstractChatAgent implements ChatAgent {
                 chatConfig
         ));
         KnowledgeContext knowledgeContext = invocation.knowledgeContext();
+        ChatContextUsageResponse initialContextUsage = chatSessionService.contextUsage(conversationId);
         Map<String, Object> advisorParams = Map.of(
                 ChatMemory.CONVERSATION_ID, conversationId,
                 CogninoteMemoryAdvisor.MAX_MESSAGE_SEQUENCE, userMessage.sequence() - 1,
@@ -132,6 +134,8 @@ public abstract class AbstractChatAgent implements ChatAgent {
                 conversationId,
                 knowledgeContext.retrievalMode(),
                 knowledgeContext.sources(),
+                initialContextUsage,
+                () -> chatSessionService.contextUsage(conversationId),
                 answer,
                 () -> saveAssistantStopped(
                         saved,

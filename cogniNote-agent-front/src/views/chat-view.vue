@@ -16,6 +16,7 @@ const isRestoringScroll = ref(false)
 const shouldFollowBottom = ref(true)
 const BOTTOM_THRESHOLD_PX = 80
 const ANCHOR_VIEWPORT_RATIO = 0.35
+const DEFAULT_CONTEXT_WINDOW_TOKENS = 128000
 let restoreRunId = 0
 const composerActionTitle = computed(() => (chatStore.isStreaming ? '停止对话' : '发送信息'))
 const activeModelSummary = computed(() => {
@@ -23,11 +24,68 @@ const activeModelSummary = computed(() => {
   const embedding = modelConfigStore.activeEmbeddingConfig?.modelName || '未配置向量模型'
   return `${chat} / ${embedding}`
 })
+const activeContextUsage = computed(() => {
+  const usage = chatStore.activeContextUsage
+  const contextWindowTokens = normalizeTokenCount(
+    usage?.contextWindowTokens || modelConfigStore.activeChatConfig?.contextWindowTokens || DEFAULT_CONTEXT_WINDOW_TOKENS
+  )
+  const usedTokens = normalizeTokenCount(usage?.usedTokens)
+  const usageRatio = normalizeRatio(
+    usage?.usageRatio,
+    contextWindowTokens > 0 ? usedTokens / contextWindowTokens : 0
+  )
+  return {
+    ...usage,
+    contextWindowTokens,
+    usedTokens,
+    usageRatio,
+    compressed: Boolean(usage?.compressed)
+  }
+})
+const contextUsageLabel = computed(() => {
+  return `上下文 ${formatTokenCount(activeContextUsage.value.usedTokens)} / ${formatTokenCount(activeContextUsage.value.contextWindowTokens)}`
+})
+const contextUsagePercentLabel = computed(() => `${Math.round(activeContextUsage.value.usageRatio * 100)}%`)
+const contextUsageTitle = computed(() => {
+  const usage = activeContextUsage.value
+  const method = usage.estimationMethod || 'local'
+  const recentCount = normalizeTokenCount(usage.recentMessageCount)
+  const totalCount = normalizeTokenCount(usage.totalMessageCount)
+  return `估算：${method}；最近原文 ${recentCount}/${totalCount}`
+})
+const isContextUsageWarning = computed(() => activeContextUsage.value.usageRatio >= 0.8)
+const isContextCompressed = computed(() => activeContextUsage.value.compressed)
 
 function handleComposerAction() {
   if (chatStore.isStreaming) {
     chatStore.stopChat()
   }
+}
+
+function normalizeTokenCount(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0
+}
+
+function normalizeRatio(value, fallback = 0) {
+  const parsed = Number(value)
+  const ratio = Number.isFinite(parsed) ? parsed : fallback
+  return Math.min(1, Math.max(0, ratio))
+}
+
+function formatTokenCount(value) {
+  const normalized = normalizeTokenCount(value)
+  if (normalized >= 1000000) {
+    return `${formatCompactNumber(normalized / 1000000)}M`
+  }
+  if (normalized >= 1000) {
+    return `${formatCompactNumber(normalized / 1000)}K`
+  }
+  return String(normalized)
+}
+
+function formatCompactNumber(value) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '')
 }
 
 function handleDraftKeydown(event) {
@@ -301,6 +359,14 @@ onBeforeUnmount(() => {
       <div class="conversation-meta">
         <span>{{ chatStore.useKnowledgeBase ? '知识库已启用' : '纯模型对话' }}</span>
         <span>{{ chatStore.mode }}</span>
+        <span
+          class="conversation-meta__context"
+          :class="{ 'is-warning': isContextUsageWarning, 'is-compressed': isContextCompressed }"
+          :title="contextUsageTitle"
+        >
+          {{ contextUsageLabel }} · {{ contextUsagePercentLabel }}
+        </span>
+        <span v-if="isContextCompressed" class="conversation-meta__compressed">已压缩</span>
         <span class="conversation-meta__model">{{ activeModelSummary }}</span>
         <button
           class="conversation-action-button"

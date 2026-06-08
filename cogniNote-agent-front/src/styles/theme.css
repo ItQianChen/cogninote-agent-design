@@ -141,6 +141,17 @@ body {
   display: inline-block;
 }
 
+.conversation-meta__context.is-warning {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.conversation-meta__context.is-compressed,
+.conversation-meta__compressed {
+  color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
+}
+
 .status-pill--loading,
 .status-chip--skipped {
   color: var(--color-warning);
@@ -487,6 +498,20 @@ body {
 .enable-config-button {
   border-color: var(--color-accent-border);
   color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
+}
+
+.context-window-preset {
+  border-color: var(--color-border);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface-muted) 58%, transparent);
+}
+
+.context-window-preset:hover,
+.context-window-preset:focus-visible,
+.context-window-preset.active {
+  border-color: var(--color-accent-border);
+  color: var(--color-text-strong);
   background: var(--color-accent-soft);
 }
 

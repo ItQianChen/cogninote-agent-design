@@ -5,6 +5,12 @@ import java.util.List;
 public record ConversationMemorySnapshot(
         String summary,
         List<ConversationMemoryEntry> recentMessages,
-        int lastIncludedSequence
+        int lastIncludedSequence,
+        int summaryTokens,
+        int recentMessageTokens,
+        int totalMessageCount,
+        int contextWindowTokens,
+        int historyBudgetTokens,
+        String estimationMethod
 ) {
 }

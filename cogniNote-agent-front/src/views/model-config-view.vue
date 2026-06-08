@@ -128,7 +128,10 @@ function normalizeInitialRole(role) {
         <p class="eyebrow">{{ role === modelConfigStore.ROLES.CHAT ? '当前对话模型' : '当前向量模型' }}</p>
         <h3>{{ roleActiveConfig(role)?.displayName || '-' }}</h3>
         <p>{{ roleActiveConfig(role)?.modelName || '-' }}</p>
-        <small>{{ roleActiveConfig(role)?.baseUrl || '-' }}</small>
+          <small>{{ roleActiveConfig(role)?.baseUrl || '-' }}</small>
+          <small v-if="role === modelConfigStore.ROLES.CHAT">
+            上下文 {{ modelConfigStore.formatContextWindowTokens(roleActiveConfig(role)?.contextWindowTokens) }}
+          </small>
       </article>
     </section>
 
@@ -268,6 +271,31 @@ function normalizeInitialRole(role) {
             <el-input-number v-model="modelConfigStore.form.defaultTopK" :min="1" :max="50" controls-position="right" />
           </label>
 
+          <label v-if="modelConfigStore.activeRole === modelConfigStore.ROLES.CHAT" class="field field--full">
+            <span>上下文长度</span>
+            <div class="context-window-field">
+              <el-input-number
+                v-model="modelConfigStore.form.contextWindowTokens"
+                :min="1024"
+                :max="2000000"
+                :step="1000"
+                controls-position="right"
+              />
+              <div class="context-window-presets" aria-label="上下文长度预设">
+                <button
+                  v-for="preset in modelConfigStore.contextWindowPresets"
+                  :key="preset.value"
+                  class="context-window-preset"
+                  :class="{ active: modelConfigStore.form.contextWindowTokens === preset.value }"
+                  type="button"
+                  @click="modelConfigStore.setContextWindowTokens(preset.value)"
+                >
+                  {{ preset.label }}
+                </button>
+              </div>
+            </div>
+          </label>
+
           <div class="model-form__actions">
             <el-button
               :disabled="modelConfigStore.isFetchingModels"
@@ -351,6 +379,12 @@ function normalizeInitialRole(role) {
               <dt>模型 ID</dt>
               <dd :title="modelConfigStore.form.modelName || '-'">
                 {{ modelConfigStore.form.modelName || '-' }}
+              </dd>
+            </div>
+            <div v-if="modelConfigStore.activeRole === modelConfigStore.ROLES.CHAT">
+              <dt>上下文窗口</dt>
+              <dd>
+                {{ modelConfigStore.formatContextWindowTokens(modelConfigStore.form.contextWindowTokens) }}
               </dd>
             </div>
           </dl>

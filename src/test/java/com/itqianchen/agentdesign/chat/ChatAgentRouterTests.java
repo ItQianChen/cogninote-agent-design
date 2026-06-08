@@ -42,6 +42,7 @@ import com.itqianchen.agentdesign.service.agent.KnowledgeContextProvider;
 import com.itqianchen.agentdesign.service.agent.KnowledgeBaseChatAgent;
 import com.itqianchen.agentdesign.service.agent.PromptAssembler;
 import com.itqianchen.agentdesign.service.agent.QueryContextualizerAgent;
+import com.itqianchen.agentdesign.service.chat.ChatContextUsageService;
 import com.itqianchen.agentdesign.service.chat.ChatSessionService;
 import com.itqianchen.agentdesign.service.chat.CogninoteMemoryAdvisor;
 import com.itqianchen.agentdesign.service.chat.ConversationMemorySnapshotService;
@@ -396,22 +397,32 @@ class ChatAgentRouterTests {
                     sqlSession.getMapper(ModelConfigMapper.class)
             );
             modelConfigRepository.save(activeChatConfig());
+            ModelConfigService modelConfigService = new ModelConfigService(modelConfigRepository);
             this.chatSessionRepository = new ChatSessionRepository(sqlSession.getMapper(ChatSessionMapper.class));
-            ChatMemoryProperties memoryProperties = new ChatMemoryProperties(6000, 8, 40);
+            ChatMemoryProperties memoryProperties = new ChatMemoryProperties(6000, 8, 200);
             TokenEstimator tokenEstimator = new TokenEstimator();
+            ConversationMemorySnapshotService memorySnapshotService = new ConversationMemorySnapshotService(
+                    chatSessionRepository,
+                    memoryProperties,
+                    tokenEstimator,
+                    modelConfigService
+            );
+            ChatContextUsageService contextUsageService = new ChatContextUsageService(
+                    chatSessionRepository,
+                    memorySnapshotService,
+                    modelConfigService,
+                    memoryProperties
+            );
             this.chatSessionService = new ChatSessionService(
                     chatSessionRepository,
                     new RagSourcesJsonCodec(new ObjectMapper()),
                     tokenEstimator,
-                    memoryProperties
+                    memoryProperties,
+                    contextUsageService,
+                    modelConfigService
             );
-            ModelConfigService modelConfigService = new ModelConfigService(modelConfigRepository);
             FakeAiRuntimeFactory runtimeFactory = new FakeAiRuntimeFactory(runtime);
             PromptAssembler promptAssembler = new PromptAssembler(defaultPromptProperties());
-            ConversationMemorySnapshotService memorySnapshotService = new ConversationMemorySnapshotService(
-                    chatSessionRepository,
-                    memoryProperties
-            );
             CogninoteMemoryAdvisor memoryAdvisor = new CogninoteMemoryAdvisor(memorySnapshotService);
             QueryContextualizerAgent queryContextualizerAgent = new QueryContextualizerAgent(
                     runtimeFactory,
@@ -471,6 +482,7 @@ class ChatAgentRouterTests {
                     null,
                     ModelConfigDefaults.TEMPERATURE,
                     ModelConfigDefaults.TOP_K,
+                    ModelConfigDefaults.CONTEXT_WINDOW_TOKENS,
                     true,
                     now,
                     now

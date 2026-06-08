@@ -11,7 +11,7 @@ public record ChatMemoryProperties(
 
     private static final int DEFAULT_MAX_HISTORY_TOKENS = 6000;
     private static final int DEFAULT_MINIMUM_RECENT_MESSAGES = 8;
-    private static final int DEFAULT_SUMMARIZE_AFTER_MESSAGES = 40;
+    private static final int DEFAULT_SUMMARIZE_AFTER_MESSAGES = 200;
 
     public int resolvedMaxHistoryTokens() {
         return maxHistoryTokens > 0 ? maxHistoryTokens : DEFAULT_MAX_HISTORY_TOKENS;

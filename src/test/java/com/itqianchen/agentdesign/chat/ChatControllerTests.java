@@ -97,7 +97,8 @@ class ChatControllerTests {
                 1024,
                 0.7,
                 8,
-                null
+                null,
+                ModelConfigDefaults.CONTEXT_WINDOW_TOKENS
         ));
         insertParsedDocument();
         knowledgeStore.rebuildAll();
@@ -123,6 +124,7 @@ class ChatControllerTests {
                 .contains("event:meta")
                 .contains("event:delta")
                 .contains("event:done")
+                .contains("contextUsage")
                 .contains("packaging.md");
     }
 

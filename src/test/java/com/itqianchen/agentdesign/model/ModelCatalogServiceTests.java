@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.itqianchen.agentdesign.domain.model.ModelCapability;
+import com.itqianchen.agentdesign.domain.model.ModelConfigDefaults;
 import com.itqianchen.agentdesign.domain.model.ModelConfigRole;
 import com.itqianchen.agentdesign.dto.model.ModelConfigRequest;
 import com.itqianchen.agentdesign.dto.model.ModelOptionsResponse;
@@ -54,7 +55,8 @@ class ModelCatalogServiceTests {
                 1024,
                 0.7,
                 8,
-                8
+                8,
+                ModelConfigDefaults.CONTEXT_WINDOW_TOKENS
         ));
 
         assertThat(response.models())
@@ -98,7 +100,8 @@ class ModelCatalogServiceTests {
                 1536,
                 0.7,
                 8,
-                8
+                8,
+                ModelConfigDefaults.CONTEXT_WINDOW_TOKENS
         ));
 
         assertThat(response.models())

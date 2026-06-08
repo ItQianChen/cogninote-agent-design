@@ -14,7 +14,8 @@ public record ModelConfigUpsertRequest(
         @NotBlank @Size(max = 120) String modelName,
         @Min(0) @Max(2) Double temperature,
         @Min(1) @Max(50) Integer defaultTopK,
-        @Min(1) @Max(8192) Integer embeddingDimensions
+        @Min(1) @Max(8192) Integer embeddingDimensions,
+        @Min(1024) @Max(2000000) Integer contextWindowTokens
 ) {
     public ModelConfigRequest toModelConfigRequest() {
         String normalizedRole = role == null ? "" : role.trim().toUpperCase();
@@ -30,7 +31,8 @@ public record ModelConfigUpsertRequest(
                 embeddingDimensions,
                 temperature,
                 defaultTopK,
-                defaultTopK
+                defaultTopK,
+                contextWindowTokens
         );
     }
 }

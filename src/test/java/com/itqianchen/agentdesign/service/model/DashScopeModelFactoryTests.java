@@ -70,6 +70,7 @@ class DashScopeModelFactoryTests {
                 ModelConfigDefaults.EMBEDDING_DIMENSIONS,
                 null,
                 null,
+                null,
                 true,
                 1L,
                 1L

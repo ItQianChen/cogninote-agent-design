@@ -13,6 +13,7 @@ public record LegacyModelConfigResponse(
         int embeddingDimensions,
         double temperature,
         int topK,
+        int contextWindowTokens,
         Long updatedAt,
         ModelConfigResponse chat,
         ModelConfigResponse embedding
@@ -29,6 +30,7 @@ public record LegacyModelConfigResponse(
                 embedding.resolvedEmbeddingDimensions(),
                 chat.resolvedTemperature(),
                 chat.resolvedDefaultTopK(),
+                chat.resolvedContextWindowTokens(),
                 Math.max(chat.updatedAt(), embedding.updatedAt()),
                 ModelConfigResponse.from(chat),
                 ModelConfigResponse.from(embedding)

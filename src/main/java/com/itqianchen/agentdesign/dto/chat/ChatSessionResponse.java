@@ -14,6 +14,7 @@ public record ChatSessionResponse(
         long createdAt,
         long updatedAt,
         int messageCount,
+        ChatContextUsageResponse contextUsage,
         List<ChatMessageResponse> messages
 ) {
 
@@ -32,6 +33,7 @@ public record ChatSessionResponse(
                 session.createdAt(),
                 session.updatedAt(),
                 messageCount,
+                null,
                 List.of()
         );
     }
@@ -47,6 +49,23 @@ public record ChatSessionResponse(
                 session.createdAt(),
                 session.updatedAt(),
                 messages.size(),
+                null,
+                messages
+        );
+    }
+
+    public ChatSessionResponse withContextUsage(ChatContextUsageResponse contextUsage) {
+        return new ChatSessionResponse(
+                id,
+                title,
+                summary,
+                useKnowledgeBase,
+                mode,
+                topK,
+                createdAt,
+                updatedAt,
+                messageCount,
+                contextUsage,
                 messages
         );
     }
