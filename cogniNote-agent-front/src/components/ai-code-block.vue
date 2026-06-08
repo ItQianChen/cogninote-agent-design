@@ -422,7 +422,6 @@ function escapeHtml(value) {
 </script>
 
 <template>
-  // Mermaid 渲染对语法敏感，进入渲染前先做兼容清洗。
   <MermaidBlockNode
     v-if="shouldRenderAsMermaid"
     :node="mermaidNode"
