@@ -36,7 +36,7 @@
 ## 行为规则
 
 - `useKnowledgeBase=false`：走 `GENERAL_CHAT`，不会调用补全 Agent。
-- `useKnowledgeBase=true` 或省略：走 `KNOWLEDGE_BASE`，每轮检索前调用补全 Agent。
+- `useKnowledgeBase=true` 或省略：走 `KNOWLEDGE_BASE`。第 21 阶段计划中的行为是每轮检索前调用补全 Agent；第 23 阶段已改为由 `queryContextualizerMode` 控制，默认 `AUTO`，只有省略式追问或弱检索等场景才调用。
 - 当前问题是完整新问题时，补全 Agent 必须返回 `shouldRewrite=false`。
 - 当前问题依赖上文时，补全 Agent 可以返回 `shouldRewrite=true` 和 `rewrittenQuery`。
 - `rewrittenQuery` 只能补充历史中已经出现的主题，不能加入新事实。
@@ -89,3 +89,7 @@ SQLite schema 不变：
 - 不新增前端调试展示。
 - 不新增数据库表。
 - 不改变普通对话 Agent 和知识库 Agent 的外部路由语义。
+
+## 后续阶段修正
+
+第 23 阶段新增 `AUTO`、`ALWAYS`、`OFF` 三种追问补全策略，并将默认行为从“知识库模式每轮都调用模型判断”调整为 `AUTO` 自动触发。该修正保留第 21 阶段的补全能力和失败回退规则，但通过本地触发判断器、弱检索重试和前端设置降低完整问题场景的额外延迟。

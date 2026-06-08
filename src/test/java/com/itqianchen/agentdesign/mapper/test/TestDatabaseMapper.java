@@ -86,6 +86,12 @@ public interface TestDatabaseMapper {
     void deleteLegacyModelConfig();
 
     /**
+     * 删除 delete App Settings 对应的数据。
+     * <p>删除全局设置，避免测试之间共享持久化开关。</p>
+     */
+    void deleteAppSettings();
+
+    /**
      * 读取 find Any Knowledge Folder Id 对应的数据。
      * <p>缺失、空值和兼容兜底由该方法统一处理。</p>
      */

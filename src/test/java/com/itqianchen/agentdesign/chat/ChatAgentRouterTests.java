@@ -14,6 +14,7 @@ import com.itqianchen.agentdesign.domain.chat.ChatMessage;
 import com.itqianchen.agentdesign.domain.chat.ChatMessageRole;
 import com.itqianchen.agentdesign.domain.chat.ChatMessageStatus;
 import com.itqianchen.agentdesign.domain.chat.ChatPromptProperties;
+import com.itqianchen.agentdesign.domain.chat.QueryContextualizerMode;
 import com.itqianchen.agentdesign.domain.chat.QueryContextualizerProperties;
 import com.itqianchen.agentdesign.domain.model.ModelConfig;
 import com.itqianchen.agentdesign.domain.model.ModelConfigDefaults;
@@ -31,10 +32,12 @@ import com.itqianchen.agentdesign.dto.search.SearchResponse;
 import com.itqianchen.agentdesign.mapper.chat.ChatSessionMapper;
 import com.itqianchen.agentdesign.mapper.model.ModelConfigMapper;
 import com.itqianchen.agentdesign.mapper.schema.DatabaseSchemaMapper;
+import com.itqianchen.agentdesign.mapper.settings.AppSettingMapper;
 import com.itqianchen.agentdesign.metadata.DatabaseSchemaInitializer;
 import com.itqianchen.agentdesign.repository.chat.ChatSessionRepository;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.repository.model.ModelConfigRepository;
+import com.itqianchen.agentdesign.repository.settings.AppSettingRepository;
 import com.itqianchen.agentdesign.service.agent.ChatAgentRouter;
 import com.itqianchen.agentdesign.service.agent.GeneralChatAgent;
 import com.itqianchen.agentdesign.service.agent.CogninoteDocumentRetriever;
@@ -42,10 +45,13 @@ import com.itqianchen.agentdesign.service.agent.KnowledgeContextProvider;
 import com.itqianchen.agentdesign.service.agent.KnowledgeBaseChatAgent;
 import com.itqianchen.agentdesign.service.agent.PromptAssembler;
 import com.itqianchen.agentdesign.service.agent.QueryContextualizerAgent;
+import com.itqianchen.agentdesign.service.agent.QueryContextualizerTriggerDecider;
 import com.itqianchen.agentdesign.service.chat.ChatContextUsageService;
+import com.itqianchen.agentdesign.service.chat.ChatSettingsService;
 import com.itqianchen.agentdesign.service.chat.ChatSessionService;
 import com.itqianchen.agentdesign.service.chat.CogninoteMemoryAdvisor;
 import com.itqianchen.agentdesign.service.chat.ConversationMemorySnapshotService;
+import com.itqianchen.agentdesign.dto.chat.ChatSettingsRequest;
 import com.itqianchen.agentdesign.service.chat.RagSourcesJsonCodec;
 import com.itqianchen.agentdesign.service.chat.TokenEstimator;
 import com.itqianchen.agentdesign.service.model.ModelConfigService;
@@ -518,12 +524,78 @@ class ChatAgentRouterTests {
     }
 
     /**
+     * 验证 AUTO 模式不会为完整独立问题额外调用补全 Agent。
+     * <p>完整问题直接检索，避免在 128K 以上上下文时代为普通知识库问答增加固定延迟。</p>
+     */
+    @Test
+    void autoModeSkipsContextualizerForStandaloneQuestion() {
+        AgentFixture fixture = new AgentFixture(new FakeKnowledgeStore(false), Flux.just("红黑树说明"));
+        fixture.agent.stream(new AgentRequest(
+                "request-auto-standalone-1",
+                "红黑树是什么？",
+                3,
+                SearchMode.KEYWORD,
+                "conversation-auto-standalone",
+                true
+        )).answer().collectList().block();
+
+        int callsBeforeStandaloneQuestion = fixture.runtime.callTextCalls;
+        fixture.runtime.stream = Flux.just("HashMap 扩容说明");
+        fixture.agent.stream(new AgentRequest(
+                "request-auto-standalone-2",
+                "HashMap 是怎么扩容的？",
+                3,
+                SearchMode.KEYWORD,
+                "conversation-auto-standalone",
+                true
+        )).answer().collectList().block();
+
+        assertThat(fixture.runtime.callTextCalls).isEqualTo(callsBeforeStandaloneQuestion);
+        assertThat(fixture.knowledgeStore.seenQueries.getLast()).isEqualTo("HashMap 是怎么扩容的？");
+    }
+
+    /**
+     * 验证 OFF 模式完全关闭追问补全。
+     * <p>即使用户输入明显省略式追问，也必须保持检索 query 等于用户原问题。</p>
+     */
+    @Test
+    void offModeUsesOriginalQuestionWithoutCallingContextualizer() {
+        AgentFixture fixture = new AgentFixture(new FakeKnowledgeStore(false), Flux.just("红黑树说明"));
+        fixture.setQueryContextualizerMode(QueryContextualizerMode.OFF);
+        fixture.runtime.contextualizerResponse = """
+                {"shouldRewrite":true,"rewrittenQuery":"红黑树 给出代码示例","reason":"test_should_not_call","confidence":1.0}
+                """;
+        fixture.agent.stream(new AgentRequest(
+                "request-off-1",
+                "红黑树是什么？",
+                3,
+                SearchMode.KEYWORD,
+                "conversation-off",
+                true
+        )).answer().collectList().block();
+
+        fixture.runtime.stream = Flux.just("代码示例");
+        fixture.agent.stream(new AgentRequest(
+                "request-off-2",
+                "给出代码示例",
+                3,
+                SearchMode.KEYWORD,
+                "conversation-off",
+                true
+        )).answer().collectList().block();
+
+        assertThat(fixture.runtime.callTextCalls).isZero();
+        assertThat(fixture.knowledgeStore.seenQueries.getLast()).isEqualTo("给出代码示例");
+    }
+
+    /**
      * 执行 聊天会话 中的 contextualizer Falls Back To Original Question When Model Returns Invalid Json 步骤。
      * <p>该方法是当前类型内部复用或对外暴露的明确业务边界。</p>
      */
     @Test
     void contextualizerFallsBackToOriginalQuestionWhenModelReturnsInvalidJson() {
         AgentFixture fixture = new AgentFixture(new FakeKnowledgeStore(false), Flux.just("仍然可以回答。"));
+        fixture.setQueryContextualizerMode(QueryContextualizerMode.ALWAYS);
         fixture.runtime.contextualizerResponse = "不是 JSON";
 
         fixture.agent.stream(new AgentRequest(
@@ -635,6 +707,7 @@ class ChatAgentRouterTests {
         private final RecordingAiRuntime runtime;
         private final ChatSessionRepository chatSessionRepository;
         private final ChatSessionService chatSessionService;
+        private final ChatSettingsService chatSettingsService;
         private final ChatAgentRouter agent;
 
         /**
@@ -648,6 +721,16 @@ class ChatAgentRouterTests {
             new DatabaseSchemaInitializer(sqlSession.getMapper(DatabaseSchemaMapper.class)).initialize();
             ModelConfigRepository modelConfigRepository = new ModelConfigRepository(
                     sqlSession.getMapper(ModelConfigMapper.class)
+            );
+            QueryContextualizerProperties queryContextualizerProperties = new QueryContextualizerProperties(
+                    true,
+                    null,
+                    6,
+                    800
+            );
+            this.chatSettingsService = new ChatSettingsService(
+                    new AppSettingRepository(sqlSession.getMapper(AppSettingMapper.class)),
+                    queryContextualizerProperties
             );
             // 写入会影响本地 SQLite 状态，调用顺序需要和会话状态机保持一致。
             modelConfigRepository.save(activeChatConfig());
@@ -681,8 +764,10 @@ class ChatAgentRouterTests {
             QueryContextualizerAgent queryContextualizerAgent = new QueryContextualizerAgent(
                     runtimeFactory,
                     defaultPromptProperties(),
-                    new QueryContextualizerProperties(true, 6, 800),
+                    queryContextualizerProperties,
+                    chatSettingsService,
                     memorySnapshotService,
+                    new QueryContextualizerTriggerDecider(),
                     new ObjectMapper()
             );
             this.agent = new ChatAgentRouter(List.of(
@@ -703,6 +788,14 @@ class ChatAgentRouterTests {
                             queryContextualizerAgent
                     )
             ));
+        }
+
+        /**
+         * 保存测试用追问补全模式。
+         * <p>通过真实 ChatSettingsService 写入 SQLite，覆盖前端 API 使用的同一条配置路径。</p>
+         */
+        private void setQueryContextualizerMode(QueryContextualizerMode mode) {
+            chatSettingsService.update(new ChatSettingsRequest(mode));
         }
 
         /**
@@ -884,6 +977,7 @@ class ChatAgentRouterTests {
         private String lastUserMessage;
         private String lastCallTextSystemPrompt;
         private String lastCallTextUserMessage;
+        private int callTextCalls;
         private List<Advisor> lastAdvisors = List.of();
         private Map<String, Object> lastAdvisorParams = Map.of();
 
@@ -928,6 +1022,7 @@ class ChatAgentRouterTests {
          */
         @Override
         public String callText(String systemPrompt, String userMessage) {
+            callTextCalls++;
             this.lastCallTextSystemPrompt = systemPrompt;
             this.lastCallTextUserMessage = userMessage;
             return contextualizerResponse;

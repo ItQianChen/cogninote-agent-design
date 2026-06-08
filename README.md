@@ -237,12 +237,13 @@ bash ./scripts/build-desktop-app-macos.sh --skip-tests
 | [阶段 20：代码友好检索优化计划](docs/phase-20-code-aware-retrieval-optimization-plan.md) | 中文正文、代码块、流程图和混合检索准确率优化 |
 | [阶段 21：模型驱动追问补全 Agent](docs/phase-21-query-contextualizer-agent-plan.md) | 知识库省略式追问的检索 query 补全与降级策略 |
 | [阶段 22：对话上下文窗口与 Token 估算优化](docs/phase-22-context-window-token-estimation-plan.md) | 128K 默认上下文、动态历史预算、tokenizer 估算和聊天页上下文占用展示 |
+| [阶段 23：知识库追问补全自动触发与前端可配置](docs/phase-23-query-contextualizer-auto-trigger-plan.md) | 追问补全 AUTO/ALWAYS/OFF 策略、聊天设置 API 和设置页配置 |
 | [可维护性重构计划](docs/maintainability-refactor-plan.md) | 前后端分层、统一响应和注释规范 |
 
 
 ## 开发状态
 
-当前项目已完成文档摄入、代码友好的 Lucene 混合检索、模型驱动追问补全 Agent、模型配置、对话上下文窗口配置与 Token 估算优化、RAG 对话、路由式多智能体对话、模式隔离聊天记忆、智能体模型运行时重构、AI 流式 Markdown 与 Mermaid 渲染、SQLite 聊天记忆、纯模型对话、空白保真的 SSE 流式输出、流式截断识别与错误状态同步、MyBatis 统一数据访问层、Windows 桌面打包、macOS Apple Silicon 独立打包链路、`0.1.2` 双平台 unsigned/signed CI 打包链路，以及桌面安装/卸载/升级可靠性修复的主要闭环。仍需重点补齐：
+当前项目已完成文档摄入、代码友好的 Lucene 混合检索、模型驱动追问补全 Agent、追问补全自动触发与前端配置、模型配置、对话上下文窗口配置与 Token 估算优化、RAG 对话、路由式多智能体对话、模式隔离聊天记忆、智能体模型运行时重构、AI 流式 Markdown 与 Mermaid 渲染、SQLite 聊天记忆、纯模型对话、空白保真的 SSE 流式输出、流式截断识别与错误状态同步、MyBatis 统一数据访问层、Windows 桌面打包、macOS Apple Silicon 独立打包链路、`0.1.2` 双平台 unsigned/signed CI 打包链路，以及桌面安装/卸载/升级可靠性修复的主要闭环。仍需重点补齐：
 
 - API Key 本地加密或凭据管理。
 - 桌面会话令牌保护。

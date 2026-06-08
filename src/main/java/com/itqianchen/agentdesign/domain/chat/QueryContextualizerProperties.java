@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.chat.query-contextualizer")
 public record QueryContextualizerProperties(
         Boolean enabled,
+        String mode,
         int maxHistoryMessages,
         int maxRewrittenQueryLength
 ) {
@@ -22,6 +23,20 @@ public record QueryContextualizerProperties(
      */
     public boolean resolvedEnabled() {
         return enabled == null || enabled;
+    }
+
+    /**
+     * 解析追问补全的配置兜底模式。
+     * <p>新环境变量 {@code COGNINOTE_QUERY_CONTEXTUALIZER_MODE} 优先；旧开关显式为 false 时兼容为 OFF。</p>
+     */
+    public QueryContextualizerMode resolvedMode() {
+        if (mode != null && !mode.isBlank()) {
+            return QueryContextualizerMode.fromConfig(mode);
+        }
+        if (enabled != null && !enabled) {
+            return QueryContextualizerMode.OFF;
+        }
+        return QueryContextualizerMode.AUTO;
     }
 
     /**

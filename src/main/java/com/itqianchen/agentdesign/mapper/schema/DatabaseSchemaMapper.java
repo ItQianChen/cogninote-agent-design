@@ -53,6 +53,12 @@ public interface DatabaseSchemaMapper {
     void createChatMessagesTable();
 
     /**
+     * 创建应用设置表。
+     * <p>表结构采用 key-value，适合保存不归属于单个模型或会话的全局聊天设置。</p>
+     */
+    void createAppSettingsTable();
+
+    /**
      * 执行 数据库元数据 中的 table Info 步骤。
      * <p>该方法是当前类型内部复用或对外暴露的明确业务边界。</p>
      */

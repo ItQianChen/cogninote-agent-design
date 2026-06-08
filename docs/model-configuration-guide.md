@@ -10,6 +10,8 @@ CogniNote 第八阶段开始使用多模型配置中心。对话模型和 Embedd
 
 第 22 阶段后，active `CHAT` 配置还会提供聊天上下文窗口 `contextWindowTokens`。默认值为 `128000`，前端显示为 `128K`；该字段只用于本地会话历史裁剪、压缩和聊天页上下文占用展示，不会作为通用参数发送给模型 API。Embedding 配置不使用上下文窗口，字段保持 `null`。
 
+第 23 阶段后，“对话模型”页面还会展示全局“知识库追问补全策略”。该设置保存在 SQLite `app_settings`，不是单个模型配置的一部分；放在对话模型页面，是因为补全 Agent 复用 active `CHAT` 模型，并影响知识库问答的检索质量。
+
 ## Provider 类型
 
 ### DashScope
@@ -67,6 +69,7 @@ OpenAI-compatible 的 Embedding 继续使用 Spring AI OpenAI runtime 的标准 
 | Chat | Temperature | `0.7` |
 | Chat | Top K | `8` |
 | Chat | 上下文窗口 | `128000`（前端显示 `128K`） |
+| Chat 设置 | 追问补全策略 | `AUTO`（前端显示“自动”） |
 | Embedding | Provider | `DASHSCOPE` |
 | Embedding | 模型 | `text-embedding-v4` |
 | Embedding | 维度 | `1024` |
@@ -83,6 +86,16 @@ OpenAI-compatible 的 Embedding 继续使用 Spring AI OpenAI runtime 的标准 
 7. 在配置列表中点击“激活”让该配置成为当前类型的 active 配置。
 
 对话模型表单中的“上下文长度”只在 `CHAT` 类型显示，可以使用预设值，也可以手动输入。保存时后端校验范围为 `1024` 到 `2000000`；超出范围会返回参数校验错误。保存成功后，聊天页会按 active Chat 配置重新计算当前会话的上下文占用。
+
+对话模型页中的“知识库追问补全策略”用于控制知识库模式下是否调用内部补全 Agent：
+
+| 选项 | 后端值 | 说明 |
+| --- | --- | --- |
+| 自动 | `AUTO` | 推荐。只有像追问或检索较弱时才补全检索问题。 |
+| 始终 | `ALWAYS` | 每轮知识库问答都先判断是否需要补全，准确性更稳但更慢。 |
+| 关闭 | `OFF` | 不补全追问，成本最低，但“继续/给个例子”等追问可能检索不准。 |
+
+该策略只影响知识库检索 query，不会修改聊天记录中的用户原文，也不会影响纯模型对话。保存策略时前端调用 `PUT /api/chat/settings`，刷新页面后通过 `GET /api/chat/settings` 回显。
 
 保存或激活 Embedding 配置后，如果模型或维度发生变化，需要在知识库中手动重建索引。系统不会自动重建旧向量，避免用户不知情地产生大量外部模型调用。第 20 阶段调整了中文 Analyzer、代码块索引文本和混合检索融合方式，升级后也需要重建 Lucene 索引；如果旧 chunks 已经丢失代码缩进，需要重新导入原始文件才能恢复代码格式。
 
@@ -111,6 +124,8 @@ OpenAI-compatible 的 Embedding 继续使用 Spring AI OpenAI runtime 的标准 
 保存配置时，如果 API Key 留空，后端会复用该配置已保存的 key。这样用户只改模型名、Base URL、temperature、Top K 或维度时，不需要重新输入密钥。
 
 保存 Chat 配置时，如果上下文窗口留空，后端会回退默认 `128000`。保存 Embedding 配置时，后端会忽略上下文窗口并保存为 `null`。
+
+追问补全策略的环境变量兜底为 `COGNINOTE_QUERY_CONTEXTUALIZER_MODE`，合法值为 `AUTO`、`ALWAYS`、`OFF`。旧变量 `COGNINOTE_QUERY_CONTEXTUALIZER_ENABLED=false` 仍兼容为 `OFF`，但只在没有 SQLite 用户设置且没有 mode 配置时生效。
 
 ## 环境变量 fallback
 

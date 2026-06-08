@@ -84,6 +84,11 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
         databaseSchemaMapper.createChatSessionsTable();
         // 数据库访问集中经过 Mapper，避免业务层直接拼接 SQL。
         databaseSchemaMapper.createChatMessagesTable();
+        /*
+         * 第 23 阶段开始，追问补全策略属于全局聊天设置。
+         * 使用独立 key-value 表，避免把非模型参数塞进 model_configs。
+         */
+        databaseSchemaMapper.createAppSettingsTable();
         /**
          * 执行 数据库元数据 中的 add Column If Missing 步骤。
          * <p>该方法是当前类型内部复用或对外暴露的明确业务边界。</p>

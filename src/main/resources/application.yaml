@@ -77,7 +77,8 @@ app: # CogniNote 自定义业务配置入口。
     batch-size: ${COGNINOTE_EMBEDDING_BATCH_SIZE:32} # 文档索引时批量调用 Embedding 的批大小。
   chat: # 对话与 Agent 配置。
     query-contextualizer: # 知识库追问补全 Agent 配置，只影响检索 query，不改变用户原文。
-      enabled: ${COGNINOTE_QUERY_CONTEXTUALIZER_ENABLED:true} # 开启后，知识库模式每轮先用 active Chat 模型判断是否需要补全检索问题。
+      mode: ${COGNINOTE_QUERY_CONTEXTUALIZER_MODE:} # AUTO/ALWAYS/OFF；为空时走旧 enabled 兼容和默认 AUTO。
+      enabled: ${COGNINOTE_QUERY_CONTEXTUALIZER_ENABLED:true} # 旧兼容开关；未设置 mode 且 enabled=false 时等价于 OFF。
       max-history-messages: ${COGNINOTE_QUERY_CONTEXTUALIZER_MAX_HISTORY_MESSAGES:6} # 补全判断最多读取的最近历史消息条数。
       max-rewritten-query-length: ${COGNINOTE_QUERY_CONTEXTUALIZER_MAX_REWRITTEN_QUERY_LENGTH:800} # 模型返回的补全检索 query 最大长度，超过则回退原问题。
     memory: # SQLite 聊天记忆注入策略配置。

@@ -62,6 +62,10 @@
         DELETE FROM model_config
     </delete>
 
+    <delete id="deleteAppSettings">
+        DELETE FROM app_settings
+    </delete>
+
     <select id="findAnyKnowledgeFolderId" resultType="java.lang.String">
         SELECT id FROM knowledge_folders LIMIT 1
     </select>

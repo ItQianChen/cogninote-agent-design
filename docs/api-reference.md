@@ -571,6 +571,54 @@ DELETE /api/chat/sessions/{conversationId}/messages
 
 删除该会话下的消息，同时清空会话摘要和摘要覆盖序号，返回清空后的会话详情。
 
+## 聊天设置
+
+第 23 阶段新增全局聊天设置 API。该设置保存在 SQLite `app_settings` 中，优先级高于环境变量；当前用于控制知识库模式下的追问补全策略。
+
+### 查询聊天设置
+
+```text
+GET /api/chat/settings
+```
+
+响应：
+
+```json
+{
+  "queryContextualizerMode": "AUTO"
+}
+```
+
+### 保存聊天设置
+
+```text
+PUT /api/chat/settings
+```
+
+请求体：
+
+```json
+{
+  "queryContextualizerMode": "OFF"
+}
+```
+
+字段说明：
+
+| 字段 | 说明 |
+| --- | --- |
+| `queryContextualizerMode` | `AUTO`、`ALWAYS` 或 `OFF`。默认 `AUTO`。 |
+
+模式语义：
+
+| 模式 | 行为 |
+| --- | --- |
+| `AUTO` | 只有像省略式追问或原问题检索较弱时才调用补全 Agent。 |
+| `ALWAYS` | 保持第 21 阶段行为，知识库模式每轮都先判断是否需要补全。 |
+| `OFF` | 完全关闭补全，始终使用用户原问题检索。 |
+
+该设置只影响知识库检索 query，不会修改 `chat_messages.content` 中的用户原文，也不会影响 `useKnowledgeBase=false` 的纯模型对话。
+
 ## RAG / 纯模型流式对话
 
 ```text
@@ -614,13 +662,13 @@ data: {"message":"..."}
 meta -> delta -> done
 ```
 
-异常时输出 `error`，事件顺序为 `meta -> delta -> error`。客户端只有收到 `done` 或 `error` 终止事件时，才能认为本轮 SSE 流有明确结论；如果连接关闭但没有终止事件，应按回答未完成处理。如果 `HYBRID` 或 `VECTOR` 因 Embedding 不可用失败，RAG 服务会自动降级到 `KEYWORD`，并在 `meta.retrievalMode` 中返回实际检索模式。`useKnowledgeBase=false` 时路由到 `GENERAL_CHAT` 普通对话 Agent，不挂 RAG Advisor，`retrievalMode` 为 `null`、`sources` 为空，只注入模式隔离后的会话记忆。`useKnowledgeBase=true` 或省略时路由到 `KNOWLEDGE_BASE` 知识库 Agent；知识库模式会在检索前内部调用模型驱动的追问补全 Agent，必要时把最近历史主题补进检索 query，但请求体、SSE `meta` 和用户消息内容都不变。
+异常时输出 `error`，事件顺序为 `meta -> delta -> error`。客户端只有收到 `done` 或 `error` 终止事件时，才能认为本轮 SSE 流有明确结论；如果连接关闭但没有终止事件，应按回答未完成处理。如果 `HYBRID` 或 `VECTOR` 因 Embedding 不可用失败，RAG 服务会自动降级到 `KEYWORD`，并在 `meta.retrievalMode` 中返回实际检索模式。`useKnowledgeBase=false` 时路由到 `GENERAL_CHAT` 普通对话 Agent，不挂 RAG Advisor，`retrievalMode` 为 `null`、`sources` 为空，只注入模式隔离后的会话记忆。`useKnowledgeBase=true` 或省略时路由到 `KNOWLEDGE_BASE` 知识库 Agent；知识库模式会按 `queryContextualizerMode` 决定是否内部调用追问补全 Agent，必要时把历史主题补进检索 query，但请求体、SSE `meta` 和用户消息内容都不变。
 
 重要约束：
 
 - SQLite 会保存全量会话历史。模型输入由“会话摘要 + token 预算内最近原文消息”组成；历史预算优先来自 active Chat 配置的 `contextWindowTokens`，默认 `128000`，并最多使用约 80% 窗口；默认至少保留最近 8 条原文消息，但不会把固定条数作为唯一记忆策略。
 - 同一会话可以在普通对话和知识库模式之间切换。后端会用 `agent_type` 标记消息，并在模型输入里隔离跨 Agent 历史：上一种 Agent 的拒答规则、引用规则和系统规则不能覆盖当前 Agent。
-- 知识库模式下，后端可能使用 active Chat 模型对省略式追问生成内部 `retrievalQuery`。这个 query 只用于检索，不写入 `chat_messages.content`，也不会通过 SSE 暴露；补全失败、非法 JSON 或 query 过长时会回退原问题检索。
+- 知识库模式下，后端可能按 `AUTO/ALWAYS/OFF` 策略使用 active Chat 模型对省略式追问生成内部 `retrievalQuery`。这个 query 只用于检索，不写入 `chat_messages.content`，也不会通过 SSE 暴露；补全失败、非法 JSON 或 query 过长时会回退原问题检索。
 - RAG 不再手动把 `{context}` 拼进 user prompt。知识库片段通过 Spring AI `RetrievalAugmentationAdvisor` 和 `CogninoteDocumentRetriever` 注入。
 - Spring AI `Document.metadata` 不允许出现 `null`。后端转换 RAG sources 时会省略缺失的 `heading/pageNumber` 等可选字段，前端仍以 SSE `meta.sources` 作为引用来源展示事实来源。
 - `delta.text` 是模型原始流式文本增量，可能只包含一个空格、换行或缩进。客户端和服务端都不能对它做 `trim()`、`trimStart()` 或 `isBlank()` 过滤，否则 Markdown 标题、列表、代码块和表格可能被破坏。

@@ -4,7 +4,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, ChevronUp } from 'lucide-vue-next'
 import KnowledgeFolderPanel from '../components/knowledge-folder-panel.vue'
 import KnowledgeSearchPanel from '../components/knowledge-search-panel.vue'
+import QueryContextualizerSettingsPanel from '../components/query-contextualizer-settings-panel.vue'
 import ModelConfigView from './model-config-view.vue'
+import { useChatSettingsStore } from '../stores/chat-settings'
 import { useKnowledgeFoldersStore } from '../stores/knowledge-folders'
 import { useModelConfigStore } from '../stores/model-config'
 import { useSearchStore } from '../stores/search'
@@ -20,6 +22,7 @@ const systemStore = useSystemStore()
 const searchStore = useSearchStore()
 const knowledgeFoldersStore = useKnowledgeFoldersStore()
 const modelConfigStore = useModelConfigStore()
+const chatSettingsStore = useChatSettingsStore()
 const themeStore = useThemeStore()
 const activeItem = ref('system-theme')
 const pageRef = ref(null)
@@ -40,8 +43,9 @@ const sidebarGroups = [
     id: 'knowledge',
     label: '知识库',
     items: [
-      { id: 'knowledge-folders', label: '知识库配置' },
-      { id: 'knowledge-search', label: '知识库检索测试' }
+      { id: 'knowledge-folders', label: '配置' },
+      { id: 'knowledge-search', label: '检索测试' },
+      { id: 'knowledge-query-contextualizer', label: '追问补全策略' }
     ]
   },
   {
@@ -60,7 +64,9 @@ const activeGroup = computed(() => {
 const activeTitle = computed(() => {
   return activeGroup.value.items.find(item => item.id === activeItem.value)?.label || '设置'
 })
-const isKnowledgePage = computed(() => activeGroup.value.id === 'knowledge')
+const shouldShowEmbeddingAlert = computed(() => {
+  return ['knowledge-folders', 'knowledge-search'].includes(activeItem.value)
+})
 const embeddingReady = computed(() => {
   const config = modelConfigStore.activeEmbeddingConfig
   return Boolean(config?.apiKeyConfigured && config?.modelName)
@@ -174,6 +180,11 @@ async function loadActiveItemData(item) {
     return
   }
 
+  if (item === 'knowledge-query-contextualizer') {
+    await chatSettingsStore.fetchSettings()
+    return
+  }
+
   if (item === 'model-chat') {
     await modelConfigStore.switchRole(modelConfigStore.ROLES.CHAT)
     return
@@ -218,7 +229,7 @@ async function loadActiveItemData(item) {
 
       <main ref="contentRef" class="settings-center-content" @scroll.passive="handleSettingsScroll">
         <el-alert
-          v-if="isKnowledgePage && !embeddingReady"
+          v-if="shouldShowEmbeddingAlert && !embeddingReady"
           class="settings-embedding-alert"
           type="warning"
           title="请先配置并启用向量模型，再导入和检索知识库。"
@@ -277,6 +288,7 @@ async function loadActiveItemData(item) {
 
         <KnowledgeFolderPanel v-else-if="activeItem === 'knowledge-folders'" />
         <KnowledgeSearchPanel v-else-if="activeItem === 'knowledge-search'" />
+        <QueryContextualizerSettingsPanel v-else-if="activeItem === 'knowledge-query-contextualizer'" />
         <ModelConfigView
           v-else-if="activeItem === 'model-chat'"
           key="model-chat"

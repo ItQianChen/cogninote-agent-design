@@ -76,14 +76,22 @@ public class KnowledgeBaseChatAgent extends AbstractChatAgent {
                 request.userMessage().sequence() - 1,
                 request.chatConfig()
         );
-        CogninoteDocumentRetriever documentRetriever = new CogninoteDocumentRetriever(
-                knowledgeContextProvider,
-                query.originalQuestion(),
-                query.retrievalQuery(),
-                request.requestedMode(),
-                request.topK()
-        );
+        CogninoteDocumentRetriever documentRetriever = documentRetriever(request, query);
         KnowledgeContext knowledgeContext = documentRetriever.retrieveKnowledgeContext();
+        if (shouldRetryWithContextualizer(query, knowledgeContext)) {
+            QueryContextualization retriedQuery = queryContextualizerAgent.contextualizeForWeakRetrieval(
+                    request.requestId(),
+                    request.conversationId(),
+                    request.question(),
+                    request.userMessage().sequence() - 1,
+                    request.chatConfig()
+            );
+            if (!retriedQuery.retrievalQuery().equals(query.retrievalQuery())) {
+                query = retriedQuery;
+                documentRetriever = documentRetriever(request, query);
+                knowledgeContext = documentRetriever.retrieveKnowledgeContext();
+            }
+        }
         List<Advisor> advisors = new ArrayList<>();
         advisors.add(memoryAdvisor);
         if (knowledgeContext.retrievalMode() != null) {
@@ -98,5 +106,36 @@ public class KnowledgeBaseChatAgent extends AbstractChatAgent {
                     .build());
         }
         return new AgentInvocation(knowledgeContext, advisors);
+    }
+
+    /**
+     * 创建知识库文档检索器。
+     * <p>原始问题用于最终回答，检索 query 可由补全 Agent 生成，两者必须保持分离。</p>
+     */
+    private CogninoteDocumentRetriever documentRetriever(
+            AgentInvocationRequest request,
+            QueryContextualization query
+    ) {
+        return new CogninoteDocumentRetriever(
+                knowledgeContextProvider,
+                query.originalQuestion(),
+                query.retrievalQuery(),
+                request.requestedMode(),
+                request.topK()
+        );
+    }
+
+    /**
+     * 判断是否需要在 AUTO 模式下做弱检索补全重试。
+     * <p>当前弱检索只按“无来源”处理，避免因为分数阈值不稳定而重复打扰模型。</p>
+     */
+    private static boolean shouldRetryWithContextualizer(
+            QueryContextualization query,
+            KnowledgeContext knowledgeContext
+    ) {
+        return !query.rewritten()
+                && "auto_standalone_question".equals(query.reason())
+                && knowledgeContext.retrievalMode() != null
+                && knowledgeContext.sources().isEmpty();
     }
 }

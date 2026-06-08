@@ -41,6 +41,10 @@ public class TestDatabaseCleaner {
          */
         clearKnowledgeFolders();
         /**
+         * 清理全局应用设置，避免某个测试保存的聊天开关影响下一个测试。
+         */
+        testDatabaseMapper.deleteAppSettings();
+        /**
          * 清理 clear Model Configs 对应的数据。
          * <p>清理只移除目标内容，保留会话或模块继续运行所需的外壳状态。</p>
          */

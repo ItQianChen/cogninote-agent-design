@@ -334,6 +334,8 @@ POST   /api/model-configs/settings/configs/{id}/activate
 
 第 22 阶段为 Chat 配置新增 `contextWindowTokens`。默认 Chat 配置为 `128000`，Embedding 配置保持 `null`；保存时校验范围为 `1024` 到 `2000000`。该字段不会作为通用上下文参数发送给模型 API，只用于 `ConversationMemorySnapshotService` 的历史预算、压缩策略和前端上下文占用展示。
 
+第 23 阶段新增全局聊天设置 `queryContextualizerMode`，取值为 `AUTO`、`ALWAYS`、`OFF`，保存在 SQLite `app_settings`。该设置在“设置 -> 模型 -> 对话模型”中展示，但不属于单个 `model_configs` 记录；它只控制知识库模式下是否调用追问补全 Agent。
+
 模型设置页使用 settings 快照接口作为页面事实来源：顶部 Active 卡片、左侧配置列表和右侧编辑表单由同一份 `ModelConfigSettingsResponse` 驱动。前端 `model-config` store 只保留一个当前编辑 `form`，不要在组件内再复制第二份表单状态；否则容易出现“列表和 Active 有数据，但右侧表单没有回显”的状态分叉。设置页切到“模型”时默认加载 `CHAT` 快照，点击 “Embedding 模型” 时再加载 `EMBEDDING` 快照。模型页不显示整块加载遮罩，避免页签切换时闪烁刺眼。
 
 API Key 第四、五阶段仍以开发态明文保存到 SQLite；本地加密或 Windows 凭据管理放到安全加固阶段，不能在最终交付版本继续明文保存。
@@ -361,7 +363,7 @@ useKnowledgeBase=false
 useKnowledgeBase=true
   └─ KNOWLEDGE_BASE：RAG prompt + CogninoteMemoryAdvisor
       ↓
-      QueryContextualizerAgent 读取最近历史，必要时生成补全后的检索 query
+      按 queryContextualizerMode 决定是否调用 QueryContextualizerAgent
       ↓
       读取 active EMBEDDING 配置
       ↓
@@ -384,7 +386,9 @@ useKnowledgeBase=true
 
 第十三阶段后，RAG 不再把 `{context}` 手动拼进 user prompt。`CogninoteDocumentRetriever` 挂在 Spring AI `RetrievalAugmentationAdvisor` 上，内部仍复用现有 `KnowledgeStore.search()`、Embedding 降级和 SQLite chunk 回读逻辑。这样既保留 CogniNote 的 Lucene + SQLite 检索能力，也把知识库增强放回 Spring AI Advisor 调用链。
 
-第 21 阶段后，知识库模式会在检索前调用内部 `QueryContextualizerAgent`。它复用 active Chat 模型，但使用独立 JSON Prompt 判断当前问题是否是省略式追问；如果需要，会把最近历史主题补进 `retrievalQuery`，例如把“给出代码示例”补成“红黑树是什么？在 Java 中哪里用到了这个结构？ 给出代码示例”。用户原始消息仍按原文写入 SQLite，最终回答也面向用户原始问题；`retrievalQuery` 只用于知识库检索和 RAG 边界说明。补全 Agent 返回非法 JSON、字段缺失、空 query、过长 query 或调用异常时，会回退原问题检索，不阻断主对话。
+第 21 阶段后，知识库模式具备内部 `QueryContextualizerAgent`。它复用 active Chat 模型，但使用独立 JSON Prompt 判断当前问题是否是省略式追问；如果需要，会把历史主题补进 `retrievalQuery`，例如把“给出代码示例”补成“红黑树是什么？在 Java 中哪里用到了这个结构？ 给出代码示例”。用户原始消息仍按原文写入 SQLite，最终回答也面向用户原始问题；`retrievalQuery` 只用于知识库检索和 RAG 边界说明。补全 Agent 返回非法 JSON、字段缺失、空 query、过长 query 或调用异常时，会回退原问题检索，不阻断主对话。
+
+第 23 阶段后，追问补全不再默认每轮调用模型，而是由 `queryContextualizerMode` 控制：`AUTO` 为默认值，通过本地打分判断短句、省略、指代、延续动作和完整问题反向信号，必要时才调用补全 Agent；`ALWAYS` 保留第 21 阶段每轮判断行为；`OFF` 完全关闭补全。AUTO 模式下，无历史时不调用补全 Agent，完整独立问题直接检索；如果原问题检索无来源且存在历史，会允许一次弱检索补全重试。补全 Prompt 输入包含“会话摘要 + 最近 N 条原文消息 + 当前问题”，压缩会话不会只看最近消息。
 
 `CogninoteDocumentRetriever` 转换 Spring AI `Document` 时必须保证 metadata 不包含 `null`。`heading`、`pageNumber` 等来源字段允许在 SQLite/Lucene 中为空，但传给 Spring AI 时要省略缺失字段；否则 Spring AI 1.1.x 会在 `Document` 构建阶段抛出 `metadata cannot have null values`，导致 RAG Advisor 流式链路中断。
 
@@ -639,6 +643,8 @@ CREATE TABLE chat_messages (
 
 `chat_sessions` 与 `chat_messages` 是第十三阶段新增的聊天记忆事实来源。SQLite 保存全量消息；`summary` 和 `summary_message_sequence` 只描述已被摘要覆盖的历史范围，模型输入仍由 `ConversationMemorySnapshotService` 按 active Chat 上下文窗口选择“摘要 + 最近原文消息”，不写死固定条数。删除会话是物理删除，会同时移除会话行和对应消息；第十八阶段新增 `chat_messages.agent_type`，用于标记消息所属 Agent，并在普通对话和知识库模式切换时隔离跨 Agent 记忆污染。
 
+`app_settings` 是第 23 阶段新增的全局应用设置表，当前用于保存 `chat.query-contextualizer.mode`。它的优先级高于 `COGNINOTE_QUERY_CONTEXTUALIZER_MODE` 和旧的 `COGNINOTE_QUERY_CONTEXTUALIZER_ENABLED=false` 兼容开关。
+
 `chunks.content` 会额外占用一份解析后的文本空间，这是有意设计。
 
 原因：
@@ -812,12 +818,16 @@ GET    /api/chat/sessions/{conversationId}
 PATCH  /api/chat/sessions/{conversationId}
 DELETE /api/chat/sessions/{conversationId}
 DELETE /api/chat/sessions/{conversationId}/messages
+GET    /api/chat/settings
+PUT    /api/chat/settings
 
 POST   /api/chat/stream
 POST   /api/chat/stream/{requestId}/cancel
 ```
 
 普通 JSON API 统一返回 `ApiResponse<T>`。`POST /api/chat/stream` 使用 SSE 流式返回，不做 JSON 响应包装；`POST /api/chat/stream/{requestId}/cancel` 和 `/api/chat/sessions...` 都是普通 JSON API；`DELETE /api/documents/{id}`、`PATCH /api/knowledge-folders/{id}/enabled` 和 `DELETE /api/knowledge-folders/{id}` 成功时返回 `204 No Content`。
+
+`GET /api/chat/settings` 和 `PUT /api/chat/settings` 用于读取和保存全局聊天设置。当前请求/响应字段为 `queryContextualizerMode`，合法值为 `AUTO`、`ALWAYS`、`OFF`；它只影响知识库检索 query 的补全策略，不改变用户原文和普通对话。
 
 ## 11. 开发里程碑
 
@@ -1014,6 +1024,15 @@ POST   /api/chat/stream/{requestId}/cancel
 - 引入 JTokkit 作为本地 tokenizer，DashScope/Qwen 默认 `o200k_base`，OpenAI-compatible 识别失败时回退 `cl100k_base`
 - 新增 `ChatContextUsageResponse`，并在 `ChatSessionResponse`、SSE `meta` 和 SSE `done` 中返回当前上下文占用
 - 聊天页发送区以圆环进度展示上下文占用和“已压缩”状态，悬停展示详细估算数据
+
+### Milestone 23：知识库追问补全自动触发与前端可配置
+
+- 新增 `QueryContextualizerMode`：`AUTO`、`ALWAYS`、`OFF`，默认 `AUTO`
+- 新增 SQLite `app_settings` 保存全局聊天设置，优先于环境变量和旧 enabled 开关
+- 新增 `GET /api/chat/settings`、`PUT /api/chat/settings`
+- `AUTO` 模式使用本地打分器判断短句、省略、指代、延续动作和完整问题反向信号，不做精确短语命中
+- 补全 Prompt 输入改为“会话摘要 + 最近原文消息 + 当前问题”
+- 设置页“模型 -> 对话模型”暴露追问补全策略，并说明它只影响知识库检索 query，不改写聊天原文，不影响纯模型对话
 
 ## 12. 后续版本规划
 
