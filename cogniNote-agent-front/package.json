@@ -1,6 +1,6 @@
 {
   "name": "cogninote-agent-front",
-  "version": "0.1.3",
+  "version": "0.1.31",
   "private": true,
   "type": "module",
   "scripts": {
