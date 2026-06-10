@@ -1,9 +1,9 @@
 <script setup>
 // chat-view 负责 聊天会话 页面或组件的状态组织、用户交互和后端同步。
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ChevronLeft, ChevronRight, LoaderCircle, Send, SlidersHorizontal, Trash2 } from 'lucide-vue-next'
 import ChatSettingsPopover from '../components/chat-settings-popover.vue'
-import SourceList from '../components/source-list.vue'
+import SourceInspector from '../components/source-inspector.vue'
 import { useChatStore } from '../stores/chat'
 import { useLayoutStore } from '../stores/layout'
 import { useModelConfigStore } from '../stores/model-config'
@@ -26,6 +26,12 @@ let restoreRunId = 0
 let composerResizeState = null
 const composerTextareaHeight = ref(COMPOSER_MIN_HEIGHT)
 const composerActionTitle = computed(() => (chatStore.isStreaming ? '停止对话' : '发送信息'))
+const totalSourceCount = computed(() =>
+  chatStore.activeMessages.reduce((total, message) => total + (message.sources?.length || 0), 0)
+)
+const firstSourceMessageId = computed(() =>
+  chatStore.activeMessages.find((message) => message.sources?.length)?.id || ''
+)
 const activeModelSummary = computed(() => {
   const chat = modelConfigStore.activeChatConfig?.modelName || '未配置对话模型'
   const embedding = modelConfigStore.activeEmbeddingConfig?.modelName || '未配置向量模型'
@@ -232,6 +238,24 @@ function clearMessages() {
   const confirmed = window.confirm('清空当前会话的全部消息？')
   if (confirmed) {
     chatStore.clearActiveMessages()
+  }
+}
+
+function openMessageSources(message, source) {
+  const chunkId = source?.chunkId || message.sources?.[0]?.chunkId || ''
+  layoutStore.openSourceInspector(message.id, chunkId, { openDetail: Boolean(source?.chunkId) })
+}
+
+function handlePageKeydown(event) {
+  if (event.key !== 'Escape') {
+    return
+  }
+  if (isComposerSettingsOpen.value) {
+    isComposerSettingsOpen.value = false
+    return
+  }
+  if (layoutStore.isSourceInspectorOpen) {
+    layoutStore.closeSourceInspector()
   }
 }
 
@@ -531,14 +555,19 @@ watch(
   { flush: 'post' }
 )
 
+onMounted(() => {
+  window.addEventListener('keydown', handlePageKeydown)
+})
+
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handlePageKeydown)
   stopComposerResize()
   saveCurrentSessionScrollPosition()
 })
 </script>
 
 <template>
-  <section class="conversation-page">
+  <section class="conversation-page" :class="{ 'conversation-page--inspector-open': layoutStore.isSourceInspectorOpen }">
     <header class="conversation-header">
       <div class="conversation-title-group">
         <button
@@ -547,7 +576,7 @@ onBeforeUnmount(() => {
           :title="layoutStore.sidebarToggleTitle"
           :aria-label="layoutStore.sidebarToggleTitle"
           :aria-expanded="!layoutStore.isSidebarCollapsed"
-          aria-controls="chat-sidebar"
+          aria-controls="workspace-context-sidebar"
           @click="layoutStore.toggleSidebar"
         >
           <ChevronRight v-if="layoutStore.isSidebarCollapsed" aria-hidden="true" />
@@ -559,6 +588,14 @@ onBeforeUnmount(() => {
         <span>{{ chatStore.useKnowledgeBase ? '知识库已启用' : '纯模型对话' }}</span>
         <span>{{ chatStore.mode }}</span>
         <span class="conversation-meta__model">{{ activeModelSummary }}</span>
+        <button
+          v-if="totalSourceCount"
+          class="conversation-source-button"
+          type="button"
+          @click="layoutStore.openSourceInspector(firstSourceMessageId)"
+        >
+          {{ totalSourceCount }} 个来源
+        </button>
         <button
           class="conversation-action-button"
           type="button"
@@ -572,43 +609,61 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <section ref="messageStreamRef" class="message-stream" aria-live="polite" @scroll.passive="handleMessageStreamScroll">
-      <div v-if="!chatStore.hasMessages" class="empty-chat">
-        <p class="eyebrow">开始一次对话</p>
-        <h3>可以直接问，也可以带知识库问。</h3>
-        <p>会话和消息会保存到本地 SQLite。开启知识库时，回答会附带检索来源；关闭后就是纯模型对话。</p>
-      </div>
-
-      <article
-        v-for="message in chatStore.activeMessages"
-        :key="message.id"
-        :data-message-id="message.id"
-        class="message-bubble"
-        :class="[`message-bubble--${message.role}`, `message-bubble--${message.status}`]"
-      >
-        <div class="message-label">
-          <span>{{ message.role === 'user' ? '你' : 'CogniNote' }}</span>
-          <em v-if="message.retrievalMode">{{ message.retrievalMode }}</em>
-          <em v-else-if="message.status === 'streaming'">生成中</em>
-          <em v-else-if="message.status === 'error'">未完成</em>
-          <em v-else-if="message.status === 'stopped'">已停止</em>
+    <div class="conversation-body">
+      <section ref="messageStreamRef" class="message-stream" aria-live="polite" @scroll.passive="handleMessageStreamScroll">
+        <div v-if="!chatStore.hasMessages" class="empty-chat">
+          <p class="eyebrow">开始一次对话</p>
+          <h3>可以直接问，也可以带知识库问。</h3>
+          <p>会话和消息会保存到本地 SQLite。开启知识库时，回答会附带检索来源；关闭后就是纯模型对话。</p>
         </div>
-        <AiMarkdownRenderer
-          v-if="message.role === 'assistant'"
-          class="message-content"
-          :content="message.content"
-          empty-text="正在等待模型返回..."
-          :final="message.status !== 'streaming'"
-        />
-        <p v-else class="message-content">{{ message.content || '正在等待模型返回...' }}</p>
-        <SourceList
-          v-if="message.sources?.length"
-          :sources="message.sources"
-          compact
-          @ask-source="chatStore.askAboutSource"
-        />
-      </article>
-    </section>
+
+        <article
+          v-for="message in chatStore.activeMessages"
+          :key="message.id"
+          :data-message-id="message.id"
+          class="message-bubble"
+          :class="[`message-bubble--${message.role}`, `message-bubble--${message.status}`]"
+        >
+          <div class="message-label">
+            <span>{{ message.role === 'user' ? '你' : 'CogniNote' }}</span>
+            <em v-if="message.retrievalMode">{{ message.retrievalMode }}</em>
+            <em v-else-if="message.status === 'streaming'">生成中</em>
+            <em v-else-if="message.status === 'error'">未完成</em>
+            <em v-else-if="message.status === 'stopped'">已停止</em>
+          </div>
+          <AiMarkdownRenderer
+            v-if="message.role === 'assistant'"
+            class="message-content"
+            :content="message.content"
+            empty-text="正在等待模型返回..."
+            :final="message.status !== 'streaming'"
+          />
+          <p v-else class="message-content">{{ message.content || '正在等待模型返回...' }}</p>
+
+          <div v-if="message.sources?.length" class="message-source-strip" aria-label="回答来源">
+            <button class="message-source-summary" type="button" @click="openMessageSources(message)">
+              {{ message.sources.length }} 个来源
+            </button>
+            <button
+              v-for="source in message.sources.slice(0, 3)"
+              :key="source.chunkId"
+              class="message-source-chip"
+              type="button"
+              :title="source.fileName"
+              @click="openMessageSources(message, source)"
+            >
+              [{{ source.index }}] {{ source.fileName }}
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <SourceInspector
+        v-if="layoutStore.isSourceInspectorOpen"
+        :messages="chatStore.activeMessages"
+        @ask-source="chatStore.askAboutSource"
+      />
+    </div>
 
     <form class="composer-bar" @submit.prevent="chatStore.streamChat">
       <div class="composer-input-row">

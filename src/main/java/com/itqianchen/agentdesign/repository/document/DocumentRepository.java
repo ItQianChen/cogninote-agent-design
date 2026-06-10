@@ -141,6 +141,14 @@ public class DocumentRepository {
     }
 
     /**
+     * 读取 find Stored Chunk By Id 对应的数据。
+     * <p>复用批量查询的 folder enabled 过滤规则，避免详情接口绕过知识库启用状态。</p>
+     */
+    public Optional<StoredChunk> findStoredChunkById(String chunkId) {
+        return findStoredChunksByIds(List.of(chunkId)).stream().findFirst();
+    }
+
+    /**
      * 执行 文档管理 中的 upsert Document 步骤。
      * <p>该方法是当前类型内部复用或对外暴露的明确业务边界。</p>
      */

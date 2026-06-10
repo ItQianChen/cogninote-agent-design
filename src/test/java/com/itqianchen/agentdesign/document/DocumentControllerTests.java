@@ -1,8 +1,11 @@
 package com.itqianchen.agentdesign.document;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.itqianchen.agentdesign.domain.document.KnowledgeChunk;
 import com.itqianchen.agentdesign.domain.document.KnowledgeDocument;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
@@ -72,5 +75,25 @@ class DocumentControllerTests {
 
         mockMvc.perform(delete("/api/documents/{id}", document.id()))
                 .andExpect(status().isNotFound());
+    }
+
+    /**
+     * 查询 get Chunk Returns Stored Content 对应的数据。
+     * <p>来源预览依赖完整 chunk 正文，避免前端只能展示搜索摘要。</p>
+     */
+    @Test
+    void getChunkReturnsStoredContent() throws Exception {
+        Path note = tempDir.resolve("chunk-detail.txt");
+        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
+        Files.writeString(note, "Full chunk detail text should be returned by the document chunk endpoint.");
+        ingestionService.ingestFolder(tempDir.toString(), true);
+        KnowledgeDocument document = documentRepository.findAllOrderByUpdatedAtDesc().getFirst();
+        KnowledgeChunk chunk = documentRepository.findChunksByDocumentId(document.id()).getFirst();
+
+        mockMvc.perform(get("/api/documents/chunks/{chunkId}", chunk.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.chunkId").value(chunk.id()))
+                .andExpect(jsonPath("$.data.fileName").value("chunk-detail.txt"))
+                .andExpect(jsonPath("$.data.content").value(chunk.content()));
     }
 }

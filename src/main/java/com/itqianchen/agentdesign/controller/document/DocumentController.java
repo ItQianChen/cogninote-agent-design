@@ -2,6 +2,7 @@ package com.itqianchen.agentdesign.controller.document;
 
 import com.itqianchen.agentdesign.common.api.ApiResponse;
 import com.itqianchen.agentdesign.common.api.ResourceNotFoundException;
+import com.itqianchen.agentdesign.dto.document.DocumentChunkResponse;
 import com.itqianchen.agentdesign.dto.document.DocumentSummaryResponse;
 import com.itqianchen.agentdesign.dto.document.IngestDocumentsRequest;
 import com.itqianchen.agentdesign.dto.document.IngestDocumentsResponse;
@@ -52,6 +53,15 @@ public class DocumentController {
     @GetMapping
     public ApiResponse<List<DocumentSummaryResponse>> listDocuments() {
         return ApiResponse.ok(documentQueryService.listDocuments());
+    }
+
+    /**
+     * 查询 文档片段详情。
+     * <p>该接口供来源预览弹窗读取完整片段内容，不改变聊天消息中的来源快照。</p>
+     */
+    @GetMapping("/chunks/{chunkId}")
+    public ApiResponse<DocumentChunkResponse> getChunk(@PathVariable String chunkId) {
+        return ApiResponse.ok(documentQueryService.getChunk(chunkId));
     }
 
     /**

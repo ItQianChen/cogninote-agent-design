@@ -1,61 +1,86 @@
-import {computed, ref} from 'vue'
-import {defineStore} from 'pinia'
+import { computed, ref, watch } from 'vue'
+import { defineStore } from 'pinia'
 
 const THEME_STORAGE_KEY = 'cogninote-theme'
-const DEFAULT_THEME = 'dark'
+const DEFAULT_THEME = 'system'
 
 export const THEME_OPTIONS = [
-    {label: '夜间', value: 'dark'},
-    {label: '日间', value: 'light'}
+  { label: '跟随系统', value: 'system' },
+  { label: '日间', value: 'light' },
+  { label: '夜间', value: 'dark' }
 ]
 
-/**
- * 定义 业务 的 Pinia Store。
- * <p>集中维护响应式状态、派生值和异步动作，组件只消费 Store 暴露的接口。</p>
- */
 export const useThemeStore = defineStore('theme', () => {
-    const theme = ref(readInitialTheme())
-    const isDark = computed(() => theme.value === 'dark')
+  const theme = ref(readInitialTheme())
+  const systemPrefersDark = ref(readSystemPreference())
+  const effectiveTheme = computed(() => theme.value === 'system'
+    ? (systemPrefersDark.value ? 'dark' : 'light')
+    : theme.value
+  )
+  const isDark = computed(() => effectiveTheme.value === 'dark')
 
-    /**
-     * 更新 set Theme 对应的状态。
-     * <p>状态写入后需要保持控件、Store 和后端快照一致。</p>
-     */
-    function setTheme(nextTheme) {
-        theme.value = THEME_OPTIONS.some((option) => option.value === nextTheme) ? nextTheme : DEFAULT_THEME
-        applyTheme()
-        window.localStorage.setItem(THEME_STORAGE_KEY, theme.value)
-    }
-
-    /**
-     * 更新 apply Theme 对应的状态。
-     * <p>状态写入后需要保持控件、Store 和后端快照一致。</p>
-     */
-    function applyTheme() {
-        // 主题类挂在 html 上，避免页面切换时丢失；CSS 模块只需要按 theme-light 做覆盖。
-        document.documentElement.classList.toggle('theme-light', theme.value === 'light')
-        document.documentElement.classList.toggle('theme-dark', theme.value === 'dark')
-        document.documentElement.classList.toggle('dark', theme.value === 'dark')
-    }
-
+  function setTheme(nextTheme) {
+    theme.value = normalizeTheme(nextTheme)
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme.value)
     applyTheme()
+  }
 
-    return {
-        theme,
-        isDark,
-        setTheme,
-        applyTheme
+  function applyTheme() {
+    if (typeof document === 'undefined') {
+      return
     }
+    // theme 是用户选择，resolvedTheme 是 CSS 真正生效的浅/深色；system 模式必须分开记录。
+    const resolvedTheme = effectiveTheme.value
+    const root = document.documentElement
+    root.classList.toggle('theme-light', resolvedTheme === 'light')
+    root.classList.toggle('theme-dark', resolvedTheme === 'dark')
+    root.classList.toggle('dark', resolvedTheme === 'dark')
+    root.dataset.theme = theme.value
+    root.dataset.resolvedTheme = resolvedTheme
+  }
+
+  function initializeSystemThemeListener() {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return
+    }
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    const handleChange = (event) => {
+      systemPrefersDark.value = event.matches
+    }
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange)
+    } else if (mediaQuery.addListener) {
+      mediaQuery.addListener(handleChange)
+    }
+  }
+
+  watch(effectiveTheme, () => applyTheme())
+  initializeSystemThemeListener()
+  applyTheme()
+
+  return {
+    theme,
+    effectiveTheme,
+    isDark,
+    setTheme,
+    applyTheme
+  }
 })
 
-/**
- * 执行 业务 中的 read Initial Theme 步骤。
- * <p>该函数是当前组件或模块中的一个明确维护边界。</p>
- */
+function normalizeTheme(value) {
+  return THEME_OPTIONS.some((option) => option.value === value) ? value : DEFAULT_THEME
+}
+
 function readInitialTheme() {
-    if (typeof window === 'undefined') {
-        return DEFAULT_THEME
-    }
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
-    return THEME_OPTIONS.some((option) => option.value === storedTheme) ? storedTheme : DEFAULT_THEME
+  if (typeof window === 'undefined') {
+    return DEFAULT_THEME
+  }
+  // 旧版本只保存 dark/light；这两个值仍然有效，缺省或异常值迁移为跟随系统。
+  return normalizeTheme(window.localStorage.getItem(THEME_STORAGE_KEY))
+}
+
+function readSystemPreference() {
+  return typeof window !== 'undefined'
+    && window.matchMedia
+    && window.matchMedia('(prefers-color-scheme: dark)').matches
 }

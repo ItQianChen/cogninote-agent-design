@@ -1,17 +1,22 @@
 <script setup>
-// knowledge-folder-panel 负责 知识库 页面或组件的状态组织、用户交互和后端同步。
+// knowledge-folder-panel 负责知识库目录导入、状态管理和目录级操作。
+import { computed, ref } from 'vue'
 import { ChevronDown, ChevronRight, FolderOpen, FolderPlus, RefreshCw, Trash2 } from 'lucide-vue-next'
-import StatGrid from './stat-grid.vue'
 import { useKnowledgeFoldersStore } from '../stores/knowledge-folders'
 import { useSearchStore } from '../stores/search'
 import { formatFileSize, formatTime } from '../utils/formatters'
 
 const knowledgeStore = useKnowledgeFoldersStore()
 const searchStore = useSearchStore()
+const isImportFormCollapsed = ref(true)
+
+const hasKnowledgeEntries = computed(() =>
+  knowledgeStore.folders.length > 0 || knowledgeStore.unassignedDocuments.length > 0
+)
+const showImportForm = computed(() => !hasKnowledgeEntries.value || !isImportFormCollapsed.value)
 
 /**
- * 执行 知识库 中的 rebuild All Indexes 步骤。
- * <p>该函数是当前组件或模块中的一个明确维护边界。</p>
+ * 全量重建是高成本操作，保留在资料管理页显式触发，避免刷新时产生副作用。
  */
 async function rebuildAllIndexes() {
   await searchStore.rebuildIndex()
@@ -19,35 +24,37 @@ async function rebuildAllIndexes() {
     await knowledgeStore.fetchFolders()
   }
 }
+
+function toggleImportForm() {
+  isImportFormCollapsed.value = !isImportFormCollapsed.value
+}
 </script>
 
 <template>
   <section class="knowledge-pane knowledge-pane--folders" aria-label="知识库目录管理">
-    <header class="knowledge-pane__header">
+    <header class="knowledge-pane__header knowledge-pane__header--compact">
       <div>
-        <p class="eyebrow">知识库配置</p>
-        <h3>本地知识库目录</h3>
+        <p class="eyebrow">资料管理</p>
+        <h3>目录</h3>
+        <p class="muted-text">导入本地文件夹，查看目录状态。</p>
       </div>
       <div class="header-actions">
-        <el-button :loading="knowledgeStore.isLoading" @click="knowledgeStore.fetchFolders">
-          刷新目录
+        <el-button v-if="hasKnowledgeEntries" @click="toggleImportForm">
+          <FolderPlus aria-hidden="true" />
+          <span>{{ showImportForm ? '收起导入' : '导入目录' }}</span>
         </el-button>
-        <el-button type="primary" :loading="searchStore.isRebuildingIndex" @click="rebuildAllIndexes">
+        <el-button :loading="searchStore.isRebuildingIndex" @click="rebuildAllIndexes">
           <RefreshCw aria-hidden="true" />
-          <span>重建全部索引</span>
+          <span>重建索引</span>
         </el-button>
       </div>
     </header>
 
-<!--    <el-alert-->
-<!--      class="settings-inline-alert retrieval-upgrade-alert"-->
-<!--      type="info"-->
-<!--      title="检索策略已升级：中文正文、代码块和流程图会使用新的索引策略。升级后请点击“重建全部索引”。"-->
-<!--      :closable="false"-->
-<!--      show-icon-->
-<!--    />-->
-
-    <form class="ingest-form knowledge-folder-import" @submit.prevent="knowledgeStore.importFolder">
+    <form
+      v-if="showImportForm"
+      class="ingest-form knowledge-folder-import"
+      @submit.prevent="knowledgeStore.importFolder"
+    >
       <label class="field field--full">
         <span>本地目录</span>
         <el-input
@@ -114,16 +121,6 @@ async function rebuildAllIndexes() {
         <span>{{ failure.message }}</span>
       </li>
     </ul>
-
-    <StatGrid
-      class="stats-row stats-row--folders"
-      :items="[
-        { label: '目录', value: knowledgeStore.stats.folderCount },
-        { label: '文档', value: knowledgeStore.stats.documentCount },
-        { label: '解析', value: knowledgeStore.stats.parsed },
-        { label: '文本块', value: knowledgeStore.stats.chunks }
-      ]"
-    />
 
     <section class="knowledge-folder-list">
       <p v-if="knowledgeStore.isLoading" class="panel-message">正在读取知识库目录...</p>

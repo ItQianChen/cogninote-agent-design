@@ -1,18 +1,23 @@
 <script setup>
-// knowledge-search-panel 负责 知识库 页面或组件的状态组织、用户交互和后端同步。
+// knowledge-search-panel 负责知识库检索验证和索引状态展示。
+import { computed } from 'vue'
 import SearchResults from './search-results.vue'
 import SegmentedControl from './segmented-control.vue'
-import StatGrid from './stat-grid.vue'
 import { useKnowledgeFoldersStore } from '../stores/knowledge-folders'
 import { SEARCH_MODES, useSearchStore } from '../stores/search'
 import { formatTime } from '../utils/formatters'
 
 const knowledgeStore = useKnowledgeFoldersStore()
 const searchStore = useSearchStore()
+const indexStatusItems = computed(() => [
+  { label: '已索引', value: searchStore.indexStatus?.indexedDocumentCount ?? '-' },
+  { label: '未索引', value: searchStore.indexStatus?.unindexedDocumentCount ?? '-' },
+  { label: 'Chunks', value: searchStore.indexStatus?.indexedChunkCount ?? '-' },
+  { label: '向量', value: searchStore.indexStatus?.embeddingConfigured ? '可用' : '未启用' }
+])
 
 /**
- * 执行 知识库 中的 rebuild All 步骤。
- * <p>该函数是当前组件或模块中的一个明确维护边界。</p>
+ * 重建后同步目录列表，让检索页和资料页共享同一份最新状态。
  */
 async function rebuildAll() {
   await searchStore.rebuildIndex()
@@ -22,10 +27,11 @@ async function rebuildAll() {
 
 <template>
   <section class="knowledge-pane knowledge-pane--search" aria-label="知识库检索测试">
-    <header class="knowledge-pane__header">
+    <header class="knowledge-pane__header knowledge-pane__header--compact">
       <div>
         <p class="eyebrow">检索测试</p>
-        <h3>索引与搜索</h3>
+        <h3>搜索</h3>
+        <p class="muted-text">验证关键词、向量和混合检索效果。</p>
       </div>
       <div class="header-actions">
         <el-button :loading="searchStore.isLoadingIndexStatus" @click="searchStore.fetchIndexStatus">
@@ -37,31 +43,6 @@ async function rebuildAll() {
       </div>
     </header>
 
-<!--    <el-alert-->
-<!--      class="settings-inline-alert retrieval-upgrade-alert"-->
-<!--      type="info"-->
-<!--      title="当前索引支持中文分词、代码标识符和流程图节点检索。升级后请先执行“全量重建”。"-->
-<!--      :closable="false"-->
-<!--      show-icon-->
-<!--    />-->
-
-    <StatGrid
-      :items="[
-        { label: '已索引文档', value: searchStore.indexStatus?.indexedDocumentCount ?? '-' },
-        { label: '未索引文档', value: searchStore.indexStatus?.unindexedDocumentCount ?? '-' },
-        { label: '索引 chunks', value: searchStore.indexStatus?.indexedChunkCount ?? '-' },
-        { label: '向量模型', value: searchStore.indexStatus?.embeddingConfigured ? '已启用' : '未启用' }
-      ]"
-    />
-
-    <section class="index-toolbar">
-      <div class="index-path-panel">
-        <span>索引目录</span>
-        <p class="path-text path-text--index">{{ searchStore.indexStatus?.indexPath || '索引目录读取中...' }}</p>
-        <p class="muted-text">最后索引：{{ formatTime(searchStore.indexStatus?.lastIndexedAt) }}</p>
-      </div>
-    </section>
-
     <el-alert
       v-if="searchStore.indexError"
       class="settings-inline-alert"
@@ -70,12 +51,6 @@ async function rebuildAll() {
       :closable="false"
       show-icon
     />
-
-    <div v-if="searchStore.rebuildResult" class="result-strip result-strip--three">
-      <span>索引文档 {{ searchStore.rebuildResult.indexedDocumentCount }}</span>
-      <span>索引 chunks {{ searchStore.rebuildResult.indexedChunkCount }}</span>
-      <span>耗时 {{ searchStore.rebuildResult.durationMs }} ms</span>
-    </div>
 
     <form class="search-form" @submit.prevent="searchStore.searchKnowledge">
       <label class="field field--full">
@@ -96,6 +71,25 @@ async function rebuildAll() {
         </el-button>
       </div>
     </form>
+
+    <section class="knowledge-inline-status" aria-label="索引摘要">
+      <span v-for="item in indexStatusItems" :key="item.label">
+        <strong>{{ item.value }}</strong>
+        {{ item.label }}
+      </span>
+      <span>最后索引 {{ formatTime(searchStore.indexStatus?.lastIndexedAt) }}</span>
+    </section>
+
+    <details class="knowledge-disclosure">
+      <summary>索引目录</summary>
+      <p class="path-text path-text--index">{{ searchStore.indexStatus?.indexPath || '索引目录读取中...' }}</p>
+    </details>
+
+    <div v-if="searchStore.rebuildResult" class="result-strip result-strip--three">
+      <span>索引文档 {{ searchStore.rebuildResult.indexedDocumentCount }}</span>
+      <span>索引 chunks {{ searchStore.rebuildResult.indexedChunkCount }}</span>
+      <span>耗时 {{ searchStore.rebuildResult.durationMs }} ms</span>
+    </div>
 
     <el-alert
       v-if="searchStore.searchError"

@@ -1,5 +1,7 @@
 package com.itqianchen.agentdesign.service.document;
 
+import com.itqianchen.agentdesign.common.api.ResourceNotFoundException;
+import com.itqianchen.agentdesign.dto.document.DocumentChunkResponse;
 import com.itqianchen.agentdesign.dto.document.DocumentSummaryResponse;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import java.util.List;
@@ -33,5 +35,16 @@ public class DocumentQueryService {
                 .stream()
                 .map(DocumentSummaryResponse::from)
                 .toList();
+    }
+
+    /**
+     * 查询 文档片段详情。
+     * <p>来源预览必须读取后端存储的完整 chunk 内容，而不是聊天消息里的摘要快照。</p>
+     */
+    @Transactional(readOnly = true)
+    public DocumentChunkResponse getChunk(String chunkId) {
+        return documentRepository.findStoredChunkById(chunkId)
+                .map(DocumentChunkResponse::from)
+                .orElseThrow(() -> new ResourceNotFoundException("Document chunk not found: " + chunkId));
     }
 }

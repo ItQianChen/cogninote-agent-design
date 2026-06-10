@@ -238,6 +238,8 @@ bash ./scripts/build-desktop-app-macos.sh --skip-tests
 | [阶段 21：模型驱动追问补全 Agent](docs/phase-21-query-contextualizer-agent-plan.md) | 知识库省略式追问的检索 query 补全与降级策略 |
 | [阶段 22：对话上下文窗口与 Token 估算优化](docs/phase-22-context-window-token-estimation-plan.md) | 128K 默认上下文、动态历史预算、tokenizer 估算和聊天页上下文占用展示 |
 | [阶段 23：知识库追问补全自动触发与前端可配置](docs/phase-23-query-contextualizer-auto-trigger-plan.md) | 追问补全 AUTO/ALWAYS/OFF 策略、动作型追问本地兜底、聊天设置 API 和知识库设置页配置 |
+| [阶段 24：工作台 UI/UX 全面改造](docs/phase-24-ui-workbench-redesign-plan.md) | 三层工作台、来源证据 Inspector、知识库工作区、设置中心 query 导航和 system/light/dark 主题 |
+| [阶段 25：知识图谱与思维导图](docs/phase-25-knowledge-graph-plan.md) | 基于导入资料 chunks 抽取实体关系，生成可追溯知识图谱、思维导图和 SSE 任务进度 |
 | [可维护性重构计划](docs/maintainability-refactor-plan.md) | 前后端分层、统一响应和注释规范 |
 
 

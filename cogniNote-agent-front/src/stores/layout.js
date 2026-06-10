@@ -1,27 +1,84 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-/**
- * 定义应用壳层布局的 Pinia Store。
- * <p>侧栏折叠状态被标题栏按钮和外层布局共同使用，独立出来能避免组件间事件绕线。</p>
- */
 export const useLayoutStore = defineStore('layout', () => {
-  const isSidebarCollapsed = ref(false)
-  const sidebarToggleTitle = computed(() =>
-    isSidebarCollapsed.value ? '展开聊天记录栏' : '隐藏聊天记录栏'
-  )
+  const isContextSidebarCollapsed = ref(false)
+  const isSourceInspectorOpen = ref(false)
+  const sourceInspectorMessageId = ref('')
+  const sourceInspectorChunkId = ref('')
+  const sourceDetailRequestId = ref(0)
+  const sourceDetailChunkId = ref('')
 
-  /**
-   * 切换聊天记录栏显示状态。
-   * <p>这里只影响布局，不改变当前草稿、会话或消息数据。</p>
-   */
+  const contextSidebarToggleTitle = computed(() =>
+    isContextSidebarCollapsed.value ? '展开上下文侧栏' : '隐藏上下文侧栏'
+  )
+  // 旧聊天页仍消费 sidebar 命名；保留别名，让工作台外壳替换不破坏现有调用方。
+  const sidebarToggleTitle = contextSidebarToggleTitle
+  const isSidebarCollapsed = isContextSidebarCollapsed
+
+  function toggleContextSidebar() {
+    isContextSidebarCollapsed.value = !isContextSidebarCollapsed.value
+  }
+
+  function setContextSidebarCollapsed(collapsed) {
+    isContextSidebarCollapsed.value = Boolean(collapsed)
+  }
+
   function toggleSidebar() {
-    isSidebarCollapsed.value = !isSidebarCollapsed.value
+    toggleContextSidebar()
+  }
+
+  function normalizeChunkId(chunkId) {
+    return chunkId === null || chunkId === undefined ? '' : String(chunkId)
+  }
+
+  function openSourceInspector(messageId, chunkId = '', options = {}) {
+    // Inspector 只保存消息和 chunk 的定位信息，来源详情继续由聊天消息快照派生，避免复制证据数据。
+    const nextChunkId = normalizeChunkId(chunkId)
+    sourceInspectorMessageId.value = messageId || ''
+    sourceInspectorChunkId.value = nextChunkId
+    isSourceInspectorOpen.value = Boolean(messageId)
+    if (messageId && nextChunkId && options.openDetail) {
+      sourceDetailChunkId.value = nextChunkId
+      sourceDetailRequestId.value += 1
+    } else {
+      sourceDetailChunkId.value = ''
+    }
+  }
+
+  function selectInspectorSource(chunkId) {
+    sourceInspectorChunkId.value = normalizeChunkId(chunkId)
+  }
+
+  function clearSourceDetailRequest(requestId) {
+    if (!requestId || requestId === sourceDetailRequestId.value) {
+      sourceDetailChunkId.value = ''
+    }
+  }
+
+  function closeSourceInspector() {
+    isSourceInspectorOpen.value = false
+    sourceInspectorMessageId.value = ''
+    sourceInspectorChunkId.value = ''
+    sourceDetailChunkId.value = ''
   }
 
   return {
+    isContextSidebarCollapsed,
     isSidebarCollapsed,
+    isSourceInspectorOpen,
+    sourceInspectorMessageId,
+    sourceInspectorChunkId,
+    sourceDetailRequestId,
+    sourceDetailChunkId,
+    contextSidebarToggleTitle,
     sidebarToggleTitle,
-    toggleSidebar
+    toggleContextSidebar,
+    toggleSidebar,
+    setContextSidebarCollapsed,
+    openSourceInspector,
+    selectInspectorSource,
+    clearSourceDetailRequest,
+    closeSourceInspector
   }
 })
