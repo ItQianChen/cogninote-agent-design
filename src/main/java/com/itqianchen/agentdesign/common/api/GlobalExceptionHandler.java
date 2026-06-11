@@ -1,6 +1,7 @@
 package com.itqianchen.agentdesign.common.api;
 
 import com.itqianchen.agentdesign.domain.ingestion.DocumentParseException;
+import com.itqianchen.agentdesign.domain.graph.KnowledgeGraphException;
 import com.itqianchen.agentdesign.domain.model.ModelConfigurationException;
 import com.itqianchen.agentdesign.domain.search.EmbeddingUnavailableException;
 import com.itqianchen.agentdesign.domain.search.SearchIndexException;
@@ -60,6 +61,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<?> handleSearchIndexException(SearchIndexException ex, HttpServletResponse response) {
         log.error("search_index_error", ex);
         return errorResponse(response, HttpStatus.INTERNAL_SERVER_ERROR, ApiErrorCode.SEARCH_INDEX_ERROR, ex.getMessage());
+    }
+
+    @ExceptionHandler(KnowledgeGraphException.class)
+    public ResponseEntity<?> handleKnowledgeGraphException(KnowledgeGraphException ex, HttpServletResponse response) {
+        return errorResponse(response, HttpStatus.BAD_REQUEST, ApiErrorCode.BAD_REQUEST, ex.getMessage());
     }
 
     /**

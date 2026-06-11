@@ -21,7 +21,7 @@
 - `chat-stream.js` 的 SSE parser 保留 `data:` 内容里的前导空白，只移除协议允许的一个分隔空格，避免 `### 标题`、`- 列表项` 等格式在流式拼接后变成非法 Markdown。
 - `ChatSseEventMapper` 避免在 SSE 发送失败时调用 `completeWithError()`，防止 Spring MVC 在 `text/event-stream` 响应上再写 JSON `ApiResponse`。
 - `POST /api/chat/stream/{requestId}/cancel` 只表示用户显式停止；普通浏览器刷新、切页或连接断开不取消后端模型流，为第十三阶段完整保存 assistant 消息预留空间。
-- `application.yaml` 中 RAG prompt 明确要求模型输出标准 Markdown：标题符号后带空格、列表符号后带空格、代码块使用 fenced code block、原始 HTML 禁止输出。
+- `cogninote-prompts.yaml` 中 RAG prompt 明确要求模型输出标准 Markdown：标题符号后带空格、列表符号后带空格、代码块使用 fenced code block、原始 HTML 禁止输出。
 
 ## Streaming Contract
 

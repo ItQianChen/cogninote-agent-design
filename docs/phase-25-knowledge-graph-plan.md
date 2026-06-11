@@ -4,6 +4,8 @@
 
 第 25 阶段在现有本地知识库和 RAG 能力之上增加知识图谱层：从用户导入的资料 `chunks` 中抽取实体、关系和证据，保存为可重建、可追溯的 SQLite 图谱事实数据，再派生出思维导图和关系图两类前端视图。
 
+实施状态：已落地。后端新增知识图谱表、Mapper、Repository、Service、Controller 和 SSE run 进度推送；前端在知识库工作台新增“知识图谱” tab，提供重建、进度恢复、思维导图、关系图、邻接列表和证据抽屉。抽取 Prompt 已从代码迁移到 `src/main/resources/cogninote-prompts.yaml`。
+
 本阶段的核心原则是：SQLite 继续作为业务事实来源；Lucene 继续作为可重建检索索引；知识图谱也必须落在 SQLite 中，并且每个节点和关系都能回链到原始 `chunk_id`。前端只消费后端生成的图谱视图，不把模型抽取结果只保存在浏览器状态里。
 
 图谱数据分两层，这是本阶段最重要的结构决策：
@@ -57,6 +59,7 @@ CogniNote 第一版不做完整 GraphRAG 查询替代，只先做“知识图谱
 - `DocumentRepository` 已经能按文档和目录回读 chunks。
 - `AiRuntimeFactory` 和 `AiChatRuntime.callText` 已经支持同步模型调用。
 - `QueryContextualizerAgent` 已经有“只返回 JSON、后端解析校验、失败降级”的范式。
+- Prompt 统一由 `cogninote-prompts.yaml` 维护；`application.yaml` 只通过 `spring.config.import` 导入该专用文件，避免业务运行配置和大段 Prompt 混杂。
 - 后端 `ChatController` 已有 `SseEmitter` + `TEXT_EVENT_STREAM` 的 SSE 写法；前端 `chat-stream.js` 已有 `readSseStream` 流式解析工具，图谱进度 SSE 直接复用。
 - `source-inspector.vue` 与 `getDocumentChunk` API 已实现“quote + 文件名 + heading + 页码 + chunk 详情弹窗”的完整交互，图谱证据面板复用该模式。
 - 第 24 阶段已把 `/knowledge` 改造为 tab 工作台（`knowledge-workbench-view.vue` 的 `panelOptions`：资料管理/检索测试），图谱作为第三个 tab 接入。
@@ -242,6 +245,20 @@ com.itqianchen.agentdesign.controller.graph
 | `KnowledgeGraphStartupCleaner` | 应用启动时把遗留 QUEUED/RUNNING run 标记为 FAILED。 |
 
 ## 抽取 Prompt 契约
+
+配置入口：
+
+```yaml
+app:
+  knowledge-graph:
+    prompts:
+      extraction:
+        version: kg-extract-v1
+        system: ...
+        user: ...
+```
+
+`KnowledgeGraphPromptProperties` 会在启动时校验 `version/system/user` 不为空，并要求 user 模板包含 `{documentName}`、`{chunkId}`、`{heading}`、`{pageNumber}` 和 `{content}`。`version` 会写入 `knowledge_graph_runs.prompt_version` 和 `knowledge_graph_chunk_extractions.prompt_version`，也是缓存复用判断的一部分；修改抽取语义时必须同步升级版本，否则旧缓存会继续命中。
 
 模型必须只返回 JSON。后端只接受结构化字段，不从自然语言解释中猜结果。
 

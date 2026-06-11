@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.itqianchen.agentdesign.mapper.graph.KnowledgeGraphMapper">
+
+    <resultMap id="KnowledgeGraphRunMap" type="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphRun">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="scope_type" javaType="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphScopeType"/>
+            <arg column="scope_id" javaType="java.lang.String"/>
+            <arg column="status" javaType="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphRunStatus"/>
+            <arg column="model_config_id" javaType="java.lang.String"/>
+            <arg column="prompt_version" javaType="java.lang.String"/>
+            <arg column="total_chunk_count" javaType="_int"/>
+            <arg column="processed_chunk_count" javaType="_int"/>
+            <arg column="skipped_chunk_count" javaType="_int"/>
+            <arg column="extracted_node_count" javaType="_int"/>
+            <arg column="extracted_edge_count" javaType="_int"/>
+            <arg column="failed_chunk_count" javaType="_int"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="started_at" javaType="java.lang.Long"/>
+            <arg column="completed_at" javaType="java.lang.Long"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="updated_at" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="ChunkExtractionMap" type="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphChunkExtraction">
+        <constructor>
+            <arg column="chunk_id" javaType="java.lang.String"/>
+            <arg column="document_id" javaType="java.lang.String"/>
+            <arg column="content_hash" javaType="java.lang.String"/>
+            <arg column="prompt_version" javaType="java.lang.String"/>
+            <arg column="model_config_id" javaType="java.lang.String"/>
+            <arg column="status" javaType="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphExtractionStatus"/>
+            <arg column="extraction_json" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="extracted_at" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="GraphNodeMap" type="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphNode">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="scope_type" javaType="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphScopeType"/>
+            <arg column="scope_id" javaType="java.lang.String"/>
+            <arg column="canonical_name" javaType="java.lang.String"/>
+            <arg column="display_name" javaType="java.lang.String"/>
+            <arg column="node_type" javaType="java.lang.String"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="confidence" javaType="_double"/>
+            <arg column="mention_count" javaType="_int"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="updated_at" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="GraphEdgeMap" type="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphEdge">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="scope_type" javaType="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphScopeType"/>
+            <arg column="scope_id" javaType="java.lang.String"/>
+            <arg column="source_node_id" javaType="java.lang.String"/>
+            <arg column="target_node_id" javaType="java.lang.String"/>
+            <arg column="relation_type" javaType="java.lang.String"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="confidence" javaType="_double"/>
+            <arg column="mention_count" javaType="_int"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="updated_at" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="GraphViewMap" type="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphView">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="scope_type" javaType="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphScopeType"/>
+            <arg column="scope_id" javaType="java.lang.String"/>
+            <arg column="view_type" javaType="com.itqianchen.agentdesign.domain.graph.KnowledgeGraphViewType"/>
+            <arg column="payload_json" javaType="java.lang.String"/>
+            <arg column="generated_from_run_id" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="updated_at" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="EvidenceDetailMap" type="com.itqianchen.agentdesign.mapper.graph.KnowledgeGraphEvidenceDetailRow">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="run_id" javaType="java.lang.String"/>
+            <arg column="node_id" javaType="java.lang.String"/>
+            <arg column="edge_id" javaType="java.lang.String"/>
+            <arg column="document_id" javaType="java.lang.String"/>
+            <arg column="chunk_id" javaType="java.lang.String"/>
+            <arg column="quote" javaType="java.lang.String"/>
+            <arg column="confidence" javaType="_double"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="file_name" javaType="java.lang.String"/>
+            <arg column="source_path" javaType="java.lang.String"/>
+            <arg column="heading" javaType="java.lang.String"/>
+            <arg column="page_number" javaType="java.lang.Integer"/>
+            <arg column="chunk_index" javaType="_int"/>
+            <arg column="node_display_name" javaType="java.lang.String"/>
+            <arg column="node_type" javaType="java.lang.String"/>
+            <arg column="edge_relation_type" javaType="java.lang.String"/>
+            <arg column="edge_source_name" javaType="java.lang.String"/>
+            <arg column="edge_target_name" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="ScopePredicate">
+        scope_type = #{scopeType}
+        AND ((scope_id IS NULL AND #{scopeId} IS NULL) OR scope_id = #{scopeId})
+    </sql>
+
+    <insert id="insertRun">
+        INSERT INTO knowledge_graph_runs (
+            id, scope_type, scope_id, status, model_config_id, prompt_version,
+            total_chunk_count, processed_chunk_count, skipped_chunk_count,
+            extracted_node_count, extracted_edge_count, failed_chunk_count,
+            error_message, started_at, completed_at, created_at, updated_at
+        )
+        VALUES (
+            #{id}, #{scopeType}, #{scopeId}, #{status}, #{modelConfigId}, #{promptVersion},
+            #{totalChunkCount}, #{processedChunkCount}, #{skippedChunkCount},
+            #{extractedNodeCount}, #{extractedEdgeCount}, #{failedChunkCount},
+            #{errorMessage}, #{startedAt}, #{completedAt}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <select id="findRunById" resultMap="KnowledgeGraphRunMap">
+        SELECT *
+        FROM knowledge_graph_runs
+        WHERE id = #{id}
+    </select>
+
+    <select id="findActiveRun" resultMap="KnowledgeGraphRunMap">
+        SELECT *
+        FROM knowledge_graph_runs
+        WHERE <include refid="ScopePredicate"/>
+          AND status IN ('QUEUED', 'RUNNING')
+        ORDER BY created_at DESC
+        LIMIT 1
+    </select>
+
+    <select id="findLatestRunForScope" resultMap="KnowledgeGraphRunMap">
+        SELECT *
+        FROM knowledge_graph_runs
+        WHERE <include refid="ScopePredicate"/>
+        ORDER BY created_at DESC
+        LIMIT 1
+    </select>
+
+    <update id="markRunStarted">
+        UPDATE knowledge_graph_runs
+        SET status = 'RUNNING',
+            total_chunk_count = #{totalChunkCount},
+            started_at = #{startedAt},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateRunProgress">
+        UPDATE knowledge_graph_runs
+        SET processed_chunk_count = #{processedChunkCount},
+            skipped_chunk_count = #{skippedChunkCount},
+            failed_chunk_count = #{failedChunkCount},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="markRunCompleted">
+        UPDATE knowledge_graph_runs
+        SET status = 'COMPLETED',
+            extracted_node_count = #{extractedNodeCount},
+            extracted_edge_count = #{extractedEdgeCount},
+            completed_at = #{completedAt},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="markRunFailed">
+        UPDATE knowledge_graph_runs
+        SET status = 'FAILED',
+            error_message = #{errorMessage},
+            completed_at = #{completedAt},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="markRunCancelled">
+        UPDATE knowledge_graph_runs
+        SET status = 'CANCELLED',
+            completed_at = #{completedAt},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="failOrphanRuns">
+        UPDATE knowledge_graph_runs
+        SET status = 'FAILED',
+            error_message = #{errorMessage},
+            completed_at = #{completedAt},
+            updated_at = #{updatedAt}
+        WHERE status IN ('QUEUED', 'RUNNING')
+    </update>
+
+    <select id="findExtractionByChunkId" resultMap="ChunkExtractionMap">
+        SELECT *
+        FROM knowledge_graph_chunk_extractions
+        WHERE chunk_id = #{chunkId}
+    </select>
+
+    <select id="findExtractionsByChunkIds" resultMap="ChunkExtractionMap">
+        SELECT *
+        FROM knowledge_graph_chunk_extractions
+        WHERE chunk_id IN
+        <foreach collection="chunkIds" item="chunkId" open="(" separator="," close=")">
+            #{chunkId}
+        </foreach>
+    </select>
+
+    <insert id="upsertChunkExtraction">
+        INSERT INTO knowledge_graph_chunk_extractions (
+            chunk_id, document_id, content_hash, prompt_version, model_config_id,
+            status, extraction_json, error_message, extracted_at
+        )
+        VALUES (
+            #{chunkId}, #{documentId}, #{contentHash}, #{promptVersion}, #{modelConfigId},
+            #{status}, #{extractionJson}, #{errorMessage}, #{extractedAt}
+        )
+        ON CONFLICT(chunk_id) DO UPDATE SET
+            document_id = excluded.document_id,
+            content_hash = excluded.content_hash,
+            prompt_version = excluded.prompt_version,
+            model_config_id = excluded.model_config_id,
+            status = excluded.status,
+            extraction_json = excluded.extraction_json,
+            error_message = excluded.error_message,
+            extracted_at = excluded.extracted_at
+    </insert>
+
+    <delete id="deleteOrphanChunkExtractions">
+        DELETE FROM knowledge_graph_chunk_extractions
+        WHERE chunk_id NOT IN (SELECT id FROM chunks)
+    </delete>
+
+    <delete id="deleteChunkExtractionsByKnowledgeFolderId">
+        DELETE FROM knowledge_graph_chunk_extractions
+        WHERE chunk_id IN (
+            SELECT c.id
+            FROM chunks c
+            JOIN documents d ON d.id = c.document_id
+            WHERE d.knowledge_folder_id = #{knowledgeFolderId}
+        )
+    </delete>
+
+    <delete id="deleteEvidenceByScope">
+        DELETE FROM knowledge_graph_evidence
+        WHERE node_id IN (
+            SELECT id FROM knowledge_graph_nodes
+            WHERE <include refid="ScopePredicate"/>
+        )
+           OR edge_id IN (
+            SELECT id FROM knowledge_graph_edges
+            WHERE <include refid="ScopePredicate"/>
+        )
+           OR run_id IN (
+            SELECT id FROM knowledge_graph_runs
+            WHERE <include refid="ScopePredicate"/>
+        )
+    </delete>
+
+    <delete id="deleteViewsByScope">
+        DELETE FROM knowledge_graph_views
+        WHERE <include refid="ScopePredicate"/>
+    </delete>
+
+    <delete id="deleteEdgesByScope">
+        DELETE FROM knowledge_graph_edges
+        WHERE <include refid="ScopePredicate"/>
+    </delete>
+
+    <delete id="deleteNodesByScope">
+        DELETE FROM knowledge_graph_nodes
+        WHERE <include refid="ScopePredicate"/>
+    </delete>
+
+    <delete id="deleteRunsByScope">
+        DELETE FROM knowledge_graph_runs
+        WHERE <include refid="ScopePredicate"/>
+    </delete>
+
+    <insert id="insertNode">
+        INSERT INTO knowledge_graph_nodes (
+            id, scope_type, scope_id, canonical_name, display_name, node_type,
+            description, confidence, mention_count, created_at, updated_at
+        )
+        VALUES (
+            #{id}, #{scopeType}, #{scopeId}, #{canonicalName}, #{displayName}, #{nodeType},
+            #{description}, #{confidence}, #{mentionCount}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <insert id="insertEdge">
+        INSERT INTO knowledge_graph_edges (
+            id, scope_type, scope_id, source_node_id, target_node_id, relation_type,
+            description, confidence, mention_count, created_at, updated_at
+        )
+        VALUES (
+            #{id}, #{scopeType}, #{scopeId}, #{sourceNodeId}, #{targetNodeId}, #{relationType},
+            #{description}, #{confidence}, #{mentionCount}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <insert id="insertEvidence">
+        INSERT INTO knowledge_graph_evidence (
+            id, run_id, node_id, edge_id, document_id, chunk_id, quote, confidence, created_at
+        )
+        VALUES (
+            #{id}, #{runId}, #{nodeId}, #{edgeId}, #{documentId}, #{chunkId}, #{quote}, #{confidence}, #{createdAt}
+        )
+    </insert>
+
+    <insert id="insertView">
+        INSERT INTO knowledge_graph_views (
+            id, scope_type, scope_id, view_type, payload_json, generated_from_run_id, created_at, updated_at
+        )
+        VALUES (
+            #{id}, #{scopeType}, #{scopeId}, #{viewType}, #{payloadJson}, #{generatedFromRunId}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <select id="findNodesByScope" resultMap="GraphNodeMap">
+        SELECT *
+        FROM knowledge_graph_nodes
+        WHERE <include refid="ScopePredicate"/>
+        ORDER BY mention_count DESC, display_name ASC
+    </select>
+
+    <select id="findEdgesByScope" resultMap="GraphEdgeMap">
+        SELECT *
+        FROM knowledge_graph_edges
+        WHERE <include refid="ScopePredicate"/>
+        ORDER BY mention_count DESC, relation_type ASC
+    </select>
+
+    <select id="findView" resultMap="GraphViewMap">
+        SELECT *
+        FROM knowledge_graph_views
+        WHERE <include refid="ScopePredicate"/>
+          AND view_type = #{viewType}
+        ORDER BY updated_at DESC
+        LIMIT 1
+    </select>
+
+    <select id="countNodesByScope" resultType="_int">
+        SELECT COUNT(*)
+        FROM knowledge_graph_nodes
+        WHERE <include refid="ScopePredicate"/>
+    </select>
+
+    <select id="countEdgesByScope" resultType="_int">
+        SELECT COUNT(*)
+        FROM knowledge_graph_edges
+        WHERE <include refid="ScopePredicate"/>
+    </select>
+
+    <sql id="EvidenceDetailColumns">
+        e.id,
+        e.run_id,
+        e.node_id,
+        e.edge_id,
+        e.document_id,
+        e.chunk_id,
+        e.quote,
+        e.confidence,
+        e.created_at,
+        d.file_name,
+        d.source_path,
+        c.heading,
+        c.page_number,
+        c.chunk_index,
+        n.display_name AS node_display_name,
+        n.node_type,
+        edge.relation_type AS edge_relation_type,
+        source_node.display_name AS edge_source_name,
+        target_node.display_name AS edge_target_name
+    </sql>
+
+    <sql id="EvidenceDetailJoins">
+        FROM knowledge_graph_evidence e
+        JOIN chunks c ON c.id = e.chunk_id
+        JOIN documents d ON d.id = e.document_id
+        LEFT JOIN knowledge_graph_nodes n ON n.id = e.node_id
+        LEFT JOIN knowledge_graph_edges edge ON edge.id = e.edge_id
+        LEFT JOIN knowledge_graph_nodes source_node ON source_node.id = edge.source_node_id
+        LEFT JOIN knowledge_graph_nodes target_node ON target_node.id = edge.target_node_id
+    </sql>
+
+    <select id="findEvidenceByNodeId" resultMap="EvidenceDetailMap">
+        SELECT <include refid="EvidenceDetailColumns"/>
+        <include refid="EvidenceDetailJoins"/>
+        WHERE e.node_id = #{nodeId}
+        ORDER BY e.confidence DESC, e.created_at DESC
+    </select>
+
+    <select id="findEvidenceByEdgeId" resultMap="EvidenceDetailMap">
+        SELECT <include refid="EvidenceDetailColumns"/>
+        <include refid="EvidenceDetailJoins"/>
+        WHERE e.edge_id = #{edgeId}
+        ORDER BY e.confidence DESC, e.created_at DESC
+    </select>
+
+    <select id="findNodeEvidenceByScope" resultMap="EvidenceDetailMap">
+        SELECT <include refid="EvidenceDetailColumns"/>
+        <include refid="EvidenceDetailJoins"/>
+        WHERE n.scope_type = #{scopeType}
+          AND ((n.scope_id IS NULL AND #{scopeId} IS NULL) OR n.scope_id = #{scopeId})
+        ORDER BY d.file_name ASC, c.chunk_index ASC, n.mention_count DESC
+    </select>
+</mapper>

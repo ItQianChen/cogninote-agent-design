@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @MapperScan({
         "com.itqianchen.agentdesign.mapper.chat",
         "com.itqianchen.agentdesign.mapper.document",
+        "com.itqianchen.agentdesign.mapper.graph",
         "com.itqianchen.agentdesign.mapper.knowledge",
         "com.itqianchen.agentdesign.mapper.model",
         "com.itqianchen.agentdesign.mapper.schema",

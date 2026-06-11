@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { FolderOpen, RefreshCw, Search, Settings2 } from 'lucide-vue-next'
+import { FolderOpen, Network, RefreshCw, Search, Settings2 } from 'lucide-vue-next'
 import KnowledgeFolderPanel from './knowledge-folder-panel.vue'
+import KnowledgeGraphPanel from './knowledge-graph-panel.vue'
 import KnowledgeSearchPanel from './knowledge-search-panel.vue'
 import { useKnowledgeFoldersStore } from '../stores/knowledge-folders'
 import { useModelConfigStore } from '../stores/model-config'
@@ -14,7 +15,8 @@ const activePanel = ref('folders')
 
 const panelOptions = [
   { id: 'folders', label: '资料管理', icon: FolderOpen },
-  { id: 'search', label: '检索测试', icon: Search }
+  { id: 'search', label: '检索测试', icon: Search },
+  { id: 'graph', label: '知识图谱', icon: Network }
 ]
 
 const embeddingReady = computed(() => {
@@ -89,7 +91,8 @@ async function refreshWorkbench() {
 
     <div class="knowledge-workbench__panel">
       <KnowledgeFolderPanel v-if="activePanel === 'folders'" />
-      <KnowledgeSearchPanel v-else />
+      <KnowledgeSearchPanel v-else-if="activePanel === 'search'" />
+      <KnowledgeGraphPanel v-else />
     </div>
   </section>
 </template>

@@ -58,6 +58,18 @@ public interface DatabaseSchemaMapper {
      */
     void createAppSettingsTable();
 
+    void createKnowledgeGraphRunsTable();
+
+    void createKnowledgeGraphChunkExtractionsTable();
+
+    void createKnowledgeGraphNodesTable();
+
+    void createKnowledgeGraphEdgesTable();
+
+    void createKnowledgeGraphEvidenceTable();
+
+    void createKnowledgeGraphViewsTable();
+
     /**
      * 执行 数据库元数据 中的 table Info 步骤。
      * <p>该方法是当前类型内部复用或对外暴露的明确业务边界。</p>
@@ -133,6 +145,22 @@ public interface DatabaseSchemaMapper {
      * <p>创建流程集中处理默认值、校验和持久化边界。</p>
      */
     void createChatMessagesConversationIdIndex();
+
+    void createKnowledgeGraphNodesScopeCanonicalIndex();
+
+    void createKnowledgeGraphEdgesScopeIndex();
+
+    void createKnowledgeGraphEdgesScopeTripleIndex();
+
+    void createKnowledgeGraphEvidenceNodeIndex();
+
+    void createKnowledgeGraphEvidenceEdgeIndex();
+
+    void createKnowledgeGraphEvidenceChunkIndex();
+
+    void createKnowledgeGraphRunsScopeStatusIndex();
+
+    void createKnowledgeGraphViewsScopeIndex();
 
     /**
      * 删除 delete Soft Deleted Chat Messages 对应的数据。

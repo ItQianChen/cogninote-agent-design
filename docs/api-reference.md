@@ -32,6 +32,7 @@
 
 - `POST /api/chat/stream` 返回 `text/event-stream`，不包装。
 - `POST /api/chat/stream/{requestId}/cancel` 是普通 JSON API，用于用户显式停止当前模型流。
+- `GET /api/knowledge-graphs/runs/{runId}/events` 返回 `text/event-stream`，不包装。
 - `/api/chat/sessions...` 是普通 JSON API，会话和消息都以 SQLite 为事实来源。
 - `DELETE /api/documents/{id}` 删除成功时返回 `204 No Content`。
 - `PATCH /api/knowledge-folders/{id}/enabled` 和 `DELETE /api/knowledge-folders/{id}` 成功时返回 `204 No Content`。
@@ -618,6 +619,245 @@ PUT /api/chat/settings
 | `OFF` | 完全关闭补全，始终使用用户原问题检索。 |
 
 该设置只影响知识库检索 query，不会修改 `chat_messages.content` 中的用户原文，也不会影响 `useKnowledgeBase=false` 的纯模型对话。
+
+## 知识图谱
+
+知识图谱是知识库资料的派生物。后端基于已解析 chunks 调用 active Chat 模型抽取实体、关系和证据，写入 SQLite 图谱缓存，再生成思维导图和关系图视图。导入文档或重建 Lucene 索引不会自动重建图谱，必须由用户显式触发。
+
+`scopeType` 支持：
+
+| 值 | scopeId |
+| --- | --- |
+| `ALL` | 可省略，表示全库 |
+| `KNOWLEDGE_FOLDER` | 必填，知识库目录 ID |
+| `DOCUMENT` | 必填，文档 ID |
+
+`viewType` 支持 `MINDMAP` 和 `GRAPH`。
+
+### 重建图谱
+
+```text
+POST /api/knowledge-graphs/rebuild
+```
+
+请求体：
+
+```json
+{
+  "scopeType": "KNOWLEDGE_FOLDER",
+  "scopeId": "folder-xxx"
+}
+```
+
+返回 `KnowledgeGraphRunResponse`。同一 scope 已有 `QUEUED` 或 `RUNNING` run 时不会新建任务，而是返回现有 run。
+
+```json
+{
+  "runId": "run-xxx",
+  "scopeType": "KNOWLEDGE_FOLDER",
+  "scopeId": "folder-xxx",
+  "status": "QUEUED",
+  "modelConfigId": "chat-config-xxx",
+  "promptVersion": "kg-extract-v1",
+  "totalChunkCount": 0,
+  "processedChunkCount": 0,
+  "skippedChunkCount": 0,
+  "extractedNodeCount": 0,
+  "extractedEdgeCount": 0,
+  "failedChunkCount": 0,
+  "errorMessage": null,
+  "startedAt": null,
+  "completedAt": null,
+  "createdAt": 1780000000000,
+  "updatedAt": 1780000000000
+}
+```
+
+### 查询图谱状态
+
+```text
+GET /api/knowledge-graphs/status?scopeType=KNOWLEDGE_FOLDER&scopeId=folder-xxx
+```
+
+返回 scope 名称、最新 run、节点/边数量和视图是否已生成：
+
+```json
+{
+  "scopeType": "KNOWLEDGE_FOLDER",
+  "scopeId": "folder-xxx",
+  "scopeName": "项目资料",
+  "latestRun": {
+    "runId": "run-xxx",
+    "scopeType": "KNOWLEDGE_FOLDER",
+    "scopeId": "folder-xxx",
+    "status": "COMPLETED",
+    "modelConfigId": "chat-config-xxx",
+    "promptVersion": "kg-extract-v1",
+    "totalChunkCount": 120,
+    "processedChunkCount": 120,
+    "skippedChunkCount": 80,
+    "extractedNodeCount": 42,
+    "extractedEdgeCount": 31,
+    "failedChunkCount": 0,
+    "errorMessage": null,
+    "startedAt": 1780000000000,
+    "completedAt": 1780000005000,
+    "createdAt": 1780000000000,
+    "updatedAt": 1780000005000
+  },
+  "nodeCount": 42,
+  "edgeCount": 31,
+  "mindmapReady": true,
+  "graphReady": true,
+  "generatedAt": 1780000000000
+}
+```
+
+### 订阅图谱生成事件
+
+```text
+GET /api/knowledge-graphs/runs/{runId}/events
+```
+
+该接口返回 SSE，不使用 `ApiResponse` 包装。事件包含当前快照、开始、进度、取消请求、视图生成、完成、失败和取消：
+
+```text
+event: graph-run-snapshot
+data: {"runId":"run-xxx","status":"RUNNING",...}
+
+event: graph-run-started
+data: {"runId":"run-xxx","status":"RUNNING","stage":"EXTRACTING","totalChunkCount":120,"processedChunkCount":0,"skippedChunkCount":0,"failedChunkCount":0}
+
+event: graph-run-progress
+data: {"runId":"run-xxx","status":"RUNNING","stage":"EXTRACTING","totalChunkCount":120,"processedChunkCount":30,"skippedChunkCount":12,"failedChunkCount":0}
+
+event: graph-run-cancel-requested
+data: {"runId":"run-xxx"}
+
+event: graph-run-view-ready
+data: {"runId":"run-xxx","viewType":"MINDMAP"}
+
+event: graph-run-completed
+data: {"runId":"run-xxx","status":"COMPLETED","nodeCount":42,"edgeCount":31}
+
+event: graph-run-failed
+data: {"runId":"run-xxx","status":"FAILED","message":"..."}
+
+event: graph-run-cancelled
+data: {"runId":"run-xxx","status":"CANCELLED"}
+```
+
+客户端 SSE 断线后应调用 `GET /api/knowledge-graphs/runs/{runId}` 或 `GET /api/knowledge-graphs/status` 恢复快照。
+
+### 查询 run
+
+```text
+GET /api/knowledge-graphs/runs/{runId}
+```
+
+返回单个 `KnowledgeGraphRunResponse`。
+
+### 取消 run
+
+```text
+POST /api/knowledge-graphs/runs/{runId}/cancel
+```
+
+返回普通 `ApiResponse<Boolean>`。`true` 表示 run 仍在 `QUEUED/RUNNING` 且已登记取消；`false` 表示 run 已进入终态。取消只在抽取阶段停止后续模型调用，已写入的抽取缓存保留，旧图谱视图不删除。
+
+### 查询图谱视图
+
+```text
+GET /api/knowledge-graphs/view?scopeType=KNOWLEDGE_FOLDER&scopeId=folder-xxx&viewType=MINDMAP
+GET /api/knowledge-graphs/view?scopeType=KNOWLEDGE_FOLDER&scopeId=folder-xxx&viewType=GRAPH
+```
+
+`MINDMAP` 视图 payload：
+
+```json
+{
+  "viewType": "MINDMAP",
+  "payload": {
+    "viewType": "MINDMAP",
+    "markdown": "# 项目资料\n\n## README.md\n\n### 架构\n#### CogniNote [PRODUCT] x2\n"
+  },
+  "generatedFromRunId": "run-xxx",
+  "createdAt": 1780000000000,
+  "updatedAt": 1780000000000
+}
+```
+
+`GRAPH` 视图 payload：
+
+```json
+{
+  "viewType": "GRAPH",
+  "payload": {
+    "viewType": "GRAPH",
+    "nodeLimit": 100,
+    "totalNodeCount": 42,
+    "totalEdgeCount": 31,
+    "nodes": [
+      {
+        "id": "node-xxx",
+        "label": "CogniNote",
+        "type": "PRODUCT",
+        "degree": 3,
+        "mentionCount": 5,
+        "confidence": 0.92
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-xxx",
+        "source": "node-xxx",
+        "target": "node-yyy",
+        "label": "USES",
+        "weight": 2,
+        "confidence": 0.88
+      }
+    ]
+  },
+  "generatedFromRunId": "run-xxx",
+  "createdAt": 1780000000000,
+  "updatedAt": 1780000000000
+}
+```
+
+### 查询证据
+
+```text
+GET /api/knowledge-graphs/nodes/{nodeId}/evidence
+GET /api/knowledge-graphs/edges/{edgeId}/evidence
+```
+
+返回节点或关系的证据列表，包含 quote、chunk、文档元数据和图谱对象摘要：
+
+```json
+[
+  {
+    "id": "evidence-xxx",
+    "runId": "run-xxx",
+    "nodeId": "node-xxx",
+    "edgeId": null,
+    "documentId": "doc-xxx",
+    "chunkId": "chunk-xxx",
+    "quote": "CogniNote Agent 是一个本地优先的个人知识库问答应用。",
+    "confidence": 0.92,
+    "createdAt": 1780000000000,
+    "fileName": "README.md",
+    "sourcePath": "D:/notes/README.md",
+    "heading": "简介",
+    "pageNumber": null,
+    "chunkIndex": 0,
+    "nodeDisplayName": "CogniNote",
+    "nodeType": "PRODUCT",
+    "edgeRelationType": null,
+    "edgeSourceName": null,
+    "edgeTargetName": null
+  }
+]
+```
 
 ## RAG / 纯模型流式对话
 

@@ -15,6 +15,7 @@ import com.itqianchen.agentdesign.dto.knowledge.KnowledgeFolderResponse;
 import com.itqianchen.agentdesign.dto.knowledge.KnowledgeFolderRebuildResponse;
 import com.itqianchen.agentdesign.dto.knowledge.KnowledgeFoldersResponse;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
+import com.itqianchen.agentdesign.repository.graph.KnowledgeGraphRepository;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRepository;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
 import java.nio.file.Files;
@@ -40,6 +41,7 @@ public class KnowledgeFolderService {
     private final DocumentIngestionService ingestionService;
     private final KnowledgeStore knowledgeStore;
     private final DocumentIdentity documentIdentity;
+    private final KnowledgeGraphRepository knowledgeGraphRepository;
 
     /**
      * 注入 KnowledgeFolderService 运行所需的协作者。
@@ -50,13 +52,15 @@ public class KnowledgeFolderService {
             DocumentRepository documentRepository,
             DocumentIngestionService ingestionService,
             KnowledgeStore knowledgeStore,
-            DocumentIdentity documentIdentity
+            DocumentIdentity documentIdentity,
+            KnowledgeGraphRepository knowledgeGraphRepository
     ) {
         this.knowledgeFolderRepository = knowledgeFolderRepository;
         this.documentRepository = documentRepository;
         this.ingestionService = ingestionService;
         this.knowledgeStore = knowledgeStore;
         this.documentIdentity = documentIdentity;
+        this.knowledgeGraphRepository = knowledgeGraphRepository;
     }
 
     /**
@@ -229,6 +233,7 @@ public class KnowledgeFolderService {
          * <p>删除时同步处理关联状态，避免调用方遗漏清理步骤。</p>
          */
         deleteFolderIndexEntries(id);
+        knowledgeGraphRepository.deleteByKnowledgeFolderId(id);
         int deletedDocuments = documentRepository.deleteByKnowledgeFolderId(id);
         if (!knowledgeFolderRepository.deleteById(id)) {
             throw new ResourceNotFoundException("Knowledge folder not found: " + id);

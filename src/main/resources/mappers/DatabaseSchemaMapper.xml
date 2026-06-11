@@ -127,6 +127,103 @@
         )
     </update>
 
+    <update id="createKnowledgeGraphRunsTable">
+        CREATE TABLE IF NOT EXISTS knowledge_graph_runs (
+            id TEXT PRIMARY KEY,
+            scope_type TEXT NOT NULL,
+            scope_id TEXT,
+            status TEXT NOT NULL,
+            model_config_id TEXT,
+            prompt_version TEXT NOT NULL,
+            total_chunk_count INTEGER NOT NULL DEFAULT 0,
+            processed_chunk_count INTEGER NOT NULL DEFAULT 0,
+            skipped_chunk_count INTEGER NOT NULL DEFAULT 0,
+            extracted_node_count INTEGER NOT NULL DEFAULT 0,
+            extracted_edge_count INTEGER NOT NULL DEFAULT 0,
+            failed_chunk_count INTEGER NOT NULL DEFAULT 0,
+            error_message TEXT,
+            started_at INTEGER,
+            completed_at INTEGER,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+    </update>
+
+    <update id="createKnowledgeGraphChunkExtractionsTable">
+        CREATE TABLE IF NOT EXISTS knowledge_graph_chunk_extractions (
+            chunk_id TEXT PRIMARY KEY,
+            document_id TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            prompt_version TEXT NOT NULL,
+            model_config_id TEXT,
+            status TEXT NOT NULL,
+            extraction_json TEXT,
+            error_message TEXT,
+            extracted_at INTEGER
+        )
+    </update>
+
+    <update id="createKnowledgeGraphNodesTable">
+        CREATE TABLE IF NOT EXISTS knowledge_graph_nodes (
+            id TEXT PRIMARY KEY,
+            scope_type TEXT NOT NULL,
+            scope_id TEXT,
+            canonical_name TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            node_type TEXT NOT NULL,
+            description TEXT,
+            confidence REAL NOT NULL DEFAULT 0,
+            mention_count INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+    </update>
+
+    <update id="createKnowledgeGraphEdgesTable">
+        CREATE TABLE IF NOT EXISTS knowledge_graph_edges (
+            id TEXT PRIMARY KEY,
+            scope_type TEXT NOT NULL,
+            scope_id TEXT,
+            source_node_id TEXT NOT NULL,
+            target_node_id TEXT NOT NULL,
+            relation_type TEXT NOT NULL,
+            description TEXT,
+            confidence REAL NOT NULL DEFAULT 0,
+            mention_count INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (source_node_id) REFERENCES knowledge_graph_nodes(id) ON DELETE CASCADE,
+            FOREIGN KEY (target_node_id) REFERENCES knowledge_graph_nodes(id) ON DELETE CASCADE
+        )
+    </update>
+
+    <update id="createKnowledgeGraphEvidenceTable">
+        CREATE TABLE IF NOT EXISTS knowledge_graph_evidence (
+            id TEXT PRIMARY KEY,
+            run_id TEXT NOT NULL,
+            node_id TEXT,
+            edge_id TEXT,
+            document_id TEXT NOT NULL,
+            chunk_id TEXT NOT NULL,
+            quote TEXT NOT NULL,
+            confidence REAL NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL
+        )
+    </update>
+
+    <update id="createKnowledgeGraphViewsTable">
+        CREATE TABLE IF NOT EXISTS knowledge_graph_views (
+            id TEXT PRIMARY KEY,
+            scope_type TEXT NOT NULL,
+            scope_id TEXT,
+            view_type TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            generated_from_run_id TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+    </update>
+
     <select id="tableInfo" resultType="map">
         PRAGMA table_info(${tableName})
     </select>
@@ -173,6 +270,43 @@
 
     <update id="createChatMessagesConversationIdIndex">
         CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id, created_at)
+    </update>
+
+    <update id="createKnowledgeGraphNodesScopeCanonicalIndex">
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_kg_nodes_scope_canonical
+        ON knowledge_graph_nodes(scope_type, scope_id, canonical_name, node_type)
+    </update>
+
+    <update id="createKnowledgeGraphEdgesScopeIndex">
+        CREATE INDEX IF NOT EXISTS idx_kg_edges_scope
+        ON knowledge_graph_edges(scope_type, scope_id)
+    </update>
+
+    <update id="createKnowledgeGraphEdgesScopeTripleIndex">
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_kg_edges_scope_triple
+        ON knowledge_graph_edges(scope_type, scope_id, source_node_id, target_node_id, relation_type)
+    </update>
+
+    <update id="createKnowledgeGraphEvidenceNodeIndex">
+        CREATE INDEX IF NOT EXISTS idx_kg_evidence_node ON knowledge_graph_evidence(node_id)
+    </update>
+
+    <update id="createKnowledgeGraphEvidenceEdgeIndex">
+        CREATE INDEX IF NOT EXISTS idx_kg_evidence_edge ON knowledge_graph_evidence(edge_id)
+    </update>
+
+    <update id="createKnowledgeGraphEvidenceChunkIndex">
+        CREATE INDEX IF NOT EXISTS idx_kg_evidence_chunk ON knowledge_graph_evidence(chunk_id)
+    </update>
+
+    <update id="createKnowledgeGraphRunsScopeStatusIndex">
+        CREATE INDEX IF NOT EXISTS idx_kg_runs_scope_status
+        ON knowledge_graph_runs(scope_type, scope_id, status)
+    </update>
+
+    <update id="createKnowledgeGraphViewsScopeIndex">
+        CREATE INDEX IF NOT EXISTS idx_kg_views_scope
+        ON knowledge_graph_views(scope_type, scope_id, view_type)
     </update>
 
     <delete id="deleteSoftDeletedChatMessages">

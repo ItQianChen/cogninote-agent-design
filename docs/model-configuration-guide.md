@@ -12,6 +12,8 @@ CogniNote 第八阶段开始使用多模型配置中心。对话模型和 Embedd
 
 第 23 阶段后，全局“知识库追问补全策略”移动到“设置 -> 知识库 -> 知识库追问补全策略”。该设置保存在 SQLite `app_settings`，不是单个模型配置的一部分；它仍复用 active `CHAT` 模型执行内部补全 Agent，因此对话模型的稳定性会影响知识库追问检索质量。
 
+第 25 阶段后，知识图谱抽取也复用 active `CHAT` 配置。图谱重建会按 chunk 调用该模型抽取实体、关系和证据；抽取 Prompt 统一维护在 `src/main/resources/cogninote-prompts.yaml`，不新增单独的 `GRAPH_EXTRACTION` 模型角色。因此，active Chat 模型的 JSON 遵循能力会影响图谱质量和缓存命中后的复用价值。
+
 ## Provider 类型
 
 ### DashScope

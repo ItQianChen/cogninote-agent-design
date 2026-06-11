@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
+import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 
 /**
@@ -13,7 +14,7 @@ import org.springframework.stereotype.Component;
  * <p>启动阶段副作用需要保持幂等，避免重复运行破坏已有数据。</p>
  */
 @Component
-public class DatabaseSchemaInitializer implements ApplicationListener<ApplicationReadyEvent> {
+public class DatabaseSchemaInitializer implements ApplicationListener<ApplicationReadyEvent>, Ordered {
 
     private static final Map<String, String> ALLOWED_COLUMN_MIGRATIONS = Map.of(
             "documents.knowledge_folder_id", "TEXT",
@@ -44,6 +45,12 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
          * <p>该方法是当前类型内部复用或对外暴露的明确业务边界。</p>
          */
         initialize();
+    }
+
+    @Override
+    public int getOrder() {
+        // Schema 必须先于各业务模块的启动清理运行，避免新表尚未创建就被查询。
+        return Ordered.HIGHEST_PRECEDENCE;
     }
 
     /**
@@ -89,6 +96,12 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
          * 使用独立 key-value 表，避免把非模型参数塞进 model_configs。
          */
         databaseSchemaMapper.createAppSettingsTable();
+        databaseSchemaMapper.createKnowledgeGraphRunsTable();
+        databaseSchemaMapper.createKnowledgeGraphChunkExtractionsTable();
+        databaseSchemaMapper.createKnowledgeGraphNodesTable();
+        databaseSchemaMapper.createKnowledgeGraphEdgesTable();
+        databaseSchemaMapper.createKnowledgeGraphEvidenceTable();
+        databaseSchemaMapper.createKnowledgeGraphViewsTable();
         /**
          * 执行 数据库元数据 中的 add Column If Missing 步骤。
          * <p>该方法是当前类型内部复用或对外暴露的明确业务边界。</p>
@@ -114,6 +127,14 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
         databaseSchemaMapper.createChatMessagesSequenceIndex();
         // 数据库访问集中经过 Mapper，避免业务层直接拼接 SQL。
         databaseSchemaMapper.createChatMessagesConversationIdIndex();
+        databaseSchemaMapper.createKnowledgeGraphNodesScopeCanonicalIndex();
+        databaseSchemaMapper.createKnowledgeGraphEdgesScopeIndex();
+        databaseSchemaMapper.createKnowledgeGraphEdgesScopeTripleIndex();
+        databaseSchemaMapper.createKnowledgeGraphEvidenceNodeIndex();
+        databaseSchemaMapper.createKnowledgeGraphEvidenceEdgeIndex();
+        databaseSchemaMapper.createKnowledgeGraphEvidenceChunkIndex();
+        databaseSchemaMapper.createKnowledgeGraphRunsScopeStatusIndex();
+        databaseSchemaMapper.createKnowledgeGraphViewsScopeIndex();
         /**
          * 执行 数据库元数据 中的 cleanup Soft Deleted Chat Sessions 步骤。
          * <p>该方法是当前类型内部复用或对外暴露的明确业务边界。</p>

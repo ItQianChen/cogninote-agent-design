@@ -100,13 +100,15 @@ export function clearChatSessionMessages(conversationId) {
  * 执行 聊天会话 中的 read Sse Stream 步骤。
  * <p>该函数是当前组件或模块中的一个明确维护边界。</p>
  */
-async function readSseStream(body, onEvent) {
+export async function readSseStream(body, onEvent, options = {}) {
   const reader = body.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
   let eventName = 'message'
   let dataLines = []
   let terminalEventReceived = false
+  const terminalEvents = new Set(options.terminalEvents || ['done', 'error'])
+  const requireTerminalEvent = options.requireTerminalEvent ?? true
 
   /**
    * 执行 聊天会话 中的 dispatch 事件 步骤。
@@ -118,7 +120,7 @@ async function readSseStream(body, onEvent) {
       return
     }
 
-    if (eventName === 'done' || eventName === 'error') {
+    if (terminalEvents.has(eventName)) {
       terminalEventReceived = true
     }
     onEvent(eventName, parsePayload(dataLines.join('\n')))
@@ -170,7 +172,7 @@ async function readSseStream(body, onEvent) {
     handleLine(buffer.replace(/\r$/, ''))
   }
   dispatchEvent()
-  if (!terminalEventReceived) {
+  if (requireTerminalEvent && !terminalEventReceived) {
     // 没有收到后端的 done/error 终止帧，说明连接中途断开或流被上游截断。
     // 这种情况下不能把已有内容当作完整回答。
     throw new Error('流式回答连接提前结束，当前回答可能不完整。请重试或让模型继续回答。')
