@@ -13,7 +13,7 @@
 
     <groupId>com.itqianchen</groupId>
     <artifactId>cogninote-agent-design</artifactId>
-    <version>0.1.32</version>
+    <version>0.1.33</version>
     <name>cogninote-agent-design</name>
     <description>CogniNote Agent local knowledge base application</description>
 

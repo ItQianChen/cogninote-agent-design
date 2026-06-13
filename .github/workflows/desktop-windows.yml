@@ -19,7 +19,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  COGNINOTE_DESKTOP_VERSION: 0.1.32
+  COGNINOTE_DESKTOP_VERSION: 0.1.33
 
 jobs:
   build-windows:
