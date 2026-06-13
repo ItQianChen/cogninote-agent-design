@@ -15,6 +15,7 @@ cogninote-data/
 logs/
 资料参考/
 .claude/
+output/
 
 # Frontend dependencies and build output
 node_modules/
