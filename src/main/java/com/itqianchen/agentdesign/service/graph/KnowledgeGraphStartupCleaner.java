@@ -33,7 +33,7 @@ public class KnowledgeGraphStartupCleaner implements ApplicationListener<Applica
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
         long now = System.currentTimeMillis();
-        repository.failOrphanRuns("Application restarted before graph run completed", now);
+        repository.failOrphanRuns("上次知识图谱生成因应用重启被中断，请重新生成。", now);
     }
 
     /**

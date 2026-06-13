@@ -24,6 +24,9 @@ public record KnowledgeGraphRunResponse(
         long createdAt,
         long updatedAt
 ) {
+    private static final String LEGACY_ORPHAN_RUN_MESSAGE = "Application restarted before graph run completed";
+    private static final String ORPHAN_RUN_MESSAGE = "上次知识图谱生成因应用重启被中断，请重新生成。";
+
     /**
      * 将图谱运行记录转换为接口响应。
      *
@@ -49,11 +52,21 @@ public record KnowledgeGraphRunResponse(
                 run.extractedNodeCount(),
                 run.extractedEdgeCount(),
                 run.failedChunkCount(),
-                run.errorMessage(),
+                normalizeErrorMessage(run.errorMessage()),
                 run.startedAt(),
                 run.completedAt(),
                 run.createdAt(),
                 run.updatedAt()
         );
+    }
+
+    private static String normalizeErrorMessage(String errorMessage) {
+        if (errorMessage == null || errorMessage.isBlank()) {
+            return errorMessage;
+        }
+        if (LEGACY_ORPHAN_RUN_MESSAGE.equals(errorMessage.strip())) {
+            return ORPHAN_RUN_MESSAGE;
+        }
+        return errorMessage;
     }
 }
