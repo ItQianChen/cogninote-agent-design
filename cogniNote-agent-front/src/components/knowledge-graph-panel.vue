@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onMounted, watch } from 'vue'
-import { Network, Play, RefreshCw, Square } from 'lucide-vue-next'
+import { computed, onMounted, ref, watch } from 'vue'
+import { Maximize2, Network, Play, RefreshCw, Square } from 'lucide-vue-next'
 import GraphAdjacencyList from './graph-adjacency-list.vue'
 import GraphEvidenceDrawer from './graph-evidence-drawer.vue'
 import GraphViewer from './graph-viewer.vue'
@@ -12,6 +12,7 @@ import { formatTime } from '../utils/formatters'
 
 const knowledgeStore = useKnowledgeFoldersStore()
 const graphStore = useKnowledgeGraphStore()
+const isExplorerDialogOpen = ref(false)
 
 /**
  * 知识图谱管理面板。
@@ -58,6 +59,9 @@ const runStatusText = computed(() => {
 const failedMessage = computed(() => graphStore.currentRun?.status === 'FAILED'
   ? graphStore.currentRun.errorMessage || '知识图谱生成失败'
   : '')
+const currentViewLabel = computed(() =>
+  GRAPH_VIEW_OPTIONS.find((option) => option.value === graphStore.viewType)?.label || '图谱视图'
+)
 
 onMounted(async () => {
   await knowledgeStore.ensureFoldersLoaded()
@@ -113,9 +117,13 @@ async function handleScopeIdChange(value) {
         </p>
       </div>
       <div class="header-actions">
-        <el-button :loading="graphStore.isLoadingStatus" @click="graphStore.loadStatus">
+        <el-button
+          :loading="graphStore.isLoadingStatus"
+          aria-label="刷新图谱状态"
+          title="刷新图谱状态"
+          @click="graphStore.loadStatus"
+        >
           <RefreshCw aria-hidden="true" />
-          <span>刷新</span>
         </el-button>
         <el-button
           type="primary"
@@ -163,6 +171,16 @@ async function handleScopeIdChange(value) {
       </label>
 
       <SegmentedControl v-model="graphStore.viewType" :options="GRAPH_VIEW_OPTIONS" label="图谱视图" />
+
+      <el-button
+        class="graph-toolbar__fullscreen"
+        :disabled="!graphStore.hasCurrentViewReady() || graphStore.isRunActive"
+        aria-label="全屏探索图谱"
+        title="全屏探索图谱"
+        @click="isExplorerDialogOpen = true"
+      >
+        <Maximize2 aria-hidden="true" />
+      </el-button>
     </section>
 
     <el-alert
@@ -216,6 +234,7 @@ async function handleScopeIdChange(value) {
       <MindmapViewer
         v-else-if="graphStore.viewType === 'MINDMAP'"
         :payload="graphStore.activeViewPayload"
+        @open-evidence="graphStore.openEvidence"
       />
       <GraphViewer
         v-else-if="graphStore.viewType === 'GRAPH'"
@@ -228,6 +247,35 @@ async function handleScopeIdChange(value) {
         @open-evidence="graphStore.openEvidence"
       />
     </section>
+
+    <el-dialog
+      v-model="isExplorerDialogOpen"
+      class="graph-fullscreen-dialog"
+      fullscreen
+      destroy-on-close
+      :title="`知识图谱 · ${currentViewLabel}`"
+    >
+      <section class="graph-fullscreen-dialog__body" aria-label="全屏图谱探索">
+        <MindmapViewer
+          v-if="graphStore.viewType === 'MINDMAP'"
+          :payload="graphStore.activeViewPayload"
+          fullscreen
+          @open-evidence="graphStore.openEvidence"
+        />
+        <GraphViewer
+          v-else-if="graphStore.viewType === 'GRAPH'"
+          :payload="graphStore.activeViewPayload"
+          fullscreen
+          @open-evidence="graphStore.openEvidence"
+        />
+        <GraphAdjacencyList
+          v-else
+          :payload="graphStore.activeViewPayload"
+          fullscreen
+          @open-evidence="graphStore.openEvidence"
+        />
+      </section>
+    </el-dialog>
 
     <GraphEvidenceDrawer
       v-model="graphStore.isEvidenceOpen"

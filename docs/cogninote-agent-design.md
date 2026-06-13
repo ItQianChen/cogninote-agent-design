@@ -1176,6 +1176,14 @@ POST   /api/chat/stream/{requestId}/cancel
 - 知识库工作台新增“知识图谱” tab，提供思维导图、关系图、邻接列表和节点/边证据抽屉。
 - 删除知识库目录时显式清理对应图谱派生数据和抽取缓存；应用启动时将遗留 QUEUED/RUNNING run 标记为失败，避免卡住重建入口。
 
+### Milestone 26：知识图谱探索器 UI/UX 重设计
+
+- 不改变第 25 阶段的 SQLite 图谱事实层，也不新增图谱 endpoint；只扩展 `MINDMAP` / `GRAPH` 派生视图 payload。
+- `MINDMAP` 保留 Markdown，同时新增 `documents -> headings -> entities` 结构化数据，让思维导图从缩进列表升级为文档结构图。
+- `GRAPH` 保留 `nodes` / `edges`，新增类型统计、关系统计、隐藏节点数和边两端展示名，支撑图例、筛选和 Inspector。
+- 前端显式引入 Cytoscape，普通视图展示可读预览，全屏弹窗提供筛选栏、大画布和右侧 Inspector。
+- 关系图用节点大小、节点颜色、边宽、箭头和标签表达提及次数、实体类型、证据强弱和关系方向；列表视图继续作为可访问性替代。
+
 ## 12. 后续版本规划
 
 ### v0.2

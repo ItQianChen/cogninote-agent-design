@@ -779,13 +779,41 @@ GET /api/knowledge-graphs/view?scopeType=KNOWLEDGE_FOLDER&scopeId=folder-xxx&vie
   "viewType": "MINDMAP",
   "payload": {
     "viewType": "MINDMAP",
-    "markdown": "# 项目资料\n\n## README.md\n\n### 架构\n#### CogniNote [PRODUCT] x2\n"
+    "markdown": "# 项目资料\n\n## README.md\n\n### 架构\n#### CogniNote [PRODUCT] x2\n",
+    "root": {
+      "id": "scope",
+      "label": "项目资料",
+      "type": "SCOPE"
+    },
+    "documents": [
+      {
+        "id": "doc-xxx",
+        "label": "README.md",
+        "fileName": "README.md",
+        "headings": [
+          {
+            "id": "doc-xxx::heading::架构",
+            "label": "架构",
+            "entities": [
+              {
+                "id": "node-xxx",
+                "label": "CogniNote",
+                "type": "PRODUCT",
+                "count": 2
+              }
+            ]
+          }
+        ]
+      }
+    ]
   },
   "generatedFromRunId": "run-xxx",
   "createdAt": 1780000000000,
   "updatedAt": 1780000000000
 }
 ```
+
+`markdown` 字段会继续保留，旧缓存只有 `markdown` 时仍可被前端兼容解析。第 26 阶段新增的 `root` 和 `documents` 用于结构化思维导图渲染，不改变 `viewType=MINDMAP` 的请求方式。
 
 `GRAPH` 视图 payload：
 
@@ -797,6 +825,14 @@ GET /api/knowledge-graphs/view?scopeType=KNOWLEDGE_FOLDER&scopeId=folder-xxx&vie
     "nodeLimit": 100,
     "totalNodeCount": 42,
     "totalEdgeCount": 31,
+    "hiddenNodeCount": 0,
+    "nodeTypeCounts": {
+      "PRODUCT": 1,
+      "TECHNOLOGY": 1
+    },
+    "relationTypeCounts": {
+      "USES": 1
+    },
     "nodes": [
       {
         "id": "node-xxx",
@@ -812,6 +848,8 @@ GET /api/knowledge-graphs/view?scopeType=KNOWLEDGE_FOLDER&scopeId=folder-xxx&vie
         "id": "edge-xxx",
         "source": "node-xxx",
         "target": "node-yyy",
+        "sourceLabel": "CogniNote",
+        "targetLabel": "Lucene",
         "label": "USES",
         "weight": 2,
         "confidence": 0.88
@@ -823,6 +861,8 @@ GET /api/knowledge-graphs/view?scopeType=KNOWLEDGE_FOLDER&scopeId=folder-xxx&vie
   "updatedAt": 1780000000000
 }
 ```
+
+`nodes` / `edges` 的基础字段保持兼容。`nodeTypeCounts`、`relationTypeCounts`、`hiddenNodeCount`、`sourceLabel` 和 `targetLabel` 是第 26 阶段新增的展示辅助字段，用于图例、筛选、Inspector 和列表视图。
 
 ### 查询证据
 

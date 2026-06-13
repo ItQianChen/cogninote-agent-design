@@ -244,12 +244,13 @@ bash ./scripts/build-desktop-app-macos.sh --skip-tests
 | [阶段 23：知识库追问补全自动触发与前端可配置](docs/phase-23-query-contextualizer-auto-trigger-plan.md) | 追问补全 AUTO/ALWAYS/OFF 策略、动作型追问本地兜底、聊天设置 API 和知识库设置页配置 |
 | [阶段 24：工作台 UI/UX 全面改造](docs/phase-24-ui-workbench-redesign-plan.md) | 三层工作台、来源证据 Inspector、知识库工作区、设置中心 query 导航和 system/light/dark 主题 |
 | [阶段 25：知识图谱与思维导图](docs/phase-25-knowledge-graph-plan.md) | 基于导入资料 chunks 抽取实体关系，生成可追溯知识图谱、思维导图和 SSE 任务进度 |
+| [阶段 26：知识图谱探索器重设计](docs/phase-26-knowledge-graph-explorer-redesign-plan.md) | 结构化思维导图、Cytoscape 关系探索器、全屏画布、筛选、Inspector 和证据回链 |
 | [可维护性重构计划](docs/maintainability-refactor-plan.md) | 前后端分层、统一响应和注释规范 |
 
 
 ## 开发状态
 
-当前项目已完成文档摄入、代码友好的 Lucene 混合检索、模型驱动追问补全 Agent、追问补全自动触发与知识库设置页配置、知识图谱与思维导图、Prompt 专用配置文件、模型配置、对话上下文窗口配置与 Token 估算优化、RAG 对话、路由式多智能体对话、模式隔离聊天记忆、智能体模型运行时重构、AI 流式 Markdown 与 Mermaid 渲染、SQLite 聊天记忆、纯模型对话、空白保真的 SSE 流式输出、流式截断识别与错误状态同步、MyBatis 统一数据访问层、Windows 桌面打包、macOS Apple Silicon 独立打包链路、`0.1.32` 双平台 unsigned/signed CI 打包链路，以及桌面安装/卸载/升级可靠性修复的主要闭环。仍需重点补齐：
+当前项目已完成文档摄入、代码友好的 Lucene 混合检索、模型驱动追问补全 Agent、追问补全自动触发与知识库设置页配置、知识图谱与思维导图、知识图谱探索器重设计、Prompt 专用配置文件、模型配置、对话上下文窗口配置与 Token 估算优化、RAG 对话、路由式多智能体对话、模式隔离聊天记忆、智能体模型运行时重构、AI 流式 Markdown 与 Mermaid 渲染、SQLite 聊天记忆、纯模型对话、空白保真的 SSE 流式输出、流式截断识别与错误状态同步、MyBatis 统一数据访问层、Windows 桌面打包、macOS Apple Silicon 独立打包链路、`0.1.32` 双平台 unsigned/signed CI 打包链路，以及桌面安装/卸载/升级可靠性修复的主要闭环。仍需重点补齐：
 
 - API Key 本地加密或凭据管理。
 - 桌面会话令牌保护。
