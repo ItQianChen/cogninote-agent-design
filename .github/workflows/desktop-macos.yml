@@ -116,6 +116,7 @@ jobs:
       - name: Build signed macOS desktop package
         if: steps.macos-signing.outputs.signed == 'true'
         env:
+          COGNINOTE_TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
           APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
         run: |
@@ -124,6 +125,8 @@ jobs:
 
       - name: Build unsigned macOS desktop package
         if: steps.macos-signing.outputs.signed == 'false'
+        env:
+          COGNINOTE_TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
         run: |
           set -euo pipefail
           bash ./scripts/build-desktop-app-macos.sh --skip-tests
@@ -239,15 +242,17 @@ jobs:
           version="$COGNINOTE_DESKTOP_VERSION"
           mkdir -p artifacts/macos-release
 
+          APP_PATH="$(find cogniNote-agent-front/src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -type d | head -n 1)"
           DMG_PATH="$(find cogniNote-agent-front/src-tauri/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -type f | head -n 1)"
           APP_ZIP="artifacts/macos/CogniNote-${version}-macos-arm64-${suffix}.app.zip"
-          if [[ -z "$DMG_PATH" || ! -f "$APP_ZIP" ]]; then
+          if [[ -z "$APP_PATH" || -z "$DMG_PATH" || ! -f "$APP_ZIP" ]]; then
             echo "macOS release assets were not generated." >&2
             exit 1
           fi
 
           cp "$DMG_PATH" "artifacts/macos-release/CogniNote-${version}-macos-arm64-${suffix}.dmg"
           cp "$APP_ZIP" "artifacts/macos-release/CogniNote-${version}-macos-arm64-${suffix}.app.zip"
+          tar -czf "artifacts/macos-release/CogniNote-${version}-macos-arm64-${suffix}.app.tar.gz" -C "$(dirname "$APP_PATH")" "$(basename "$APP_PATH")"
 
       - name: Publish macOS GitHub Release assets
         if: ${{ inputs.publish_release }}
@@ -287,3 +292,74 @@ jobs:
           fi
 
           gh release upload "$tag" artifacts/macos-release/* --clobber
+
+      - name: Publish macOS updater manifest
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          has_public_key=false
+          has_private_key=false
+          [[ -n "${TAURI_UPDATER_PUBLIC_KEY:-}" ]] && has_public_key=true
+          [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]] && has_private_key=true
+          if [[ "$has_public_key" != "$has_private_key" ]]; then
+            echo 'Configure both TAURI_UPDATER_PUBLIC_KEY and TAURI_SIGNING_PRIVATE_KEY, or leave both empty to skip updater manifest publication.' >&2
+            exit 1
+          fi
+          if [[ "$has_private_key" == "false" ]]; then
+            echo 'Tauri updater signing key is not configured; skipping updater manifest publication.'
+            exit 0
+          fi
+
+          suffix="${{ steps.macos-signing.outputs.artifact_suffix }}"
+          version="$COGNINOTE_DESKTOP_VERSION"
+          tag="${RELEASE_TAG_INPUT:-}"
+          if [[ -z "$tag" ]]; then
+            if [[ "$suffix" == "signed" ]]; then
+              tag="v${version}"
+            else
+              tag="v${version}-test.1"
+            fi
+          fi
+          if [[ "$suffix" == "signed" ]]; then
+            channel="stable"
+            updater_tag="desktop-updater-stable"
+          else
+            channel="preview"
+            updater_tag="desktop-updater-preview"
+          fi
+
+          asset_name="CogniNote-${version}-macos-arm64-${suffix}.app.tar.gz"
+          asset_path="artifacts/macos-release/${asset_name}"
+          if [[ ! -f "$asset_path" ]]; then
+            echo "macOS updater asset not found: $asset_path" >&2
+            exit 1
+          fi
+
+          npm --silent --prefix cogniNote-agent-front run tauri -- signer sign --password="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" "$asset_path"
+          signature_path="${asset_path}.sig"
+          if [[ ! -f "$signature_path" ]]; then
+            echo "Tauri updater signature was not generated: $signature_path" >&2
+            exit 1
+          fi
+
+          mkdir -p artifacts/updater
+          gh release download "$updater_tag" --pattern latest.json --dir artifacts/updater --clobber >/dev/null 2>&1 || true
+          asset_url="https://github.com/ItQianChen/cogninote-agent-design/releases/download/${tag}/${asset_name}"
+          node scripts/build-updater-manifest.mjs \
+            --manifest artifacts/updater/latest.json \
+            --version "$version" \
+            --platform darwin-aarch64 \
+            --url "$asset_url" \
+            --signatureFile "$signature_path" \
+            --notes "CogniNote ${version} ${suffix}"
+
+          if ! gh release view "$updater_tag" >/dev/null 2>&1; then
+            gh release create "$updater_tag" --title "CogniNote desktop updater ${channel}" --notes "Static Tauri updater manifest for the ${channel} channel."
+          fi
+          gh release upload "$updater_tag" artifacts/updater/latest.json --clobber

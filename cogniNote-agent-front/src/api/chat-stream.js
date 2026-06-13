@@ -1,4 +1,4 @@
-import { jsonOptions, requestJson } from './http-client'
+import { jsonOptions, requestJson, withDesktopSessionHeader } from './http-client'
 
 /**
  * 发起聊天流式请求。
@@ -6,10 +6,10 @@ import { jsonOptions, requestJson } from './http-client'
  * SSE 需要 POST JSON body，不能直接使用浏览器 EventSource，因此这里手动读取响应流。
  */
 export async function streamChatAnswer(payload, { signal, onEvent }) {
-  const response = await fetch('/api/chat/stream', {
+  const response = await fetch('/api/chat/stream', await withDesktopSessionHeader({
     ...jsonOptions('POST', payload),
     signal
-  })
+  }))
 
   if (!response.ok) {
     const body = await response.json().catch(() => null)

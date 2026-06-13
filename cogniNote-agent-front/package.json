@@ -16,6 +16,7 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "cytoscape": "^3.34.0",
     "cytoscape-fcose": "^2.2.0",
     "element-plus": "^2.14.1",

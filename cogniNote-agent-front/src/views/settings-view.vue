@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ChevronUp } from 'lucide-vue-next'
+import DesktopUpdateSettingsPanel from '../components/desktop-update-settings-panel.vue'
 import QueryContextualizerSettingsPanel from '../components/query-contextualizer-settings-panel.vue'
 import SystemStatusCard from '../components/system-status-card.vue'
 import { DEFAULT_SETTINGS_ITEM, SETTINGS_NAV_GROUPS, normalizeSettingsItem } from '../config/settings-navigation'
@@ -175,6 +176,7 @@ function readRouteItem(item = route.query.item) {
         />
       </section>
 
+      <DesktopUpdateSettingsPanel v-else-if="activeItem === 'app-update'" />
       <QueryContextualizerSettingsPanel v-else-if="activeItem === 'chat-retrieval'" />
       <ModelConfigView
         v-else-if="activeItem === 'model-chat'"

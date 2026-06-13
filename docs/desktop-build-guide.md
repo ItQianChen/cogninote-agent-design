@@ -211,6 +211,31 @@ bash ./scripts/build-desktop-app-macos.sh --skip-tests --sign
 
 该模式要求 `APPLE_SIGNING_IDENTITY` 已设置。脚本会把签名 identity 只写入临时 active Tauri 配置，构建结束后恢复 Windows `tauri.conf.json`。macOS 最终包内还嵌入了 `jpackage` 生成的 `CogniNoteBackend.app`，signed 模式会先用同一份 Developer ID 证书签名这个嵌套后端 app，再让 Tauri 生成外层桌面 app 和 DMG，并校验外层 app 与嵌套后端 app 的签名。不要把未签名的后端 app 直接塞进 signed 外层包，否则用户下载后 Gatekeeper 可能仍提示“已损坏，无法打开”。
 
+## 桌面本机 API 令牌保护
+
+桌面壳启动后端时会生成一次性桌面 session token，并通过环境变量注入后端：
+
+```text
+COGNINOTE_DESKTOP=true
+COGNINOTE_DESKTOP_SESSION_TOKEN=<random-token>
+```
+
+Spring Boot 在 `app.desktop.enabled=true` 时只保护 `/api/**`，要求请求带：
+
+```text
+X-CogniNote-Desktop-Session: <random-token>
+```
+
+静态页面、SPA 路由和 `/assets/**` 不需要该 header，保证首屏可以正常加载。Tauri 健康检查、前端普通 JSON API 和聊天 SSE 请求都会自动带 header；普通 `mvn spring-boot:run` 或 Vite 开发模式默认 `app.desktop.enabled=false`，不强制 token，便于本地调试。
+
+桌面模式下可用无 token 的 curl 做验收，预期返回 `401` 和 `UNAUTHORIZED`：
+
+```powershell
+curl.exe http://127.0.0.1:18080/api/system/status
+```
+
+如果直接运行后端开发模式，上面的请求应仍返回 `200`。这说明过滤器只跟随桌面壳注入的运行模式启用。
+
 ## GitHub Actions 构建
 
 Windows 和 macOS CI 也分开维护，均默认手动触发：
@@ -284,6 +309,57 @@ CogniNote-0.1.33-macos-notarization-logs
 
 两个 workflow 不共享 Tauri bundle 配置，不共享后端 app-image 输出目录，也不把平台差异塞进同一个脚本。
 
+### Tauri updater 签名与发布
+
+自动更新使用 Tauri updater 的免费签名校验，和 Windows Authenticode、macOS Developer ID 代码签名是两套机制。没有付费 OS 证书时仍可以生成 unsigned 测试包，但 updater 安装前仍会校验 Tauri `.sig`，确保下载文件没有被替换。
+
+生成 Tauri updater 密钥：
+
+```powershell
+npm --prefix cogniNote-agent-front run tauri -- signer generate -w ~/.tauri/cogninote-updater.key --ci
+```
+
+CI 需要以下 Secrets：
+
+```text
+TAURI_UPDATER_PUBLIC_KEY
+TAURI_SIGNING_PRIVATE_KEY
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+```
+
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 可选。`tauri signer sign` 会从 `TAURI_SIGNING_PRIVATE_KEY` 读取私钥内容；如果改用文件路径，应使用 Tauri CLI 支持的 `TAURI_SIGNING_PRIVATE_KEY_PATH`，但当前 workflow 默认按私钥内容读取。私钥绝不能写入仓库。`TAURI_UPDATER_PUBLIC_KEY` 会在构建时注入为 `COGNINOTE_TAURI_UPDATER_PUBLIC_KEY` 并编译进桌面壳。未配置 public key 的本地构建仍能正常运行，只是设置页检查更新会提示自动更新未配置。
+
+发布通道由两个固定 GitHub Release 承载：
+
+```text
+desktop-updater-stable
+desktop-updater-preview
+```
+
+每个 Release 中固定上传 `latest.json`。运行时稳定通道读取 `desktop-updater-stable/latest.json`，测试通道读取 `desktop-updater-preview/latest.json`。设置页默认使用 `stable`，用户可显式切到 `preview`。
+
+Windows updater 指向最终 NSIS installer：
+
+```text
+CogniNote-0.1.33-windows-x64-signed-installer.exe
+CogniNote-0.1.33-windows-x64-unsigned-installer.exe
+```
+
+macOS updater 指向 `.app.tar.gz`：
+
+```text
+CogniNote-0.1.33-macos-arm64-signed.app.tar.gz
+CogniNote-0.1.33-macos-arm64-unsigned.app.tar.gz
+```
+
+DMG 只作为手动下载安装资产，不给 updater 使用。所有 updater `.sig` 都必须在最终文件稳定后生成：Windows 应在 Authenticode 签名后签 updater；macOS 应在 `.app` 签名、公证、staple 后重新打 `.app.tar.gz`，再签 updater。后处理会改变文件内容，先签 updater 再改文件会导致安装校验失败。
+
+`scripts/build-updater-manifest.mjs` 负责合并 manifest 平台条目。Windows 和 macOS workflow 可以分别发布同一版本；同一版本下会保留已有平台条目，版本变化时重新开始新的平台集合。脚本测试：
+
+```powershell
+node scripts/build-updater-manifest.test.mjs
+```
+
 ### 发布到 GitHub Release
 
 两个 workflow 默认只上传 Actions artifacts，不会自动污染 Release 页面。手动触发 workflow 时可以设置：
@@ -302,9 +378,10 @@ CogniNote-0.1.33-windows-x64-unsigned-installer.exe
 CogniNote-0.1.33-windows-x64-unsigned-portable.zip
 CogniNote-0.1.33-macos-arm64-signed.dmg
 CogniNote-0.1.33-macos-arm64-signed.app.zip
+CogniNote-0.1.33-macos-arm64-signed.app.tar.gz
 ```
 
-给测试用户分发时，优先发送 Release 页面里的 `.exe` 或 signed `.dmg` 下载链接。macOS unsigned DMG 不适合普通用户分发。
+给测试用户分发时，优先发送 Release 页面里的 `.exe` 或 signed `.dmg` 下载链接。macOS `.app.tar.gz` 是 updater 资产，不建议作为普通用户手动安装入口；macOS unsigned DMG 不适合普通用户分发。
 
 ## Windows 运行和验收
 
@@ -325,7 +402,9 @@ CogniNote-0.1.33-macos-arm64-signed.app.zip
 - 双击后打开 CogniNote 桌面窗口，不打开系统浏览器。
 - 后端在后台启动，不应弹出常驻 cmd 窗口。
 - Tauri 会在 `18080-18120` 中选择可用端口，并把端口通过 `COGNINOTE_PORT` 注入后端。
+- Tauri 会把 `COGNINOTE_DESKTOP=true` 和一次性 `COGNINOTE_DESKTOP_SESSION_TOKEN` 注入后端；无 token 访问 `/api/**` 应返回 `401`。
 - 桌面窗口加载 `http://127.0.0.1:{port}/`，前端 `/api` 相对路径继续同源工作。
+- 设置页“系统 / 应用更新”能显示当前通道并检查 stable/preview；未配置 updater public key 时应提示自动更新未配置，不影响普通使用。
 - 关闭窗口后，Tauri 会终止后端进程。
 - 第二次启动应用时会聚焦已有窗口，避免旧实例仍运行时误以为新版已启动。
 - 安装器会在升级、降级重装或卸载前尝试关闭 `CogniNote.exe`、`cogninote-agent.exe` 和 `CogniNoteBackend.exe`。
@@ -381,7 +460,9 @@ open ./cogniNote-agent-front/src-tauri/target/release/bundle/dmg/CogniNote_0.1.3
 - 双击后打开 CogniNote 桌面窗口，不打开系统浏览器。
 - 后端在后台启动，不应弹出 Terminal 窗口。
 - Tauri 会在 `18080-18120` 中选择可用端口，并把端口通过 `COGNINOTE_PORT` 注入后端。
+- Tauri 会把 `COGNINOTE_DESKTOP=true` 和一次性 `COGNINOTE_DESKTOP_SESSION_TOKEN` 注入后端；无 token 访问 `/api/**` 应返回 `401`。
 - 桌面窗口加载 `http://127.0.0.1:{port}/`，前端 `/api` 相对路径继续同源工作。
+- 设置页“系统 / 应用更新”能显示当前通道并检查 stable/preview；未配置 updater public key 时应提示自动更新未配置，不影响普通使用。
 - 关闭窗口后，Tauri 会终止后端进程。
 - 升级或降级后首次启动时，桌面壳会比较 `~/Library/Application Support/CogniNote/desktop-webview-version.txt` 与当前桌面壳版本；版本变化时清理已知 WKWebView 缓存目录，macOS 14+ 还会使用版本相关的 `data_store_identifier` 隔离 WebView 数据仓库，再加载 `http://127.0.0.1:{port}/`。
 

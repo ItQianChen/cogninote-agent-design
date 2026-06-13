@@ -1,6 +1,6 @@
 # CogniNote API 参考
 
-本文档记录当前后端对外暴露的 HTTP API。普通 JSON API 使用统一响应格式；RAG 对话流式接口使用 SSE，不做 JSON 包装。
+本文档记录当前后端对外暴露的 HTTP API。普通 JSON API 使用统一响应格式；RAG 对话流式接口使用 SSE，不做 JSON 包装。桌面模式下，`/api/**` 还会要求 Tauri 桌面壳注入的本机会话令牌。
 
 ## 统一响应格式
 
@@ -36,6 +36,37 @@
 - `/api/chat/sessions...` 是普通 JSON API，会话和消息都以 SQLite 为事实来源。
 - `DELETE /api/documents/{id}` 删除成功时返回 `204 No Content`。
 - `PATCH /api/knowledge-folders/{id}/enabled` 和 `DELETE /api/knowledge-folders/{id}` 成功时返回 `204 No Content`。
+
+## 桌面模式请求头
+
+当后端由 Tauri 桌面壳启动时，会带有：
+
+```text
+COGNINOTE_DESKTOP=true
+COGNINOTE_DESKTOP_SESSION_TOKEN=<random-token>
+```
+
+此时所有 `/api/**` 请求必须带 header：
+
+```text
+X-CogniNote-Desktop-Session: <random-token>
+```
+
+Tauri 健康检查、前端 JSON API 和聊天 SSE 请求会自动加该 header。普通 `mvn spring-boot:run`、Vite 浏览器开发模式或没有设置 `COGNINOTE_DESKTOP=true` 的后端进程不强制该 header。
+
+缺失或错误 token 返回 `401`：
+
+```json
+{
+  "success": false,
+  "code": "UNAUTHORIZED",
+  "message": "Desktop session token is missing or invalid",
+  "data": null,
+  "timestamp": 1780000000000
+}
+```
+
+静态页面、SPA 路由和 `/assets/**` 不需要 token，只有 API 访问受保护。
 
 ## 系统状态
 

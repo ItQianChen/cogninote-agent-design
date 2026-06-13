@@ -1,3 +1,7 @@
+import { getDesktopSessionToken } from './desktop-api'
+
+export const DESKTOP_SESSION_HEADER = 'X-CogniNote-Desktop-Session'
+
 export function jsonOptions(method, body) {
   return {
     method,
@@ -14,7 +18,7 @@ export function jsonOptions(method, body) {
  */
 export async function requestJson(url, options = {}) {
   // 这里进入浏览器网络请求边界，后续统一解析响应和错误。
-  const response = await fetch(url, options)
+  const response = await fetch(url, await withDesktopSessionHeader(options))
   const payload = await response.json().catch(() => null)
 
   if (!response.ok) {
@@ -39,9 +43,28 @@ export async function requestJson(url, options = {}) {
  */
 export async function requestNoContent(url, options = {}) {
   // 这里进入浏览器网络请求边界，后续统一解析响应和错误。
-  const response = await fetch(url, options)
+  const response = await fetch(url, await withDesktopSessionHeader(options))
   if (!response.ok) {
     const payload = await response.json().catch(() => null)
     throw new Error(payload?.message || payload?.code || `HTTP ${response.status}`)
+  }
+}
+
+/**
+ * 给桌面 WebView 发出的 API 请求补充本机会话令牌。
+ *
+ * <p>令牌只存在于 Tauri 桌面壳生命周期内；普通浏览器开发模式拿不到令牌时保持原始请求不变。</p>
+ */
+export async function withDesktopSessionHeader(options = {}) {
+  const token = await getDesktopSessionToken()
+  if (!token) {
+    return options
+  }
+
+  const headers = new Headers(options.headers || {})
+  headers.set(DESKTOP_SESSION_HEADER, token)
+  return {
+    ...options,
+    headers
   }
 }

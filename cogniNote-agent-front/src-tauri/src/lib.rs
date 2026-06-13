@@ -12,8 +12,12 @@ use std::{
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
-use tauri::{path::BaseDirectory, App, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use serde::Serialize;
+use tauri::{
+    path::BaseDirectory, App, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
+};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+use tauri_plugin_updater::UpdaterExt;
 
 const APP_NAME: &str = "CogniNote";
 const DESKTOP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -39,6 +43,15 @@ const MIN_PORT: u16 = 18080;
 const MAX_PORT: u16 = 18120;
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(45);
 const HEALTH_CHECK_INTERVAL: Duration = Duration::from_millis(500);
+const DESKTOP_SESSION_HEADER: &str = "X-CogniNote-Desktop-Session";
+const STABLE_UPDATER_ENDPOINT: &str =
+    "https://github.com/ItQianChen/cogninote-agent-design/releases/download/desktop-updater-stable/latest.json";
+const PREVIEW_UPDATER_ENDPOINT: &str =
+    "https://github.com/ItQianChen/cogninote-agent-design/releases/download/desktop-updater-preview/latest.json";
+const UPDATER_PUBLIC_KEY: &str = match option_env!("COGNINOTE_TAURI_UPDATER_PUBLIC_KEY") {
+    Some(value) => value,
+    None => "",
+};
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -46,6 +59,73 @@ struct BackendProcess {
     child: Mutex<Option<Child>>,
     port: u16,
     log_path: PathBuf,
+}
+
+struct DesktopSession {
+    token: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopUpdateInfo {
+    channel: String,
+    current_version: String,
+    version: String,
+    date: Option<String>,
+    body: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopInstallResult {
+    channel: String,
+    installed: bool,
+    version: Option<String>,
+    restart_requested: bool,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct DesktopUpdateProgress {
+    event: String,
+    channel: String,
+    downloaded: Option<u64>,
+    content_length: Option<u64>,
+    message: Option<String>,
+}
+
+impl DesktopUpdateProgress {
+    fn started(channel: &str, message: &str) -> Self {
+        Self::message("Started", channel, message)
+    }
+
+    fn progress(channel: &str, downloaded: u64, content_length: Option<u64>) -> Self {
+        Self {
+            event: "Progress".to_string(),
+            channel: channel.to_string(),
+            downloaded: Some(downloaded),
+            content_length,
+            message: None,
+        }
+    }
+
+    fn finished(channel: &str, message: &str) -> Self {
+        Self::message("Finished", channel, message)
+    }
+
+    fn failed(channel: &str, message: &str) -> Self {
+        Self::message("Error", channel, message)
+    }
+
+    fn message(event: &str, channel: &str, message: &str) -> Self {
+        Self {
+            event: event.to_string(),
+            channel: channel.to_string(),
+            downloaded: None,
+            content_length: None,
+            message: Some(message.to_string()),
+        }
+    }
 }
 
 impl Drop for BackendProcess {
@@ -63,6 +143,7 @@ impl Drop for BackendProcess {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             #[cfg(target_os = "macos")]
             app.dialog()
@@ -77,7 +158,12 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![pick_knowledge_folder])
+        .invoke_handler(tauri::generate_handler![
+            pick_knowledge_folder,
+            get_desktop_session_token,
+            check_desktop_update,
+            install_desktop_update
+        ])
         .setup(setup_desktop)
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
@@ -102,6 +188,157 @@ fn pick_knowledge_folder(app: AppHandle) -> Option<String> {
         .map(|path| path.to_string())
 }
 
+#[tauri::command]
+fn get_desktop_session_token(session: tauri::State<'_, DesktopSession>) -> String {
+    session.token.clone()
+}
+
+#[tauri::command]
+async fn check_desktop_update(
+    app: AppHandle,
+    channel: String,
+) -> Result<Option<DesktopUpdateInfo>, String> {
+    let channel = normalize_update_channel(&channel)?;
+    let updater = build_channel_updater(&app, &channel)?;
+    let Some(update) = updater
+        .check()
+        .await
+        .map_err(|error| format!("检查更新失败：{error}"))?
+    else {
+        return Ok(None);
+    };
+
+    Ok(Some(DesktopUpdateInfo {
+        channel,
+        current_version: update.current_version,
+        version: update.version,
+        date: update.date.map(|date| date.to_string()),
+        body: update.body,
+    }))
+}
+
+#[tauri::command]
+async fn install_desktop_update(
+    app: AppHandle,
+    channel: String,
+) -> Result<DesktopInstallResult, String> {
+    let channel = normalize_update_channel(&channel)?;
+    let updater = build_channel_updater(&app, &channel)?;
+    let Some(update) = updater
+        .check()
+        .await
+        .map_err(|error| format!("检查更新失败：{error}"))?
+    else {
+        return Ok(DesktopInstallResult {
+            channel,
+            installed: false,
+            version: None,
+            restart_requested: false,
+        });
+    };
+
+    emit_update_progress(
+        &app,
+        DesktopUpdateProgress::started(&channel, "开始下载更新包。"),
+    );
+    let progress_app = app.clone();
+    let progress_channel = channel.clone();
+    let finish_app = app.clone();
+    let finish_channel = channel.clone();
+    let mut downloaded: u64 = 0;
+    update
+        .download_and_install(
+            move |chunk_length, content_length| {
+                downloaded += chunk_length as u64;
+                emit_update_progress(
+                    &progress_app,
+                    DesktopUpdateProgress::progress(
+                        &progress_channel,
+                        downloaded,
+                        content_length,
+                    ),
+                );
+            },
+            move || {
+                emit_update_progress(
+                    &finish_app,
+                    DesktopUpdateProgress::finished(&finish_channel, "更新包下载完成，正在安装。"),
+                );
+            },
+        )
+        .await
+        .map_err(|error| {
+            emit_update_progress(
+                &app,
+                DesktopUpdateProgress::failed(&channel, &format!("安装更新失败：{error}")),
+            );
+            format!("安装更新失败：{error}")
+        })?;
+
+    emit_update_progress(
+        &app,
+        DesktopUpdateProgress::finished(&channel, "更新已安装，正在重启应用。"),
+    );
+    app.restart();
+}
+
+fn generate_desktop_session_token() -> Result<String, String> {
+    let mut bytes = [0_u8; 32];
+    getrandom::getrandom(&mut bytes)
+        .map_err(|error| format!("无法生成桌面会话令牌：{error}"))?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+fn normalize_update_channel(channel: &str) -> Result<String, String> {
+    match channel.trim().to_ascii_lowercase().as_str() {
+        "stable" => Ok("stable".to_string()),
+        "preview" => Ok("preview".to_string()),
+        other => Err(format!("未知更新通道：{other}")),
+    }
+}
+
+fn updater_endpoint(channel: &str) -> Result<tauri::Url, String> {
+    let endpoint = match channel {
+        "stable" => STABLE_UPDATER_ENDPOINT,
+        "preview" => PREVIEW_UPDATER_ENDPOINT,
+        other => return Err(format!("未知更新通道：{other}")),
+    };
+    endpoint
+        .parse()
+        .map_err(|error| format!("无法解析更新地址：{error}"))
+}
+
+fn updater_public_key() -> Result<&'static str, String> {
+    let public_key = UPDATER_PUBLIC_KEY.trim();
+    if public_key.is_empty() {
+        return Err("自动更新未配置：缺少 COGNINOTE_TAURI_UPDATER_PUBLIC_KEY。".to_string());
+    }
+    Ok(public_key)
+}
+
+fn build_channel_updater(
+    app: &AppHandle,
+    channel: &str,
+) -> Result<tauri_plugin_updater::Updater, String> {
+    let endpoint = updater_endpoint(channel)?;
+    let public_key = updater_public_key()?;
+    let before_exit_app = app.clone();
+    app.updater_builder()
+        .pubkey(public_key)
+        .endpoints(vec![endpoint])
+        .map_err(|error| format!("更新通道配置无效：{error}"))?
+        .timeout(Duration::from_secs(30))
+        .on_before_exit(move || {
+            shutdown_backend(&before_exit_app);
+        })
+        .build()
+        .map_err(|error| format!("自动更新未就绪：{error}"))
+}
+
+fn emit_update_progress(app: &AppHandle, payload: DesktopUpdateProgress) {
+    let _ = app.emit("desktop-update-progress", payload);
+}
+
 fn setup_desktop(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     match start_backend_and_open_window(app) {
         Ok(()) => Ok(()),
@@ -116,11 +353,15 @@ fn start_backend_and_open_window(app: &mut App) -> Result<(), String> {
     let port = select_available_port()?;
     let backend_exe = resolve_backend_exe(app)?;
     let log_path = prepare_backend_log_path()?;
+    let session_token = generate_desktop_session_token()?;
+    app.manage(DesktopSession {
+        token: session_token.clone(),
+    });
     append_desktop_startup_log(app, &backend_exe, port, &log_path);
     let reset_webview_cache = prepare_webview_cache_for_current_version(&log_path);
-    let child = spawn_backend(&backend_exe, port, &log_path)?;
+    let child = spawn_backend(&backend_exe, port, &log_path, &session_token)?;
 
-    if let Err(error) = wait_until_backend_ready(port) {
+    if let Err(error) = wait_until_backend_ready(port, &session_token) {
         let mut child = child;
         let _ = child.kill();
         let _ = child.wait();
@@ -380,7 +621,12 @@ fn app_support_dir() -> Result<PathBuf, String> {
     }
 }
 
-fn spawn_backend(backend_exe: &Path, port: u16, log_path: &Path) -> Result<Child, String> {
+fn spawn_backend(
+    backend_exe: &Path,
+    port: u16,
+    log_path: &Path,
+    session_token: &str,
+) -> Result<Child, String> {
     let stdout = OpenOptions::new()
         .create(true)
         .append(true)
@@ -403,6 +649,7 @@ fn spawn_backend(backend_exe: &Path, port: u16, log_path: &Path) -> Result<Child
     command
         .env("COGNINOTE_PORT", port.to_string())
         .env("COGNINOTE_DESKTOP", "true")
+        .env("COGNINOTE_DESKTOP_SESSION_TOKEN", session_token)
         .current_dir(backend_exe.parent().unwrap_or_else(|| Path::new(".")))
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr));
@@ -454,10 +701,10 @@ fn configure_macos_backend_environment(command: &mut Command) {
     }
 }
 
-fn wait_until_backend_ready(port: u16) -> Result<(), String> {
+fn wait_until_backend_ready(port: u16, session_token: &str) -> Result<(), String> {
     let deadline = Instant::now() + STARTUP_TIMEOUT;
     while Instant::now() < deadline {
-        if is_system_status_ready(port) {
+        if is_system_status_ready(port, session_token) {
             return Ok(());
         }
         thread::sleep(HEALTH_CHECK_INTERVAL);
@@ -488,16 +735,18 @@ fn desktop_backend_log_hint() -> String {
     }
 }
 
-fn is_system_status_ready(port: u16) -> bool {
+fn is_system_status_ready(port: u16, session_token: &str) -> bool {
     let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) else {
         return false;
     };
     let _ = stream.set_read_timeout(Some(Duration::from_millis(800)));
     let _ = stream.set_write_timeout(Some(Duration::from_millis(800)));
 
-    let request =
-        b"GET /api/system/status HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
-    if stream.write_all(request).is_err() {
+    let request = format!(
+        "GET /api/system/status HTTP/1.1\r\nHost: 127.0.0.1\r\n{}: {}\r\nConnection: close\r\n\r\n",
+        DESKTOP_SESSION_HEADER, session_token
+    );
+    if stream.write_all(request.as_bytes()).is_err() {
         return false;
     }
 

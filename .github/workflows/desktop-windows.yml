@@ -75,6 +75,7 @@ jobs:
         shell: pwsh
         env:
           COGNINOTE_REQUIRE_WINDOWS_SIGNING: ${{ steps.windows-signing.outputs.require_signing }}
+          COGNINOTE_TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: .\scripts\build-desktop-app.ps1 -SkipTests
@@ -211,4 +212,76 @@ jobs:
           & gh @uploadArgs
           if ($LASTEXITCODE -ne 0) {
             throw "Failed to upload Windows assets to GitHub Release $tag."
+          }
+
+      - name: Publish Windows updater manifest
+        if: ${{ inputs.publish_release }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $hasPublicKey = -not [string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY)
+          $hasPrivateKey = -not [string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)
+          if ($hasPublicKey -xor $hasPrivateKey) {
+            throw 'Configure both TAURI_UPDATER_PUBLIC_KEY and TAURI_SIGNING_PRIVATE_KEY, or leave both empty to skip updater manifest publication.'
+          }
+          if (-not $hasPrivateKey) {
+            Write-Host 'Tauri updater signing key is not configured; skipping updater manifest publication.'
+            exit 0
+          }
+
+          $suffix = '${{ steps.windows-signing.outputs.artifact_suffix }}'
+          $version = $env:COGNINOTE_DESKTOP_VERSION
+          $tag = $env:RELEASE_TAG_INPUT.Trim()
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            $tag = if ($suffix -eq 'signed') { "v$version" } else { "v$version-test.1" }
+          }
+          $channel = if ($suffix -eq 'signed') { 'stable' } else { 'preview' }
+          $updaterTag = if ($channel -eq 'stable') { 'desktop-updater-stable' } else { 'desktop-updater-preview' }
+          $assetName = "CogniNote-${version}-windows-x64-${suffix}-installer.exe"
+          $assetPath = "artifacts/windows-release/$assetName"
+          if (-not (Test-Path -LiteralPath $assetPath)) {
+            throw "Windows updater asset not found: $assetPath"
+          }
+
+          npm --silent --prefix cogniNote-agent-front run tauri -- signer sign --password="$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" $assetPath
+          $signaturePath = "$assetPath.sig"
+          if (-not (Test-Path -LiteralPath $signaturePath)) {
+            throw "Tauri updater signature was not generated: $signaturePath"
+          }
+
+          $updaterDir = 'artifacts/updater'
+          New-Item -ItemType Directory -Force -Path $updaterDir | Out-Null
+          $previousNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+          $PSNativeCommandUseErrorActionPreference = $false
+          gh release download $updaterTag --pattern latest.json --dir $updaterDir --clobber *> $null
+          $downloadExitCode = $LASTEXITCODE
+          $PSNativeCommandUseErrorActionPreference = $previousNativeErrorPreference
+          if ($downloadExitCode -ne 0) {
+            Write-Host "No existing updater manifest found for $updaterTag; creating a new latest.json."
+          }
+          $assetUrl = "https://github.com/ItQianChen/cogninote-agent-design/releases/download/$tag/$assetName"
+          node scripts/build-updater-manifest.mjs `
+            --manifest "$updaterDir/latest.json" `
+            --version $version `
+            --platform windows-x86_64 `
+            --url $assetUrl `
+            --signatureFile $signaturePath `
+            --notes "CogniNote $version $suffix"
+
+          gh release view $updaterTag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $updaterTag --title "CogniNote desktop updater $channel" --notes "Static Tauri updater manifest for the $channel channel."
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to create updater release $updaterTag."
+            }
+          }
+
+          gh release upload $updaterTag "$updaterDir/latest.json" --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to upload updater manifest to $updaterTag."
           }

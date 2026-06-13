@@ -62,6 +62,9 @@ mybatis: # MyBatis 配置。
     map-underscore-to-camel-case: true # 自动把 snake_case 数据库字段映射到 Java camelCase 属性。
 
 app: # CogniNote 自定义业务配置入口。
+  desktop: # 桌面壳运行时注入的本机保护参数。
+    enabled: ${COGNINOTE_DESKTOP:false} # 仅桌面包启动后端时启用；普通开发后端保持无 token 访问，便于本地调试。
+    session-token: ${COGNINOTE_DESKTOP_SESSION_TOKEN:} # Tauri 每次启动生成的临时令牌，只保护本机 /api/** 请求。
   storage: # 本地存储配置。
     base-dir: ${COGNINOTE_DATA_DIR:} # 用户数据根目录；为空时由 AppStorageInitializer 按平台选择默认目录。
     database-path: ${COGNINOTE_DATABASE_PATH:} # SQLite 文件路径；为空时使用 base-dir/data/cogninote.db。

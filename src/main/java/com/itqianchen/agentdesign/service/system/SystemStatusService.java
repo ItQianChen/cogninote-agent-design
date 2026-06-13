@@ -32,11 +32,12 @@ public class SystemStatusService {
     public SystemStatusService(
             AppStorageInitializer storageInitializer,
             @Value("${app.version:}") String configuredVersion,
+            @Value("${app.desktop.enabled:false}") boolean desktopMode,
             ObjectProvider<BuildProperties> buildPropertiesProvider
     ) {
         this.storageInitializer = storageInitializer;
         this.version = resolveVersion(configuredVersion, buildPropertiesProvider.getIfAvailable());
-        this.desktopMode = Boolean.parseBoolean(System.getenv().getOrDefault("COGNINOTE_DESKTOP", "false"));
+        this.desktopMode = desktopMode;
     }
 
     /**

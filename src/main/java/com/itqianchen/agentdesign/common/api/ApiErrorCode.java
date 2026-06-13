@@ -7,6 +7,7 @@ package com.itqianchen.agentdesign.common.api;
 public enum ApiErrorCode {
     OK,
     BAD_REQUEST,
+    UNAUTHORIZED,
     VALIDATION_ERROR,
     NOT_FOUND,
     EMBEDDING_UNAVAILABLE,

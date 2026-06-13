@@ -117,6 +117,51 @@
   margin: 0;
 }
 
+.desktop-update-card {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.desktop-update-card__main {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.desktop-update-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.desktop-update-row > span {
+  color: var(--color-text-strong);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.desktop-update-notes {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface-strong) 92%, transparent);
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.desktop-update-card .el-button svg {
+  width: 16px;
+  height: 16px;
+}
+
 .query-contextualizer-panel {
   max-width: 1120px;
 }
@@ -352,6 +397,11 @@
   }
 
   .settings-theme-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .desktop-update-row {
     align-items: stretch;
     flex-direction: column;
   }

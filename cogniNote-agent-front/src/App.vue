@@ -1,7 +1,9 @@
 <script setup>
 import { onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import AppShell from './components/app-shell.vue'
 import { useChatStore } from './stores/chat'
+import { useDesktopUpdateStore } from './stores/desktop-update'
 import { useKnowledgeFoldersStore } from './stores/knowledge-folders'
 import { useModelConfigStore } from './stores/model-config'
 import { useSearchStore } from './stores/search'
@@ -14,6 +16,7 @@ const knowledgeFoldersStore = useKnowledgeFoldersStore()
 const searchStore = useSearchStore()
 const modelConfigStore = useModelConfigStore()
 const themeStore = useThemeStore()
+const desktopUpdateStore = useDesktopUpdateStore()
 
 /**
  * 应用启动时拉取首屏共享快照。
@@ -22,12 +25,38 @@ const themeStore = useThemeStore()
  */
 onMounted(() => {
   themeStore.applyTheme()
+  initializeDesktopUpdateCheck()
   chatStore.initializeSessions()
   systemStore.fetchStatus()
   knowledgeFoldersStore.fetchFolders()
   searchStore.fetchIndexStatus()
   modelConfigStore.fetchModelConfig()
 })
+
+async function initializeDesktopUpdateCheck() {
+  await desktopUpdateStore.initializeUpdateListener()
+  const update = await desktopUpdateStore.checkForUpdates({ silent: true })
+  if (!update) {
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `发现新版本 ${update.version}，安装后会重启 CogniNote。`,
+      '应用更新',
+      {
+        confirmButtonText: '安装并重启',
+        cancelButtonText: '稍后',
+        type: 'info'
+      }
+    )
+    await desktopUpdateStore.installUpdate()
+  } catch (err) {
+    if (err !== 'cancel') {
+      ElMessage.error(desktopUpdateStore.error || err?.message || '安装更新失败')
+    }
+  }
+}
 </script>
 
 <template>
