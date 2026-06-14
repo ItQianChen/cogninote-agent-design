@@ -47,6 +47,7 @@ const HEALTH_CHECK_INTERVAL: Duration = Duration::from_millis(500);
 const DESKTOP_BACKEND_LOG_MAX_BYTES: u64 = 2 * 1024 * 1024;
 const DESKTOP_BACKEND_LOG_MAX_HISTORY: u32 = 5;
 const DESKTOP_SESSION_HEADER: &str = "X-CogniNote-Desktop-Session";
+const DESKTOP_SESSION_TOKEN_GLOBAL: &str = "__COGNINOTE_DESKTOP_SESSION_TOKEN__";
 const STABLE_UPDATER_ENDPOINT: &str =
     "https://github.com/ItQianChen/cogninote-agent-design/releases/download/desktop-updater-stable/latest.json";
 const PREVIEW_UPDATER_ENDPOINT: &str =
@@ -257,11 +258,7 @@ async fn install_desktop_update(
                 downloaded += chunk_length as u64;
                 emit_update_progress(
                     &progress_app,
-                    DesktopUpdateProgress::progress(
-                        &progress_channel,
-                        downloaded,
-                        content_length,
-                    ),
+                    DesktopUpdateProgress::progress(&progress_channel, downloaded, content_length),
                 );
             },
             move || {
@@ -289,8 +286,7 @@ async fn install_desktop_update(
 
 fn generate_desktop_session_token() -> Result<String, String> {
     let mut bytes = [0_u8; 32];
-    getrandom::getrandom(&mut bytes)
-        .map_err(|error| format!("无法生成桌面会话令牌：{error}"))?;
+    getrandom::getrandom(&mut bytes).map_err(|error| format!("无法生成桌面会话令牌：{error}"))?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
@@ -375,7 +371,13 @@ fn start_backend_and_open_window(app: &mut App) -> Result<(), String> {
 
     // Tauri 配置里不预创建窗口，避免后端未就绪时显示一个不可用的空白页面。
     // 健康检查通过后再把 WebView 指到 Spring Boot 同源页面，前端现有 /api 相对路径即可继续工作。
-    if let Err(error) = open_main_window(app.handle(), port, reset_webview_cache, &log_path) {
+    if let Err(error) = open_main_window(
+        app.handle(),
+        port,
+        reset_webview_cache,
+        &log_path,
+        &session_token,
+    ) {
         let mut child = child;
         let _ = child.kill();
         let _ = child.wait();
@@ -817,6 +819,7 @@ fn open_main_window(
     port: u16,
     reset_webview_cache: bool,
     log_path: &Path,
+    session_token: &str,
 ) -> Result<(), String> {
     let url = format!("http://127.0.0.1:{port}/")
         .parse()
@@ -824,6 +827,7 @@ fn open_main_window(
     let initial_url = initial_webview_url(&url, reset_webview_cache)?;
     let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(initial_url))
         .title(DISPLAY_APP_NAME)
+        .initialization_script(desktop_session_token_init_script(session_token))
         .inner_size(1280.0, 820.0)
         .min_inner_size(960.0, 640.0)
         .center();
@@ -881,6 +885,13 @@ fn initial_webview_url(
     }
 
     Ok(target_url.clone())
+}
+
+fn desktop_session_token_init_script(session_token: &str) -> String {
+    let token_literal = serde_json::to_string(session_token).unwrap_or_else(|_| "\"\"".to_string());
+    format!(
+        "Object.defineProperty(window, '{DESKTOP_SESSION_TOKEN_GLOBAL}', {{ value: {token_literal}, writable: false, configurable: false, enumerable: false }});"
+    )
 }
 
 #[cfg(target_os = "macos")]

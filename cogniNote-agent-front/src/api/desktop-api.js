@@ -1,5 +1,6 @@
 let cachedDesktopSessionToken
 let desktopSessionTokenPromise = null
+const DESKTOP_SESSION_TOKEN_GLOBAL = '__COGNINOTE_DESKTOP_SESSION_TOKEN__'
 
 /**
  * 调用 Tauri 桌面端文件夹选择器。
@@ -24,6 +25,11 @@ export async function pickKnowledgeFolder() {
  * <p>Web 开发模式没有该 Tauri command，返回空字符串让 HTTP 客户端保持普通浏览器调试体验。</p>
  */
 export async function getDesktopSessionToken() {
+  const injectedToken = readInjectedDesktopSessionToken()
+  if (injectedToken) {
+    cachedDesktopSessionToken = injectedToken
+    return cachedDesktopSessionToken
+  }
   if (cachedDesktopSessionToken !== undefined) {
     return cachedDesktopSessionToken
   }
@@ -45,10 +51,16 @@ export async function getDesktopSessionToken() {
  * <p>浏览器开发态先短路，避免每个 API 请求都重复尝试加载 Tauri command。</p>
  */
 export function isTauriRuntime() {
-  return typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__)
+  return typeof window !== 'undefined'
+    && (Boolean(window.__TAURI_INTERNALS__) || Boolean(window.isTauri) || Boolean(readInjectedDesktopSessionToken()))
 }
 
 async function loadDesktopSessionToken() {
+  const injectedToken = readInjectedDesktopSessionToken()
+  if (injectedToken) {
+    cachedDesktopSessionToken = injectedToken
+    return cachedDesktopSessionToken
+  }
   try {
     const { invoke } = await import('@tauri-apps/api/core')
     cachedDesktopSessionToken = await invoke('get_desktop_session_token') || ''
@@ -56,4 +68,12 @@ async function loadDesktopSessionToken() {
     cachedDesktopSessionToken = ''
   }
   return cachedDesktopSessionToken
+}
+
+function readInjectedDesktopSessionToken() {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+  const token = window[DESKTOP_SESSION_TOKEN_GLOBAL]
+  return typeof token === 'string' ? token : ''
 }

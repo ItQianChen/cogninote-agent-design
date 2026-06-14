@@ -49,11 +49,38 @@
   DetailPrint "Removing stale CogniNote shortcuts..."
   Delete "$DESKTOP\CogniNote.lnk"
   Delete "$DESKTOP\CogniNote Agent.lnk"
+  Delete "$COMMONDESKTOP\CogniNote.lnk"
+  Delete "$COMMONDESKTOP\CogniNote Agent.lnk"
   Delete "$SMPROGRAMS\CogniNote.lnk"
   Delete "$SMPROGRAMS\CogniNote Agent.lnk"
   Delete "$SMPROGRAMS\CogniNote\CogniNote.lnk"
   Delete "$SMPROGRAMS\CogniNote\CogniNote Agent.lnk"
   RMDir "$SMPROGRAMS\CogniNote"
+!macroend
+
+!macro COGNINOTE_REFRESH_SHORTCUT_ICON SHORTCUT_PATH
+  ${If} ${FileExists} "${SHORTCUT_PATH}"
+    Delete "${SHORTCUT_PATH}"
+    CreateShortcut "${SHORTCUT_PATH}" "$INSTDIR\${MAINBINARYNAME}.exe" "" "$INSTDIR\${MAINBINARYNAME}.exe" 0
+    !insertmacro SetLnkAppUserModelId "${SHORTCUT_PATH}"
+  ${EndIf}
+!macroend
+
+!macro COGNINOTE_REFRESH_INSTALLED_ICONS
+  DetailPrint "Refreshing CogniNote shortcut icons..."
+  /*
+   * Tauri's generated shortcuts can leave IconLocation empty. After an app icon change,
+   * Explorer may keep showing the previous cached icon unless the shortcut points at the
+   * installed executable explicitly and the shell icon cache is notified.
+   */
+  !if "${STARTMENUFOLDER}" != ""
+    !insertmacro COGNINOTE_REFRESH_SHORTCUT_ICON "$SMPROGRAMS\$AppStartMenuFolder\${PRODUCTNAME}.lnk"
+  !else
+    !insertmacro COGNINOTE_REFRESH_SHORTCUT_ICON "$SMPROGRAMS\${PRODUCTNAME}.lnk"
+  !endif
+  !insertmacro COGNINOTE_REFRESH_SHORTCUT_ICON "$DESKTOP\${PRODUCTNAME}.lnk"
+  !insertmacro COGNINOTE_REFRESH_SHORTCUT_ICON "$COMMONDESKTOP\${PRODUCTNAME}.lnk"
+  System::Call "shell32::SHChangeNotify(i,i,i,i) (0x08000000, 0x1000, 0, 0)"
 !macroend
 
 !macro NSIS_HOOK_PREINSTALL
@@ -63,6 +90,10 @@
   !insertmacro COGNINOTE_CLEAN_INSTALL_DIR
   !insertmacro COGNINOTE_CLEAN_WEBVIEW_CACHE
   !insertmacro COGNINOTE_DELETE_SHORTCUTS
+!macroend
+
+!macro NSIS_HOOK_POSTINSTALL
+  !insertmacro COGNINOTE_REFRESH_INSTALLED_ICONS
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL

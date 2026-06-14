@@ -6,5 +6,12 @@
   "remote": {
     "urls": ["http://127.0.0.1:*", "http://localhost:*"]
   },
-  "permissions": ["dialog:default", "core:default"]
+  "permissions": [
+    "dialog:default",
+    "core:default",
+    "allow-pick-knowledge-folder",
+    "allow-get-desktop-session-token",
+    "allow-check-desktop-update",
+    "allow-install-desktop-update"
+  ]
 }

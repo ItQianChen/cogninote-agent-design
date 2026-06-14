@@ -1,15 +1,23 @@
-name: Desktop macOS
+name: 桌面端 macOS 打包
 
 on:
   workflow_dispatch:
     inputs:
       publish_release:
-        description: 'Upload generated macOS assets to a GitHub Release.'
+        description: '是否上传生成的 macOS 安装包到 GitHub Release。'
         required: false
         type: boolean
         default: false
+      release_type:
+        description: '发布类型。正式版写入 stable 更新通道；预发行版写入 preview 更新通道。'
+        required: true
+        type: choice
+        default: '预发行版'
+        options:
+          - '正式版'
+          - '预发行版'
       release_tag:
-        description: 'Release tag. Leave empty to derive it from COGNINOTE_DESKTOP_VERSION.'
+        description: 'Release 标签。留空自动生成；也可写 v{{VERSION}} 作为版本占位。'
         required: false
         type: string
         default: ''
@@ -23,7 +31,7 @@ env:
 
 jobs:
   build-macos:
-    name: Build macOS Apple Silicon desktop package
+    name: 构建 macOS Apple Silicon 桌面安装包
     runs-on: macos-15
 
     steps:
@@ -259,37 +267,63 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          RELEASE_TYPE_INPUT: ${{ inputs.release_type }}
         run: |
           set -euo pipefail
           suffix="${{ steps.macos-signing.outputs.artifact_suffix }}"
           version="$COGNINOTE_DESKTOP_VERSION"
+          release_type="${RELEASE_TYPE_INPUT:-预发行版}"
+          if [[ "$release_type" == "正式版" ]]; then
+            is_preview=false
+            release_kind="正式版"
+            updater_channel="stable"
+          else
+            is_preview=true
+            release_kind="预发行版"
+            updater_channel="preview"
+          fi
           tag="${RELEASE_TAG_INPUT:-}"
           if [[ -z "$tag" ]]; then
-            if [[ "$suffix" == "signed" ]]; then
-              tag="v${version}"
-            else
+            if [[ "$is_preview" == "true" ]]; then
               tag="v${version}-test.1"
+            else
+              tag="v${version}"
             fi
+          else
+            tag="${tag//'{{VERSION}}'/$version}"
+            tag="${tag//'{version}'/$version}"
           fi
 
           notes_path="$RUNNER_TEMP/cogninote-macos-release-notes.md"
-          printf '%s\n' \
-            "CogniNote ${version} macOS Apple Silicon ${suffix} package." \
-            "" \
-            "Assets:" \
-            "- DMG installer: CogniNote-${version}-macos-arm64-${suffix}.dmg" \
-            "- App bundle zip: CogniNote-${version}-macos-arm64-${suffix}.app.zip" \
-            "" \
-            "Unsigned macOS builds are for technical testing only and are not ordinary-user installers. Use signed, notarized and stapled DMG assets for distribution." \
-            > "$notes_path"
+          dmg_name="CogniNote-${version}-macos-arm64-${suffix}.dmg"
+          app_zip_name="CogniNote-${version}-macos-arm64-${suffix}.app.zip"
+          if [[ "$suffix" == "signed" ]]; then
+            signing_note="这是已签名、公证并 stapled 的 DMG，适合普通用户分发。"
+          else
+            signing_note="这是未签名测试包。如果提示“已损坏，无法打开”，请先把 CogniNote.app 拖入 /Applications，然后执行：\`sudo xattr -dr com.apple.quarantine /Applications/CogniNote.app\`。"
+          fi
+          notes="$(cat .github/release-templates/desktop-macos.md)"
+          notes="${notes//'{{VERSION}}'/$version}"
+          notes="${notes//'{{RELEASE_KIND}}'/$release_kind}"
+          notes="${notes//'{{MACOS_DMG}}'/$dmg_name}"
+          notes="${notes//'{{MACOS_APP_ZIP}}'/$app_zip_name}"
+          notes="${notes//'{{MACOS_SIGNING_NOTE}}'/$signing_note}"
+          notes="${notes//'{{UPDATER_CHANNEL}}'/$updater_channel}"
+          printf '%s\n' "$notes" > "$notes_path"
 
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            create_args=(release create "$tag" --title "CogniNote ${version} ${suffix}" --notes-file "$notes_path")
-            if [[ "$suffix" != "signed" ]]; then
+            release_title="知记空间 ${version} macOS ${release_kind}"
+            create_args=(release create "$tag" --title "$release_title" --notes-file "$notes_path")
+            if [[ "$is_preview" == "true" ]]; then
               create_args+=(--prerelease)
             fi
             gh "${create_args[@]}"
+          else
+            release_title="知记空间 ${version} macOS ${release_kind}"
+            gh release edit "$tag" --title "$release_title" --notes-file "$notes_path"
           fi
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq .id)"
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F "prerelease=${is_preview}" >/dev/null
 
           gh release upload "$tag" artifacts/macos-release/* --clobber
 
@@ -298,6 +332,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          RELEASE_TYPE_INPUT: ${{ inputs.release_type }}
           TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -318,15 +353,24 @@ jobs:
 
           suffix="${{ steps.macos-signing.outputs.artifact_suffix }}"
           version="$COGNINOTE_DESKTOP_VERSION"
+          release_type="${RELEASE_TYPE_INPUT:-预发行版}"
+          if [[ "$release_type" == "正式版" ]]; then
+            is_preview=false
+          else
+            is_preview=true
+          fi
           tag="${RELEASE_TAG_INPUT:-}"
           if [[ -z "$tag" ]]; then
-            if [[ "$suffix" == "signed" ]]; then
-              tag="v${version}"
-            else
+            if [[ "$is_preview" == "true" ]]; then
               tag="v${version}-test.1"
+            else
+              tag="v${version}"
             fi
+          else
+            tag="${tag//'{{VERSION}}'/$version}"
+            tag="${tag//'{version}'/$version}"
           fi
-          if [[ "$suffix" == "signed" ]]; then
+          if [[ "$is_preview" == "false" ]]; then
             channel="stable"
             updater_tag="desktop-updater-stable"
           else

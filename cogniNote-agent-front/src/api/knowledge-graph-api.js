@@ -1,4 +1,4 @@
-import { jsonOptions, requestJson } from './http-client'
+import { jsonOptions, requestJson, withDesktopSessionHeader } from './http-client'
 import { readSseStream } from './chat-stream'
 
 /**
@@ -42,13 +42,13 @@ export function listEdgeEvidence(edgeId) {
  * <p>后端可能在终止事件前已经完成状态写入，前端收到 completed/failed/cancelled 后仍要重新拉取状态快照。</p>
  */
 export async function streamKnowledgeGraphRun(runId, { signal, onEvent }) {
-  const response = await fetch(`/api/knowledge-graphs/runs/${encodeURIComponent(runId)}/events`, {
+  const response = await fetch(`/api/knowledge-graphs/runs/${encodeURIComponent(runId)}/events`, await withDesktopSessionHeader({
     method: 'GET',
     headers: {
       Accept: 'text/event-stream'
     },
     signal
-  })
+  }))
 
   if (!response.ok) {
     const body = await response.json().catch(() => null)

@@ -28,5 +28,13 @@
       "hardenedRuntime": true,
       "entitlements": "entitlements/macos.plist"
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": [
+        "https://github.com/ItQianChen/cogninote-agent-design/releases/download/desktop-updater-stable/latest.json"
+      ]
+    }
   }
 }

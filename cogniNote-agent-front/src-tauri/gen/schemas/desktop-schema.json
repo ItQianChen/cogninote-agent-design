@@ -177,6 +177,30 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Allows the frontend to check for desktop updates through the shell.",
+          "type": "string",
+          "const": "allow-check-desktop-update",
+          "markdownDescription": "Allows the frontend to check for desktop updates through the shell."
+        },
+        {
+          "description": "Allows the frontend to read the desktop session token fallback from the shell.",
+          "type": "string",
+          "const": "allow-get-desktop-session-token",
+          "markdownDescription": "Allows the frontend to read the desktop session token fallback from the shell."
+        },
+        {
+          "description": "Allows the frontend to install desktop updates through the shell.",
+          "type": "string",
+          "const": "allow-install-desktop-update",
+          "markdownDescription": "Allows the frontend to install desktop updates through the shell."
+        },
+        {
+          "description": "Allows the frontend to ask the desktop shell to open the knowledge folder picker.",
+          "type": "string",
+          "const": "allow-pick-knowledge-folder",
+          "markdownDescription": "Allows the frontend to ask the desktop shell to open the knowledge folder picker."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",

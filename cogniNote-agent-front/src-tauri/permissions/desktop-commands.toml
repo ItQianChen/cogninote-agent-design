@@ -1,0 +1,21 @@
+"$schema" = "schemas/schema.json"
+
+[[permission]]
+identifier = "allow-pick-knowledge-folder"
+description = "Allows the frontend to ask the desktop shell to open the knowledge folder picker."
+commands.allow = ["pick_knowledge_folder"]
+
+[[permission]]
+identifier = "allow-get-desktop-session-token"
+description = "Allows the frontend to read the desktop session token fallback from the shell."
+commands.allow = ["get_desktop_session_token"]
+
+[[permission]]
+identifier = "allow-check-desktop-update"
+description = "Allows the frontend to check for desktop updates through the shell."
+commands.allow = ["check_desktop_update"]
+
+[[permission]]
+identifier = "allow-install-desktop-update"
+description = "Allows the frontend to install desktop updates through the shell."
+commands.allow = ["install_desktop_update"]

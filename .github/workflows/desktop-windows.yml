@@ -1,15 +1,23 @@
-name: Desktop Windows
+name: 桌面端 Windows 打包
 
 on:
   workflow_dispatch:
     inputs:
       publish_release:
-        description: 'Upload generated Windows assets to a GitHub Release.'
+        description: '是否上传生成的 Windows 安装包到 GitHub Release。'
         required: false
         type: boolean
         default: false
+      release_type:
+        description: '发布类型。正式版写入 stable 更新通道；预发行版写入 preview 更新通道。'
+        required: true
+        type: choice
+        default: '预发行版'
+        options:
+          - '正式版'
+          - '预发行版'
       release_tag:
-        description: 'Release tag. Leave empty to derive it from COGNINOTE_DESKTOP_VERSION.'
+        description: 'Release 标签。留空自动生成；也可写 v{{VERSION}} 作为版本占位。'
         required: false
         type: string
         default: ''
@@ -23,7 +31,7 @@ env:
 
 jobs:
   build-windows:
-    name: Build Windows desktop package
+    name: 构建 Windows 桌面安装包
     runs-on: windows-latest
 
     steps:
@@ -175,36 +183,60 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          RELEASE_TYPE_INPUT: ${{ inputs.release_type }}
         run: |
           $suffix = '${{ steps.windows-signing.outputs.artifact_suffix }}'
           $version = $env:COGNINOTE_DESKTOP_VERSION
+          $releaseType = $env:RELEASE_TYPE_INPUT.Trim()
+          $isPreviewRelease = $releaseType -ne '正式版'
+          $releaseKind = if ($isPreviewRelease) { '预发行版' } else { '正式版' }
+          $updaterChannel = if ($isPreviewRelease) { 'preview' } else { 'stable' }
           $tag = $env:RELEASE_TAG_INPUT.Trim()
           if ([string]::IsNullOrWhiteSpace($tag)) {
-            $tag = if ($suffix -eq 'signed') { "v$version" } else { "v$version-test.1" }
+            $tag = if ($isPreviewRelease) { "v$version-test.1" } else { "v$version" }
+          } else {
+            $tag = $tag.Replace('{{VERSION}}', $version).Replace('{version}', $version)
           }
 
           $notesPath = Join-Path $env:RUNNER_TEMP 'cogninote-windows-release-notes.md'
-          $notes = @(
-            "CogniNote $version Windows x64 $suffix package.",
-            '',
-            'Assets:',
-            "- Installer: CogniNote-${version}-windows-x64-${suffix}-installer.exe",
-            "- Portable zip: CogniNote-${version}-windows-x64-${suffix}-portable.zip",
-            '',
-            'Unsigned Windows builds may show SmartScreen or Unknown Publisher prompts. Use signed assets for ordinary-user distribution when a code-signing certificate is available.'
-          )
+          $installerName = "CogniNote-${version}-windows-x64-${suffix}-installer.exe"
+          $portableName = "CogniNote-${version}-windows-x64-${suffix}-portable.zip"
+          $signingNote = if ($suffix -eq 'signed') {
+            '这是已签名安装包，适合普通用户分发。'
+          } else {
+            '这是未签名测试包。安装时如果提示“未知发布者”或 SmartScreen，请选择“更多信息” -> “仍要运行”。'
+          }
+          $notes = Get-Content -LiteralPath '.github/release-templates/desktop-windows.md' -Raw -Encoding UTF8
+          $notes = $notes.Replace('{{VERSION}}', $version)
+          $notes = $notes.Replace('{{RELEASE_KIND}}', $releaseKind)
+          $notes = $notes.Replace('{{WINDOWS_INSTALLER}}', $installerName)
+          $notes = $notes.Replace('{{WINDOWS_PORTABLE}}', $portableName)
+          $notes = $notes.Replace('{{WINDOWS_SIGNING_NOTE}}', $signingNote)
+          $notes = $notes.Replace('{{UPDATER_CHANNEL}}', $updaterChannel)
           $notes | Set-Content -LiteralPath $notesPath -Encoding UTF8
 
           gh release view $tag *> $null
+          $releaseTitle = "知记空间 $version Windows $releaseKind"
           if ($LASTEXITCODE -ne 0) {
-            $createArgs = @('release', 'create', $tag, '--title', "CogniNote $version $suffix", '--notes-file', $notesPath)
-            if ($suffix -ne 'signed') {
+            $createArgs = @('release', 'create', $tag, '--title', $releaseTitle, '--notes-file', $notesPath)
+            if ($isPreviewRelease) {
               $createArgs += '--prerelease'
             }
             & gh @createArgs
             if ($LASTEXITCODE -ne 0) {
               throw "Failed to create GitHub Release $tag."
             }
+          } else {
+            gh release edit $tag --title $releaseTitle --notes-file $notesPath
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to update GitHub Release $tag."
+            }
+          }
+          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$tag" | ConvertFrom-Json
+          $prereleaseValue = if ($isPreviewRelease) { 'true' } else { 'false' }
+          gh api -X PATCH "repos/$env:GITHUB_REPOSITORY/releases/$($release.id)" -F "prerelease=$prereleaseValue" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to update GitHub Release prerelease flag for $tag."
           }
 
           $assetPaths = (Get-ChildItem -LiteralPath 'artifacts/windows-release' -File).FullName
@@ -220,6 +252,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          RELEASE_TYPE_INPUT: ${{ inputs.release_type }}
           TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -236,11 +269,15 @@ jobs:
 
           $suffix = '${{ steps.windows-signing.outputs.artifact_suffix }}'
           $version = $env:COGNINOTE_DESKTOP_VERSION
+          $releaseType = $env:RELEASE_TYPE_INPUT.Trim()
+          $isPreviewRelease = $releaseType -ne '正式版'
           $tag = $env:RELEASE_TAG_INPUT.Trim()
           if ([string]::IsNullOrWhiteSpace($tag)) {
-            $tag = if ($suffix -eq 'signed') { "v$version" } else { "v$version-test.1" }
+            $tag = if ($isPreviewRelease) { "v$version-test.1" } else { "v$version" }
+          } else {
+            $tag = $tag.Replace('{{VERSION}}', $version).Replace('{version}', $version)
           }
-          $channel = if ($suffix -eq 'signed') { 'stable' } else { 'preview' }
+          $channel = if ($isPreviewRelease) { 'preview' } else { 'stable' }
           $updaterTag = if ($channel -eq 'stable') { 'desktop-updater-stable' } else { 'desktop-updater-preview' }
           $assetName = "CogniNote-${version}-windows-x64-${suffix}-installer.exe"
           $assetPath = "artifacts/windows-release/$assetName"
