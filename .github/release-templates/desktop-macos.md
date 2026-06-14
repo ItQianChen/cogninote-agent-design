@@ -1,4 +1,4 @@
-# 知记空间 {{VERSION}} macOS Apple Silicon {{RELEASE_KIND}}
+## macOS Apple Silicon
 
 macOS Apple Silicon 用户：
 下载 `{{MACOS_DMG}}` 安装。

@@ -294,7 +294,16 @@ jobs:
             tag="${tag//'{version}'/$version}"
           fi
 
-          notes_path="$RUNNER_TEMP/cogninote-macos-release-notes.md"
+          notes_path="$RUNNER_TEMP/cogninote-desktop-release-notes.md"
+          existing_notes_path="$RUNNER_TEMP/cogninote-existing-release-notes.md"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            release_exists=true
+            gh release view "$tag" --json body --jq .body > "$existing_notes_path"
+          else
+            release_exists=false
+            : > "$existing_notes_path"
+          fi
+
           dmg_name="CogniNote-${version}-macos-arm64-${suffix}.dmg"
           app_zip_name="CogniNote-${version}-macos-arm64-${suffix}.app.zip"
           if [[ "$suffix" == "signed" ]]; then
@@ -302,28 +311,35 @@ jobs:
           else
             signing_note="这是未签名测试包。如果提示“已损坏，无法打开”，请先把 CogniNote.app 拖入 /Applications，然后执行：\`sudo xattr -dr com.apple.quarantine /Applications/CogniNote.app\`。"
           fi
-          notes="$(cat .github/release-templates/desktop-macos.md)"
-          notes="${notes//'{{VERSION}}'/$version}"
-          notes="${notes//'{{RELEASE_KIND}}'/$release_kind}"
-          notes="${notes//'{{MACOS_DMG}}'/$dmg_name}"
-          notes="${notes//'{{MACOS_APP_ZIP}}'/$app_zip_name}"
-          notes="${notes//'{{MACOS_SIGNING_NOTE}}'/$signing_note}"
-          notes="${notes//'{{UPDATER_CHANNEL}}'/$updater_channel}"
-          printf '%s\n' "$notes" > "$notes_path"
+          node scripts/render-desktop-release-notes.mjs \
+            --existing "$existing_notes_path" \
+            --output "$notes_path" \
+            --version "$version" \
+            --releaseKind "$release_kind" \
+            --platform macos \
+            --template .github/release-templates/desktop-macos.md \
+            --updaterChannel "$updater_channel" \
+            --macosDmg "$dmg_name" \
+            --macosAppZip "$app_zip_name" \
+            --macosSigningNote "$signing_note"
 
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            release_title="知记空间 ${version} macOS ${release_kind}"
+          release_title="知记空间 ${version} 桌面端 ${release_kind}"
+          if [[ "$release_exists" == "false" ]]; then
             create_args=(release create "$tag" --title "$release_title" --notes-file "$notes_path")
             if [[ "$is_preview" == "true" ]]; then
               create_args+=(--prerelease)
             fi
             gh "${create_args[@]}"
           else
-            release_title="知记空间 ${version} macOS ${release_kind}"
             gh release edit "$tag" --title "$release_title" --notes-file "$notes_path"
           fi
           release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq .id)"
-          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F "prerelease=${is_preview}" >/dev/null
+          if [[ "$is_preview" == "true" ]]; then
+            make_latest=false
+          else
+            make_latest=true
+          fi
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F "prerelease=${is_preview}" -f "make_latest=${make_latest}" >/dev/null
 
           gh release upload "$tag" artifacts/macos-release/* --clobber
 
@@ -404,7 +420,13 @@ jobs:
             --signatureFile "$signature_path" \
             --notes "CogniNote ${version} ${suffix}"
 
+          updater_title="内部：知记空间桌面端更新清单 ${channel}"
+          updater_notes="此 Release 只托管 Tauri updater 的 latest.json，不是用户安装包发行版。"
           if ! gh release view "$updater_tag" >/dev/null 2>&1; then
-            gh release create "$updater_tag" --title "CogniNote desktop updater ${channel}" --notes "Static Tauri updater manifest for the ${channel} channel."
+            gh release create "$updater_tag" --title "$updater_title" --notes "$updater_notes" --prerelease
+          else
+            gh release edit "$updater_tag" --title "$updater_title" --notes "$updater_notes"
           fi
+          updater_release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${updater_tag}" --jq .id)"
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${updater_release_id}" -F prerelease=true -f make_latest=false >/dev/null
           gh release upload "$updater_tag" artifacts/updater/latest.json --clobber

@@ -1,4 +1,4 @@
-# 知记空间 {{VERSION}} Windows x64 {{RELEASE_KIND}}
+## Windows x64
 
 Windows 用户：
 下载 `{{WINDOWS_INSTALLER}}` 安装。

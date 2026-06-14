@@ -198,7 +198,16 @@ jobs:
             $tag = $tag.Replace('{{VERSION}}', $version).Replace('{version}', $version)
           }
 
-          $notesPath = Join-Path $env:RUNNER_TEMP 'cogninote-windows-release-notes.md'
+          $notesPath = Join-Path $env:RUNNER_TEMP 'cogninote-desktop-release-notes.md'
+          $existingNotesPath = Join-Path $env:RUNNER_TEMP 'cogninote-existing-release-notes.md'
+          gh release view $tag *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+          if ($releaseExists) {
+            gh release view $tag --json body --jq .body | Set-Content -LiteralPath $existingNotesPath -Encoding UTF8
+          } else {
+            '' | Set-Content -LiteralPath $existingNotesPath -Encoding UTF8
+          }
+
           $installerName = "CogniNote-${version}-windows-x64-${suffix}-installer.exe"
           $portableName = "CogniNote-${version}-windows-x64-${suffix}-portable.zip"
           $signingNote = if ($suffix -eq 'signed') {
@@ -206,18 +215,20 @@ jobs:
           } else {
             '这是未签名测试包。安装时如果提示“未知发布者”或 SmartScreen，请选择“更多信息” -> “仍要运行”。'
           }
-          $notes = Get-Content -LiteralPath '.github/release-templates/desktop-windows.md' -Raw -Encoding UTF8
-          $notes = $notes.Replace('{{VERSION}}', $version)
-          $notes = $notes.Replace('{{RELEASE_KIND}}', $releaseKind)
-          $notes = $notes.Replace('{{WINDOWS_INSTALLER}}', $installerName)
-          $notes = $notes.Replace('{{WINDOWS_PORTABLE}}', $portableName)
-          $notes = $notes.Replace('{{WINDOWS_SIGNING_NOTE}}', $signingNote)
-          $notes = $notes.Replace('{{UPDATER_CHANNEL}}', $updaterChannel)
-          $notes | Set-Content -LiteralPath $notesPath -Encoding UTF8
+          node scripts/render-desktop-release-notes.mjs `
+            --existing $existingNotesPath `
+            --output $notesPath `
+            --version $version `
+            --releaseKind $releaseKind `
+            --platform windows `
+            --template .github/release-templates/desktop-windows.md `
+            --updaterChannel $updaterChannel `
+            --windowsInstaller $installerName `
+            --windowsPortable $portableName `
+            --windowsSigningNote $signingNote
 
-          gh release view $tag *> $null
-          $releaseTitle = "知记空间 $version Windows $releaseKind"
-          if ($LASTEXITCODE -ne 0) {
+          $releaseTitle = "知记空间 $version 桌面端 $releaseKind"
+          if (-not $releaseExists) {
             $createArgs = @('release', 'create', $tag, '--title', $releaseTitle, '--notes-file', $notesPath)
             if ($isPreviewRelease) {
               $createArgs += '--prerelease'
@@ -234,7 +245,8 @@ jobs:
           }
           $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$tag" | ConvertFrom-Json
           $prereleaseValue = if ($isPreviewRelease) { 'true' } else { 'false' }
-          gh api -X PATCH "repos/$env:GITHUB_REPOSITORY/releases/$($release.id)" -F "prerelease=$prereleaseValue" *> $null
+          $makeLatestValue = if ($isPreviewRelease) { 'false' } else { 'true' }
+          gh api -X PATCH "repos/$env:GITHUB_REPOSITORY/releases/$($release.id)" -F "prerelease=$prereleaseValue" -f "make_latest=$makeLatestValue" *> $null
           if ($LASTEXITCODE -ne 0) {
             throw "Failed to update GitHub Release prerelease flag for $tag."
           }
@@ -313,10 +325,21 @@ jobs:
 
           gh release view $updaterTag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $updaterTag --title "CogniNote desktop updater $channel" --notes "Static Tauri updater manifest for the $channel channel."
+            gh release create $updaterTag --title "内部：知记空间桌面端更新清单 $channel" --notes "此 Release 只托管 Tauri updater 的 latest.json，不是用户安装包发行版。" --prerelease
             if ($LASTEXITCODE -ne 0) {
               throw "Failed to create updater release $updaterTag."
             }
+          } else {
+            gh release edit $updaterTag --title "内部：知记空间桌面端更新清单 $channel" --notes "此 Release 只托管 Tauri updater 的 latest.json，不是用户安装包发行版。"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to update updater release $updaterTag."
+            }
+          }
+
+          $updaterRelease = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$updaterTag" | ConvertFrom-Json
+          gh api -X PATCH "repos/$env:GITHUB_REPOSITORY/releases/$($updaterRelease.id)" -F 'prerelease=true' -f 'make_latest=false' *> $null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to mark updater release $updaterTag as internal prerelease."
           }
 
           gh release upload $updaterTag "$updaterDir/latest.json" --clobber
