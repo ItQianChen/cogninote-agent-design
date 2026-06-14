@@ -1,6 +1,6 @@
-# CogniNote 桌面构建与运行指南
+# 知记空间（CogniNote）桌面构建与运行指南
 
-本指南说明如何构建 CogniNote 桌面应用。Windows 和 macOS 打包链路分开维护：Windows 继续使用 PowerShell、`tauri.conf.json` 和 NSIS；macOS 使用独立 Shell 脚本、`tauri.macos.conf.json` 和 `.app` / `.dmg`。
+本指南说明如何构建知记空间桌面应用。中文显示名是“知记空间”；`CogniNote` 继续作为英文工程名、安装包名、安装目录、数据目录和兼容标识。Windows 和 macOS 打包链路分开维护：Windows 继续使用 PowerShell、`tauri.conf.json` 和 NSIS；macOS 使用独立 Shell 脚本、`tauri.macos.conf.json` 和 `.app` / `.dmg`。
 
 ## 发布版本号更新
 
@@ -399,7 +399,7 @@ CogniNote-0.1.33-macos-arm64-signed.app.tar.gz
 
 正常行为：
 
-- 双击后打开 CogniNote 桌面窗口，不打开系统浏览器。
+- 双击后打开知记空间桌面窗口，不打开系统浏览器。
 - 后端在后台启动，不应弹出常驻 cmd 窗口。
 - Tauri 会在 `18080-18120` 中选择可用端口，并把端口通过 `COGNINOTE_PORT` 注入后端。
 - Tauri 会把 `COGNINOTE_DESKTOP=true` 和一次性 `COGNINOTE_DESKTOP_SESSION_TOKEN` 注入后端；无 token 访问 `/api/**` 应返回 `401`。
@@ -470,7 +470,7 @@ open ./cogniNote-agent-front/src-tauri/target/release/bundle/dmg/CogniNote_0.1.3
 
 正常行为：
 
-- 双击后打开 CogniNote 桌面窗口，不打开系统浏览器。
+- 双击后打开知记空间桌面窗口，不打开系统浏览器。
 - 后端在后台启动，不应弹出 Terminal 窗口。
 - Tauri 会在 `18080-18120` 中选择可用端口，并把端口通过 `COGNINOTE_PORT` 注入后端。
 - Tauri 会把 `COGNINOTE_DESKTOP=true` 和一次性 `COGNINOTE_DESKTOP_SESSION_TOKEN` 注入后端；无 token 访问 `/api/**` 应返回 `401`。

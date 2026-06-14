@@ -3,10 +3,14 @@ import { computed, onMounted } from 'vue'
 import { Download, RefreshCw } from 'lucide-vue-next'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useDesktopUpdateStore } from '../stores/desktop-update'
+import { APP_DISPLAY_NAME } from '../config/brand'
 
 const desktopUpdateStore = useDesktopUpdateStore()
 
 const updateStatus = computed(() => {
+  if (!desktopUpdateStore.isDesktopRuntime) {
+    return { type: 'info', text: '仅桌面版可用' }
+  }
   if (desktopUpdateStore.error) {
     return { type: 'error', text: desktopUpdateStore.error }
   }
@@ -38,7 +42,7 @@ async function installUpdate() {
 
   try {
     await ElMessageBox.confirm(
-      `安装 ${desktopUpdateStore.updateInfo.version} 后会重启 CogniNote。`,
+      `安装 ${desktopUpdateStore.updateInfo.version} 后会重启${APP_DISPLAY_NAME}。`,
       '安装更新',
       {
         confirmButtonText: '安装并重启',
@@ -107,13 +111,17 @@ async function installUpdate() {
       </div>
 
       <div class="button-row">
-        <el-button :loading="desktopUpdateStore.isChecking" @click="checkForUpdates">
+        <el-button
+          :disabled="!desktopUpdateStore.isDesktopRuntime"
+          :loading="desktopUpdateStore.isChecking"
+          @click="checkForUpdates"
+        >
           <RefreshCw aria-hidden="true" />
           检查更新
         </el-button>
         <el-button
           type="primary"
-          :disabled="!desktopUpdateStore.updateInfo || desktopUpdateStore.isInstalling"
+          :disabled="!desktopUpdateStore.isDesktopRuntime || !desktopUpdateStore.updateInfo || desktopUpdateStore.isInstalling"
           :loading="desktopUpdateStore.isInstalling"
           @click="installUpdate"
         >

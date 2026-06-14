@@ -27,7 +27,7 @@ class SystemStatusControllerTests {
     void statusReturnsApplicationHealthAndStoragePath() {
         com.itqianchen.agentdesign.dto.system.SystemStatusResponse response = systemStatusService.status();
 
-        assertThat(response.appName()).isEqualTo("CogniNote Agent");
+        assertThat(response.appName()).isEqualTo("知记空间");
         assertThat(response.version()).isEqualTo("test-backend-version");
         assertThat(response.status()).isEqualTo("UP");
         assertThat(response.dataDir()).contains("target");

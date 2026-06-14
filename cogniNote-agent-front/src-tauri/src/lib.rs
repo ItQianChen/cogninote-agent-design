@@ -19,7 +19,8 @@ use tauri::{
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_updater::UpdaterExt;
 
-const APP_NAME: &str = "CogniNote";
+const DISPLAY_APP_NAME: &str = "知记空间";
+const APP_STORAGE_NAME: &str = "CogniNote";
 const DESKTOP_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg(target_os = "macos")]
 const APP_IDENTIFIER: &str = "com.itqianchen.cogninote";
@@ -149,9 +150,11 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             #[cfg(target_os = "macos")]
             app.dialog()
-                .message("CogniNote 已经在运行。升级或降级后，请先完全退出旧版本，再从 /Applications 打开新版本。")
+                .message(format!(
+                    "{DISPLAY_APP_NAME}已经在运行。升级或降级后，请先完全退出旧版本，再从 /Applications 打开新版本。"
+                ))
                 .kind(MessageDialogKind::Info)
-                .title("CogniNote 已在运行")
+                .title(format!("{DISPLAY_APP_NAME}已在运行"))
                 .blocking_show();
 
             if let Some(window) = app.get_webview_window("main") {
@@ -543,12 +546,12 @@ fn remove_macos_webview_cache_dirs(log_path: &Path) {
         .join("WebsiteData");
     let cache_dirs = [
         library_dir.join("Caches").join(APP_IDENTIFIER),
-        library_dir.join("Caches").join(APP_NAME),
+        library_dir.join("Caches").join(APP_STORAGE_NAME),
         webkit_data_dir.join("NetworkCache"),
         webkit_data_dir.join("CacheStorage"),
         webkit_data_dir.join("ServiceWorkers"),
         container_library_dir.join("Caches").join(APP_IDENTIFIER),
-        container_library_dir.join("Caches").join(APP_NAME),
+        container_library_dir.join("Caches").join(APP_STORAGE_NAME),
         container_library_dir.join("Caches").join("WebKit"),
         container_webkit_data_dir.join("NetworkCache"),
         container_webkit_data_dir.join("CacheStorage"),
@@ -633,7 +636,7 @@ fn app_support_dir() -> Result<PathBuf, String> {
         let app_data = std::env::var_os("APPDATA")
             .map(PathBuf::from)
             .ok_or_else(|| "无法读取 APPDATA 环境变量，不能创建桌面启动日志。".to_string())?;
-        return Ok(app_data.join(APP_NAME));
+        return Ok(app_data.join(APP_STORAGE_NAME));
     }
 
     #[cfg(target_os = "macos")]
@@ -644,7 +647,7 @@ fn app_support_dir() -> Result<PathBuf, String> {
         return Ok(home
             .join("Library")
             .join("Application Support")
-            .join(APP_NAME));
+            .join(APP_STORAGE_NAME));
     }
 
     #[cfg(not(any(windows, target_os = "macos")))]
@@ -773,14 +776,14 @@ fn wait_until_backend_ready(port: u16, session_token: &str) -> Result<(), String
 fn desktop_backend_log_hint() -> String {
     #[cfg(windows)]
     {
-        return format!("%APPDATA%\\{}\\logs\\desktop-backend.log", APP_NAME);
+        return format!("%APPDATA%\\{}\\logs\\desktop-backend.log", APP_STORAGE_NAME);
     }
 
     #[cfg(target_os = "macos")]
     {
         return format!(
             "~/Library/Application Support/{}/logs/desktop-backend.log",
-            APP_NAME
+            APP_STORAGE_NAME
         );
     }
 
@@ -820,7 +823,7 @@ fn open_main_window(
         .map_err(|error| format!("无法生成桌面窗口 URL：{error}"))?;
     let initial_url = initial_webview_url(&url, reset_webview_cache)?;
     let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(initial_url))
-        .title(APP_NAME)
+        .title(DISPLAY_APP_NAME)
         .inner_size(1280.0, 820.0)
         .min_inner_size(960.0, 640.0)
         .center();
@@ -912,7 +915,7 @@ fn show_startup_error(app: &AppHandle, message: &str) {
     app.dialog()
         .message(message)
         .kind(MessageDialogKind::Error)
-        .title("CogniNote 启动失败")
+        .title(format!("{DISPLAY_APP_NAME}启动失败"))
         .blocking_show();
 }
 

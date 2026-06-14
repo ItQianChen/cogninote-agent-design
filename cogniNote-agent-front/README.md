@@ -1,6 +1,6 @@
-# CogniNote Frontend
+# 知记空间（CogniNote）Frontend
 
-CogniNote Agent 的 Vue 3 前端。当前前端是桌面对话应用形态：`/chat` 显示左侧临时会话列表和主对话流，`/settings` 使用独立全屏设置中心，左侧归拢系统、知识库和模型配置，右侧展示具体设置内容。
+知记空间（CogniNote）的 Vue 3 前端。当前前端是桌面对话应用形态：`/chat` 显示左侧临时会话列表和主对话流，`/settings` 使用独立全屏设置中心，左侧归拢系统、知识库和模型配置，右侧展示具体设置内容。
 
 前端生产构建由 Spring Boot 托管，桌面版由 Tauri WebView 加载后端页面。
 

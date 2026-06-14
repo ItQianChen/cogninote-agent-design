@@ -466,7 +466,7 @@ class ChatAgentRouterTests {
         return new ChatPromptProperties(
                 new ChatPromptProperties.PromptTemplate(
                         """
-                                你是 CogniNote Agent 的普通对话助手。
+                                你是知记空间（CogniNote）的普通对话助手。
                                 当前不使用知识库，也不需要引用来源。
                                 """,
                         """
@@ -476,7 +476,7 @@ class ChatAgentRouterTests {
                 ),
                 new ChatPromptProperties.Rag(
                         """
-                                你是 CogniNote Agent 的本地知识库问答助手。
+                                你是知记空间（CogniNote）的本地知识库问答助手。
                                 请使用清晰的 Markdown 回答。
                                 开启知识库时必须用 [1]、[2] 标注引用来源。
                                 """,
@@ -500,7 +500,7 @@ class ChatAgentRouterTests {
                                 {question}
                                 """
                 ),
-                new ChatPromptProperties.ConnectionTest("请用一句话回答：CogniNote 连接测试是否可用？")
+                new ChatPromptProperties.ConnectionTest("请用一句话回答：知记空间（CogniNote）连接测试是否可用？")
         );
     }
 

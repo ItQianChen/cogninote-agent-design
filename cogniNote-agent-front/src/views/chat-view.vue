@@ -4,6 +4,7 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, r
 import { ChevronLeft, ChevronRight, LoaderCircle, Send, SlidersHorizontal, Trash2 } from 'lucide-vue-next'
 import ChatSettingsPopover from '../components/chat-settings-popover.vue'
 import SourceInspector from '../components/source-inspector.vue'
+import { APP_DISPLAY_NAME } from '../config/brand'
 import { useChatStore } from '../stores/chat'
 import { useLayoutStore } from '../stores/layout'
 import { useModelConfigStore } from '../stores/model-config'
@@ -570,7 +571,7 @@ onBeforeUnmount(() => {
           :class="[`message-bubble--${message.role}`, `message-bubble--${message.status}`]"
         >
           <div class="message-label">
-            <span>{{ message.role === 'user' ? '你' : 'CogniNote' }}</span>
+            <span>{{ message.role === 'user' ? '你' : APP_DISPLAY_NAME }}</span>
             <em v-if="message.retrievalMode">{{ message.retrievalMode }}</em>
             <em v-else-if="message.status === 'streaming'">生成中</em>
             <em v-else-if="message.status === 'error'">未完成</em>

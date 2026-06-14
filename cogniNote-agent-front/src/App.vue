@@ -9,6 +9,7 @@ import { useModelConfigStore } from './stores/model-config'
 import { useSearchStore } from './stores/search'
 import { useSystemStore } from './stores/system'
 import { useThemeStore } from './stores/theme'
+import { APP_DISPLAY_NAME } from './config/brand'
 
 const systemStore = useSystemStore()
 const chatStore = useChatStore()
@@ -42,7 +43,7 @@ async function initializeDesktopUpdateCheck() {
 
   try {
     await ElMessageBox.confirm(
-      `发现新版本 ${update.version}，安装后会重启 CogniNote。`,
+      `发现新版本 ${update.version}，安装后会重启${APP_DISPLAY_NAME}。`,
       '应用更新',
       {
         confirmButtonText: '安装并重启',

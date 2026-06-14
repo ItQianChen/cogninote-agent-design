@@ -1,8 +1,8 @@
-# CogniNote Agent
+# 知记空间（CogniNote）
 
-CogniNote Agent 是一个本地优先的个人知识库问答应用。它可以导入本机 Markdown、TXT、DOCX 和文本型 PDF，使用 SQLite 保存知识片段，使用 Lucene 建立关键词/向量混合检索索引，并通过可配置的大模型提供带引用来源的 RAG 问答。
+知记空间（CogniNote）是一个本地优先的个人知识库问答应用。它可以导入本机 Markdown、TXT、DOCX 和文本型 PDF，使用 SQLite 保存知识片段，使用 Lucene 建立关键词/向量混合检索索引，并通过可配置的大模型提供带引用来源的 RAG 问答。
 
-当前项目面向本地桌面交付：Tauri 负责桌面窗口、后端进程生命周期、桌面会话令牌和自动更新检查，Spring Boot 负责业务 API 和托管 Vue 页面。Windows 与 macOS 打包链路分开维护，避免平台资源和脚本互相污染。
+当前项目面向本地桌面交付：Tauri 负责桌面窗口、后端进程生命周期、桌面会话令牌和自动更新检查，Spring Boot 负责业务 API 和托管 Vue 页面。中文显示名是“知记空间”，英文工程名、安装包名、数据目录和兼容标识继续保留 `CogniNote`。Windows 与 macOS 打包链路分开维护，避免平台资源和脚本互相污染。
 
 适合的使用场景：
 
@@ -152,7 +152,7 @@ macOS 可以在 GitHub Actions `Desktop macOS` workflow 构建。未配置 Apple
 
 ## 数据与隐私
 
-CogniNote 默认把数据写入：
+知记空间默认继续把数据写入英文工程目录：
 
 ```text
 %APPDATA%\CogniNote\

@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
+  DESKTOP_UPDATE_UNAVAILABLE_MESSAGE,
   UPDATE_CHANNELS,
   checkDesktopUpdate,
   installDesktopUpdate,
@@ -27,6 +28,7 @@ export const useDesktopUpdateStore = defineStore('desktop-update', () => {
   const listenerReady = ref(false)
   let unlistenProgress = null
 
+  const isDesktopRuntime = computed(() => isTauriRuntime())
   const channelLabel = computed(() =>
     UPDATE_CHANNELS.find((item) => item.value === channel.value)?.label || '正式版'
   )
@@ -51,6 +53,10 @@ export const useDesktopUpdateStore = defineStore('desktop-update', () => {
     if (listenerReady.value) {
       return
     }
+    if (!isDesktopRuntime.value) {
+      listenerReady.value = true
+      return
+    }
     try {
       unlistenProgress = await listenDesktopUpdateProgress((payload) => {
         progress.value = payload
@@ -69,6 +75,14 @@ export const useDesktopUpdateStore = defineStore('desktop-update', () => {
   }
 
   async function checkForUpdates(options = {}) {
+    if (!isDesktopRuntime.value) {
+      updateInfo.value = null
+      if (!options.silent) {
+        message.value = ''
+        error.value = DESKTOP_UPDATE_UNAVAILABLE_MESSAGE
+      }
+      return null
+    }
     isChecking.value = true
     error.value = ''
     if (!options.silent) {
@@ -93,6 +107,10 @@ export const useDesktopUpdateStore = defineStore('desktop-update', () => {
   }
 
   async function installUpdate() {
+    if (!isDesktopRuntime.value) {
+      error.value = DESKTOP_UPDATE_UNAVAILABLE_MESSAGE
+      return null
+    }
     isInstalling.value = true
     error.value = ''
     message.value = ''
@@ -124,6 +142,7 @@ export const useDesktopUpdateStore = defineStore('desktop-update', () => {
     channels: UPDATE_CHANNELS,
     channel,
     channelLabel,
+    isDesktopRuntime,
     updateInfo,
     isChecking,
     isInstalling,
@@ -151,5 +170,6 @@ function readInitialChannel() {
 }
 
 function normalizeUpdateError(error) {
-  return error?.message || String(error || '自动更新不可用')
+  const message = error?.message || String(error || '自动更新不可用')
+  return message.includes("reading 'invoke'") ? DESKTOP_UPDATE_UNAVAILABLE_MESSAGE : message
 }

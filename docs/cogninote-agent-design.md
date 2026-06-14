@@ -1,8 +1,10 @@
-# CogniNote Agent 项目方案
+# 知记空间（CogniNote）项目方案
 
 ## 1. 项目定位
 
-CogniNote Agent 是一个以 Java + Vue 为核心技术栈的本地个人知识库智能体。
+知记空间（CogniNote）是一个以 Java + Vue 为核心技术栈的本地个人知识库智能体。
+
+中文显示名是“知记空间”；`CogniNote` 继续作为英文工程名、安装包名、数据目录名和兼容标识，避免破坏已有桌面升级链路与用户数据路径。
 
 第一版目标不是做一个大而全的 Agent 平台，而是做一个能真正落地的本地知识库问答工具：
 
@@ -1270,7 +1272,7 @@ POST   /api/chat/stream/{requestId}/cancel
 
 ## 14. 结论
 
-CogniNote Agent 第一版应聚焦为：
+知记空间（CogniNote）第一版应聚焦为：
 
 > 一个 Java + Vue 实现的本地 Markdown / TXT / DOCX / 文本型 PDF 知识库问答工具，核心卖点是 SQLite + Lucene 的清晰存储分工、Lucene 混合检索、模型可配置、答案可溯源，并能打包成 Windows 桌面应用一键运行。
 

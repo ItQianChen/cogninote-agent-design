@@ -16,6 +16,7 @@ import org.springframework.util.StringUtils;
 public class SystemStatusService {
 
     private static final String STATUS_UP = "UP";
+    private static final String DISPLAY_APP_NAME = "知记空间";
     private static final String FALLBACK_VERSION = "dev";
 
     private final AppStorageInitializer storageInitializer;
@@ -47,7 +48,7 @@ public class SystemStatusService {
      */
     public SystemStatusResponse status() {
         return new SystemStatusResponse(
-                "CogniNote Agent",
+                DISPLAY_APP_NAME,
                 version,
                 STATUS_UP,
                 storageInitializer.appStorage().baseDir().toString(),
