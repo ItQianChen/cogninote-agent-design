@@ -1,0 +1,27 @@
+spring: # 桌面安装包默认配置；Tauri 启动后端时会自动激活 desktop profile。
+  main:
+    banner-mode: off # 桌面包不需要 Spring Boot banner，减少 desktop-backend.log 的启动噪音。
+  ai:
+    chat:
+      client:
+        observations:
+          log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:false}
+          log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:false}
+      observations:
+        log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:false}
+        log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:false}
+        include-error-logging: ${COGNINOTE_SPRING_AI_LOG_ERRORS:true}
+
+logging:
+  logback:
+    rollingpolicy:
+      max-file-size: ${COGNINOTE_LOG_MAX_FILE_SIZE:10MB}
+      max-history: ${COGNINOTE_LOG_MAX_HISTORY:5}
+      total-size-cap: ${COGNINOTE_LOG_TOTAL_SIZE_CAP:50MB}
+  level:
+    root: info
+    org.springframework.ai: warn
+    org.springframework.ai.chat.client.observation: warn
+    org.springframework.ai.chat.observation: warn
+    org.springframework.ai.model.observation: warn
+    com.itqianchen.agentdesign: info

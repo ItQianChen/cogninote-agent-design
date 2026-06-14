@@ -56,7 +56,7 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 ### 启动后端
 
 ```powershell
-mvn spring-boot:run
+mvn spring-boot:run '-Dspring-boot.run.profiles=dev'
 ```
 
 默认地址：
@@ -176,6 +176,8 @@ SQLite 是业务事实来源，Lucene 是可重建索引。应用不会复制用
 
 `app.log` 是 Spring Boot 业务日志，`desktop-backend.log` 是桌面壳启动后端时的 stdout/stderr 日志。定位桌面启动、模型连接、RAG 对话和索引问题时优先查看这两个文件。
 
+日志分为三档：默认发布配置为 `INFO`，不落盘 Spring AI prompt/completion；本地开发使用 `dev` profile 保持详细日志；用户问题排查可临时启用 `diagnostic` profile。桌面安装包会自动带 `desktop` profile，Spring Boot 业务日志只写滚动 `app.log`，避免控制台日志重复撑大 `desktop-backend.log`。
+
 当前 `0.1.33` 仍把 API Key 明文保存到本机 SQLite，适合内部测试和小范围安装验证，不建议作为大范围公开生产发布。桌面本机 API 已通过启动期会话令牌保护，公开发布前仍应改为 Windows 本地加密或系统凭据管理保存 API Key。
 
 ## 架构概览
@@ -216,6 +218,9 @@ Vue Frontend
 ```powershell
 # 后端测试
 mvn test
+
+# 后端开发运行，启用详细诊断日志
+mvn spring-boot:run '-Dspring-boot.run.profiles=dev'
 
 # 前端构建
 npm --prefix cogniNote-agent-front run build

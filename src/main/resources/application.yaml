@@ -29,12 +29,12 @@ spring: # Spring Boot 与 Spring AI 自动配置入口。
           model: ${COGNINOTE_EMBEDDING_MODEL:text-embedding-v4} # 环境变量 fallback 的 Embedding 模型名，默认 text-embedding-v4。
     chat: # Spring AI 对话观测日志配置。
       client: # ChatClient 层观测；当前对话链路通过 ChatClient 组装 system/user/advisor。
-        observations: # 打印前后文内容，便于在控制台排查最终 Prompt 和模型回复。
-          log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:true} # 输出 ChatClient 请求中的 prompt 内容。
-          log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:true} # 输出 ChatClient 聚合后的 completion 内容。
+        observations: # 默认不落盘 prompt/completion，避免发布包记录用户对话内容；dev/diagnostic profile 会显式打开。
+          log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:false} # 输出 ChatClient 请求中的 prompt 内容。
+          log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:false} # 输出 ChatClient 聚合后的 completion 内容。
       observations: # ChatModel 层观测；动态创建的 DashScope/OpenAI-compatible 模型都会接入 ObservationRegistry。
-        log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:true} # 输出底层模型调用 prompt。
-        log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:true} # 输出底层模型 completion。
+        log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:false} # 输出底层模型调用 prompt。
+        log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:false} # 输出底层模型 completion。
         include-error-logging: ${COGNINOTE_SPRING_AI_LOG_ERRORS:true} # 模型调用异常时打印观测错误日志。
 
 server: # Spring Boot 内置 Web 服务配置。
@@ -47,14 +47,16 @@ logging: # 日志配置。
     name: ${COGNINOTE_LOG_FILE:${APPDATA:${user.home}}/CogniNote/logs/app.log} # Spring Boot 业务日志路径，Windows 默认落到 %APPDATA%/CogniNote/logs/app.log。
   logback: # Logback 细项配置。
     rollingpolicy: # 文件滚动策略。
-      max-file-size: 20MB # 单个日志文件最大 20MB，超过后滚动。
-      max-history: 10 # 最多保留 10 个历史日志文件，避免本地日志无限增长。
+      max-file-size: ${COGNINOTE_LOG_MAX_FILE_SIZE:10MB} # 单个日志文件最大 10MB，超过后滚动。
+      max-history: ${COGNINOTE_LOG_MAX_HISTORY:5} # 默认最多保留 5 个历史日志文件，避免用户本地日志无限增长。
+      total-size-cap: ${COGNINOTE_LOG_TOTAL_SIZE_CAP:50MB} # 默认业务日志总量控制在 50MB 左右。
   level: # 包级别日志等级配置。
-    org.springframework.ai: debug # Spring AI 相关日志设为 debug，便于定位模型运行时、Advisor 和 Embedding 问题。
-    org.springframework.ai.chat.client.observation: debug # ChatClient 观测日志包含 prompt/completion 内容。
-    org.springframework.ai.chat.observation: debug # ChatModel 观测日志包含底层模型请求/响应内容。
-    org.springframework.ai.model.observation: debug # 模型调用异常观测日志输出到控制台。
-    com.itqianchen.agentdesign: debug # 项目业务日志设为 debug，便于本地桌面测试和问题排查。
+    root: info # 发布默认保持安静；开发排查使用 dev 或 diagnostic profile。
+    org.springframework.ai: warn # Spring AI 默认只记录异常和警告，避免模型链路在发布包里刷屏。
+    org.springframework.ai.chat.client.observation: warn # ChatClient 观测日志默认关闭详细内容。
+    org.springframework.ai.chat.observation: warn # ChatModel 观测日志默认关闭详细内容。
+    org.springframework.ai.model.observation: warn # 模型调用异常仍保留 warning/error。
+    com.itqianchen.agentdesign: info # 业务日志保留关键状态，避免 debug SQL/流式事件撑大日志。
 
 mybatis: # MyBatis 配置。
   mapper-locations: classpath*:/mappers/*.xml # XML Mapper 扫描位置，业务 SQL 统一放在 src/main/resources/mappers。

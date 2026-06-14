@@ -1,0 +1,24 @@
+spring: # 用户问题排查配置；可与 desktop 组合：SPRING_PROFILES_ACTIVE=desktop,diagnostic。
+  ai:
+    chat:
+      client:
+        observations:
+          log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:true} # 诊断模式会记录对话内容，开启前应确认用户接受隐私风险。
+          log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:true}
+      observations:
+        log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:true}
+        log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:true}
+        include-error-logging: ${COGNINOTE_SPRING_AI_LOG_ERRORS:true}
+
+logging:
+  logback:
+    rollingpolicy:
+      max-file-size: ${COGNINOTE_LOG_MAX_FILE_SIZE:20MB}
+      max-history: ${COGNINOTE_LOG_MAX_HISTORY:10}
+      total-size-cap: ${COGNINOTE_LOG_TOTAL_SIZE_CAP:200MB}
+  level:
+    org.springframework.ai: debug
+    org.springframework.ai.chat.client.observation: debug
+    org.springframework.ai.chat.observation: debug
+    org.springframework.ai.model.observation: debug
+    com.itqianchen.agentdesign: debug

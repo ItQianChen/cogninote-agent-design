@@ -535,6 +535,8 @@ CogniNote/
 
 `app.log` 是 Spring Boot 业务日志，默认路径可通过 `COGNINOTE_LOG_FILE` 覆盖；`desktop-backend.log` 是 Tauri 启动后端进程时收集的 stdout/stderr。定位桌面启动问题先看 `desktop-backend.log`，定位接口、索引、模型连接和 RAG 问题先看 `app.log`。
 
+日志策略按 profile 分层：默认发布配置为 `INFO` 且不落盘 Spring AI prompt/completion；本地开发使用 `dev` profile 保持详细日志；用户问题排查可临时启用 `diagnostic` profile。桌面壳启动后端时会自动合并并注入 `SPRING_PROFILES_ACTIVE=desktop`，desktop profile 只启用滚动 `app.log`，不再把 Spring 控制台业务日志重复写进 `desktop-backend.log`。
+
 ## 8. 数据存储设计
 
 第一版采用 SQLite + Lucene 的组合。
@@ -898,6 +900,7 @@ macOS 桌面版运行时显式注入：
 ```text
 COGNINOTE_DATA_DIR=~/Library/Application Support/CogniNote
 COGNINOTE_LOG_FILE=~/Library/Application Support/CogniNote/logs/app.log
+SPRING_PROFILES_ACTIVE=desktop
 ```
 
 后续可增加系统托盘能力：

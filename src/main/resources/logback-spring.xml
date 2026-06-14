@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProperty scope="context" name="LOG_FILE" source="logging.file.name"/>
+    <springProperty scope="context" name="ROOT_LOG_LEVEL" source="logging.level.root" defaultValue="INFO"/>
+    <property name="LOG_FILE" value="${LOG_FILE:-${LOG_PATH:-${LOG_TEMP:-${java.io.tmpdir:-/tmp}}/spring.log}}"/>
+
+    <include resource="org/springframework/boot/logging/logback/file-appender.xml"/>
+
+    <!-- desktop profile 下只写滚动 app.log，避免 Spring 控制台日志被 Tauri 重定向后撑大 desktop-backend.log。 -->
+    <springProfile name="desktop">
+        <root level="${ROOT_LOG_LEVEL}">
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!desktop">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+        <root level="${ROOT_LOG_LEVEL}">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+</configuration>

@@ -1,0 +1,24 @@
+spring: # 本地开发诊断配置；PowerShell 下用 mvn spring-boot:run '-Dspring-boot.run.profiles=dev' 启用。
+  ai:
+    chat:
+      client:
+        observations:
+          log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:true} # 开发模式默认打印最终 Prompt，便于定位 RAG 和 Advisor 问题。
+          log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:true} # 开发模式默认打印模型回复，便于核对流式与聚合结果。
+      observations:
+        log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:true}
+        log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:true}
+        include-error-logging: ${COGNINOTE_SPRING_AI_LOG_ERRORS:true}
+
+logging:
+  logback:
+    rollingpolicy:
+      max-file-size: ${COGNINOTE_LOG_MAX_FILE_SIZE:20MB} # 开发环境保留更长现场，方便回看调试过程。
+      max-history: ${COGNINOTE_LOG_MAX_HISTORY:10}
+      total-size-cap: ${COGNINOTE_LOG_TOTAL_SIZE_CAP:200MB}
+  level:
+    org.springframework.ai: debug
+    org.springframework.ai.chat.client.observation: debug
+    org.springframework.ai.chat.observation: debug
+    org.springframework.ai.model.observation: debug
+    com.itqianchen.agentdesign: debug

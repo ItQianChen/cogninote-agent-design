@@ -43,6 +43,8 @@ const MIN_PORT: u16 = 18080;
 const MAX_PORT: u16 = 18120;
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(45);
 const HEALTH_CHECK_INTERVAL: Duration = Duration::from_millis(500);
+const DESKTOP_BACKEND_LOG_MAX_BYTES: u64 = 2 * 1024 * 1024;
+const DESKTOP_BACKEND_LOG_MAX_HISTORY: u32 = 5;
 const DESKTOP_SESSION_HEADER: &str = "X-CogniNote-Desktop-Session";
 const STABLE_UPDATER_ENDPOINT: &str =
     "https://github.com/ItQianChen/cogninote-agent-design/releases/download/desktop-updater-stable/latest.json";
@@ -419,7 +421,40 @@ fn prepare_backend_log_path() -> Result<PathBuf, String> {
     let log_dir = app_support_dir()?.join("logs");
     fs::create_dir_all(&log_dir)
         .map_err(|error| format!("无法创建日志目录 {}：{error}", log_dir.display()))?;
-    Ok(log_dir.join("desktop-backend.log"))
+    let log_path = log_dir.join("desktop-backend.log");
+    rotate_desktop_backend_log(&log_path);
+    Ok(log_path)
+}
+
+fn rotate_desktop_backend_log(log_path: &Path) {
+    let Ok(metadata) = fs::metadata(log_path) else {
+        return;
+    };
+    if metadata.len() < DESKTOP_BACKEND_LOG_MAX_BYTES {
+        return;
+    }
+
+    for index in (1..=DESKTOP_BACKEND_LOG_MAX_HISTORY).rev() {
+        let source = if index == 1 {
+            log_path.to_path_buf()
+        } else {
+            desktop_backend_log_archive_path(log_path, index - 1)
+        };
+        if !source.exists() {
+            continue;
+        }
+        let target = desktop_backend_log_archive_path(log_path, index);
+        let _ = fs::remove_file(&target);
+        let _ = fs::rename(source, target);
+    }
+}
+
+fn desktop_backend_log_archive_path(log_path: &Path, index: u32) -> PathBuf {
+    let file_name = log_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("desktop-backend.log");
+    log_path.with_file_name(format!("{file_name}.{index}"))
 }
 
 #[cfg(target_os = "macos")]
@@ -635,13 +670,15 @@ fn spawn_backend(
     let stderr = stdout
         .try_clone()
         .map_err(|error| format!("无法复用后端日志句柄：{error}"))?;
+    let spring_profiles = desktop_spring_profiles();
 
     append_log_line(
         log_path,
         &format!(
-            "==== Starting backend executable: {} on port {} ====",
+            "==== Starting backend executable: {} on port {} with springProfiles={} ====",
             backend_exe.display(),
-            port
+            port,
+            spring_profiles
         ),
     );
 
@@ -650,6 +687,7 @@ fn spawn_backend(
         .env("COGNINOTE_PORT", port.to_string())
         .env("COGNINOTE_DESKTOP", "true")
         .env("COGNINOTE_DESKTOP_SESSION_TOKEN", session_token)
+        .env("SPRING_PROFILES_ACTIVE", spring_profiles)
         .current_dir(backend_exe.parent().unwrap_or_else(|| Path::new(".")))
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr));
@@ -658,6 +696,23 @@ fn spawn_backend(
     command
         .spawn()
         .map_err(|error| format!("无法启动后端进程：{error}"))
+}
+
+fn desktop_spring_profiles() -> String {
+    let mut profiles: Vec<String> = std::env::var("SPRING_PROFILES_ACTIVE")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|profile| !profile.is_empty())
+        .map(ToString::to_string)
+        .collect();
+    if !profiles
+        .iter()
+        .any(|profile| profile.eq_ignore_ascii_case("desktop"))
+    {
+        profiles.insert(0, "desktop".to_string());
+    }
+    profiles.join(",")
 }
 
 fn append_desktop_startup_log(app: &App, backend_exe: &Path, port: u16, log_path: &Path) {
