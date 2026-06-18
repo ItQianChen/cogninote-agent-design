@@ -4,7 +4,7 @@
   "pub_date": "2026-06-15T13:42:18.307Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUFHS3ZrTlNtTTVVSzFqYWh0dWdzYmNnckkrMDBWV1c4UStnYWhqYzc1azRmMGNTTjZlNGxGcDgvekI5UDRQclZhd2crcUt4UXo4eW9YWWdscTVjdEFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxNzg3NTgwCWZpbGU6Q29nbmlOb3RlLTAuMS4zNS13aW5kb3dzLXg2NC11bnNpZ25lZC1pbnN0YWxsZXIuZXhlCkt4bXFaQUNLM2ZsanBMZlo0eS9ETUNvR1ZBUTFKVXRtdmRUQjJwZkJhZ01qSjZrK3JkaXlBQ2hHaTRzUWp3b3RNSFFITWk1d0tqdUQyTmtCU0VIYkJRPT0K",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUI0YnRFT2ZrR3F3ZzBWYm1NUkJmdi9UTkNxT2k3a1ZmTzJ5NE5NRjFtNE1sVTU0S3FhWVMvL2dNaHVRNDNRODJCaGF0dTNnZkpTeWNJY1N6UXlqalFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxNzg4NzA1CWZpbGU6Q29nbmlOb3RlLTAuMS4zNS13aW5kb3dzLXg2NC11bnNpZ25lZC1pbnN0YWxsZXIuZXhlCll2QlNFUHNFTlpzSzJRWU5MSi9PajIraVM2THpTdjdQUitjNFlYWUZXOW5nSGNidXVadG1wa0pBMEZCcVJnMXd1RmpycTV4Yy9OQVVrZWhGUHV1RkNnPT0K",
       "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.35-test.1/CogniNote-0.1.35-windows-x64-unsigned-installer.exe"
     },
     "darwin-aarch64": {
