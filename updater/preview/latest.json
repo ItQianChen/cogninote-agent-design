@@ -6,6 +6,10 @@
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUFHS3ZrTlNtTTVVSzFqYWh0dWdzYmNnckkrMDBWV1c4UStnYWhqYzc1azRmMGNTTjZlNGxGcDgvekI5UDRQclZhd2crcUt4UXo4eW9YWWdscTVjdEFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxNzg3NTgwCWZpbGU6Q29nbmlOb3RlLTAuMS4zNS13aW5kb3dzLXg2NC11bnNpZ25lZC1pbnN0YWxsZXIuZXhlCkt4bXFaQUNLM2ZsanBMZlo0eS9ETUNvR1ZBUTFKVXRtdmRUQjJwZkJhZ01qSjZrK3JkaXlBQ2hHaTRzUWp3b3RNSFFITWk1d0tqdUQyTmtCU0VIYkJRPT0K",
       "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.35-test.1/CogniNote-0.1.35-windows-x64-unsigned-installer.exe"
+    },
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUcyOGxFYm9PcG00UlV3cENUM0syQXpVWng2c1VTVWtIK2NxVElYN09vRlN0cldsc054V08rVEVRZFI3RWM3MGwwR1BYdmV3aE56M1o0T0JBa1VLVHdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxNzg4NjM1CWZpbGU6Q29nbmlOb3RlLTAuMS4zNS1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6CnlONFkxMjk1RHIyQWM5SGlaNzNZT3FHV3VVSVR0RHcwME83bjhLdEJsV0ZUVk11VnFnbG1BeGRNZEkyVkZISnI2T0dOTEhrYmRUd3Z1R3JQcXR3TEJBPT0K",
+      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.35-test.1/CogniNote-0.1.35-macos-arm64-unsigned.app.tar.gz"
     }
   }
 }
