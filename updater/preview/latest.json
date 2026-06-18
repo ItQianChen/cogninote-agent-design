@@ -1,15 +1,11 @@
 {
-  "version": "0.1.34",
-  "notes": "CogniNote 0.1.34 unsigned",
+  "version": "0.1.35",
+  "notes": "CogniNote 0.1.35 unsigned",
   "pub_date": "2026-06-15T13:42:18.307Z",
   "platforms": {
-    "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUZ6WWpoMnpocHVBSkpOeThYMzFpK3lBTnQyVzhVNGxaU05CcGNnY3daWlVuVk4reFNRUmRad0xIUVA1Vy9xNXJXaE9yYm4xOUtDSytBT3lYRC9XU0FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxNTMwOTM3CWZpbGU6Q29nbmlOb3RlLTAuMS4zNC1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6Clh2eTJBOCtWMDhzL09scGFzM2NhSzJBemRURnhsd29tTk1zU0EydlBoUm9mNUNLR2JHaTRCOUdQaFJoY3JxRFhjL2NGdzFlSEhTWjZacEloQnBGUkJRPT0K",
-      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.34-test.1/CogniNote-0.1.34-macos-arm64-unsigned.app.tar.gz"
-    },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUE2Tm9DbE00ei9PVExwTWlCOEd2Wkp6WU4wS0d2aDRETDBkQjhGWEsvb21QSW5sNDI1T3VlZ00xUlRlZThPRUp5MXp1RVpmOFZBdTVTb2h5a3VrUHdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxNTMxMjYxCWZpbGU6Q29nbmlOb3RlLTAuMS4zNC13aW5kb3dzLXg2NC11bnNpZ25lZC1pbnN0YWxsZXIuZXhlCmNONzM5RHAzY0R3UHR2S2pQWDFvR01RMlU4SEthcW84dVgrcmZMWDZrK3p0WEZjZEtvTGdhaUZtSUxjY0J1a1VjRE9EWTJLZHFZbCs2UmRqRnhlT0RRPT0K",
-      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.34-test.1/CogniNote-0.1.34-windows-x64-unsigned-installer.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUFHS3ZrTlNtTTVVSzFqYWh0dWdzYmNnckkrMDBWV1c4UStnYWhqYzc1azRmMGNTTjZlNGxGcDgvekI5UDRQclZhd2crcUt4UXo4eW9YWWdscTVjdEFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxNzg3NTgwCWZpbGU6Q29nbmlOb3RlLTAuMS4zNS13aW5kb3dzLXg2NC11bnNpZ25lZC1pbnN0YWxsZXIuZXhlCkt4bXFaQUNLM2ZsanBMZlo0eS9ETUNvR1ZBUTFKVXRtdmRUQjJwZkJhZ01qSjZrK3JkaXlBQ2hHaTRzUWp3b3RNSFFITWk1d0tqdUQyTmtCU0VIYkJRPT0K",
+      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.35-test.1/CogniNote-0.1.35-windows-x64-unsigned-installer.exe"
     }
   }
 }
