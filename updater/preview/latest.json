@@ -1,15 +1,11 @@
 {
-  "version": "0.1.36",
-  "notes": "CogniNote 0.1.36 unsigned",
-  "pub_date": "2026-06-20T06:28:43.053Z",
+  "version": "0.1.50",
+  "notes": "CogniNote 0.1.50 unsigned",
+  "pub_date": "2026-06-22T15:27:23.063Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUlkamVROFVhS0hUUitja0NkMWFialplSVFCUkFJdzdRcURmM29NMzEzdlFreThNM3cwNUFuWWVyeG5mNnBleGtsK0I4VTMxWDZsTXVZZDZuMllmeVFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxOTM2OTIxCWZpbGU6Q29nbmlOb3RlLTAuMS4zNi1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6Cm1OZC85ellPRjEvcW5VZThNeW80aHlycEVFVnBpcFpKc3hOUUFUZDQ4TTZMNGh2cXkyYW5FUk1na3laYzgwRVRXL2g0Q25COGxGWnRvY2lXaHUzb0NBPT0K",
-      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.36-test.1/CogniNote-0.1.36-macos-arm64-unsigned.app.tar.gz"
-    },
-    "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUVaREFyeE9NN0Fra3J5dXRrdFJWbmhBdjIxS3drdENBVGkxc1drSlNDM0YyTisxcUkwTUQyRmRIcW51YW5jRXVkb0FIY0pER1NlYzRKN094YXhuZUFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxOTM3MzQ3CWZpbGU6Q29nbmlOb3RlLTAuMS4zNi13aW5kb3dzLXg2NC11bnNpZ25lZC1pbnN0YWxsZXIuZXhlCmRlWlVIL0dFUzRjS1hNeW5NQmhpcENZazdCZG1xRmdSSEZSbWtNejhLNU5HQkVYN1dCMThuRlltQ1kxanExVHordVhQSlM0RGN2eVBJVHd2SmhDNEJBPT0K",
-      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.36-test.1/CogniNote-0.1.36-windows-x64-unsigned-installer.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRU9lRDRsT05HNUUzSUpJaGlISUlCVndUQXFTbXBBRzlWZHdabnlwNExlZWlEQ3ZmNjBmdUpkcjhHRzgyQmdqQ2hXNWVwK3R1bnNaeTdEa28rN1VmbEFnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMTQyMDQxCWZpbGU6Q29nbmlOb3RlLTAuMS41MC1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6CkVrWFMwRGlFMlhJOWRFUzFXVGI5SS9aRWNCWitxTDJPUlpJZ0RsOTAvelB2Uk5XbUFiZ0lQNm9nNTFpTC9mcisvb1VMdnFJcm5mTEl5YzBCOXJqbUNBPT0K",
+      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.50-test.1/CogniNote-0.1.50-macos-arm64-unsigned.app.tar.gz"
     }
   }
 }
