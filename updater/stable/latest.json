@@ -1,0 +1,11 @@
+{
+  "version": "0.1.51",
+  "notes": "CogniNote 0.1.51 unsigned",
+  "pub_date": "2026-06-23T05:13:26.687Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUdNU3FpYXVFbkZjNmMyeldxL2ppS0NRV3Y2RDdQS2hFMzE3bERTdUZnSzRlNkNVSjFyRlErSHNoV2RML2QzcUZyd0szUDZkd2ErbHQvZkhjNG52MXdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMTkxNjA0CWZpbGU6Q29nbmlOb3RlLTAuMS41MS1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6Ck9jaDBUeUpqVE1nWkFkQjZhSFFyMG8wOGEvQ0RuUFZOZHBVT3BaVEtoMkdoRWJGL2Q0WjVjeHZXY2c1WXRFTnNtU1pUWlA4WFR2WUlnYzcxQmE1MEJ3PT0K",
+      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.51/CogniNote-0.1.51-macos-arm64-unsigned.app.tar.gz"
+    }
+  }
+}
