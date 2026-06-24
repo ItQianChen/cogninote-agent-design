@@ -1,15 +1,11 @@
 {
-  "version": "0.1.51",
-  "notes": "CogniNote 0.1.51 unsigned",
-  "pub_date": "2026-06-23T05:13:26.687Z",
+  "version": "0.1.6",
+  "notes": "## 知记空间 0.1.6 更新内容\n\n### 新增与改进\n\n- 改进模型能力识别与展示，增加排序和缓存。\n- Model Config：模型选择下拉框支持搜索过滤和自动获取。\n- Model Config：优化模型选择与头部展示，移除预设模型名。\n- 应用更新：优化启动更新提示，支持Markdown更新说明和“不再提示”选项。\n- 知识库健康诊断：优化版本冲突检测规则并增强诊断详情展示。\n- 知识库健康诊断：将健康诊断问题按类别分组，支持忽略和查看详情。\n- 知识库健康诊断：将健康诊断重构为问答可用性诊断，新增图谱过期、重复内容与版本冲突提示。\n- 知识库维护：新增维护记录详情查看、删除、批量删除和筛选功能。\n- 知识库维护：维护操作新增统一确认对话框，防止误操作。\n- 知识库维护：支持多条维护完成通知队列，优化本地数据存储并发。\n- 知识库维护：新增维护任务完成全局通知，并精简面板内容。\n- 知识库健康诊断：新增本地未同步文件检测。\n- 知识库维护：新增知识库维护任务队列与取消支持。\n- 知识库健康诊断：新增可信状态独立面板并重构概览入口。\n- 知识库健康诊断：增强可信状态控制台与索引一致性诊断。\n- 界面：新增消息流滚动到底部按钮并将图表增强器重构为可组合项。\n- 界面：完善知识库目录管理界面，停用目录不计入健康问题。\n- 界面：重构知识库界面，拆分目录管理面板并优化布局。\n- 知识库健康诊断：新增知识库健康诊断与维护运行记录。\n\n### 问题修复\n\n- Version：修复修正版本号从 0.1.51 到 0.1.6。\n- Model Config：修复索引重建提示误触发问题。\n- 知识库健康诊断：修复维护记录筛选栏在窄屏下的布局错乱并添加操作图标。\n- 知识库维护：修复队列状态同步与去重逻辑。\n- 知识库维护：修复限制取消维护任务仅允许等待中的任务。\n- 知识库健康诊断：修复仅当索引异常时显示刷新按钮。\n- Test：修复将测试映射文件中的结果类型从 _int 改为 int。\n- 知识库健康诊断：修复停用文件夹不参与健康状态计算。\n\n### 稳定性与性能\n\n- 数据库：移除旧版数据库兼容逻辑，简化启动初始化。\n- 知识库健康诊断：预编译版本标准化匹配规则以提升性能。\n- 知识库维护：统一知识库快照刷新入口并防止重复刷新。\n- 界面：将知识库导入表单重构为对话框并使布局响应式。",
+  "pub_date": "2026-06-24T12:49:02.909Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUdNU3FpYXVFbkZjNmMyeldxL2ppS0NRV3Y2RDdQS2hFMzE3bERTdUZnSzRlNkNVSjFyRlErSHNoV2RML2QzcUZyd0szUDZkd2ErbHQvZkhjNG52MXdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMTkxNjA0CWZpbGU6Q29nbmlOb3RlLTAuMS41MS1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6Ck9jaDBUeUpqVE1nWkFkQjZhSFFyMG8wOGEvQ0RuUFZOZHBVT3BaVEtoMkdoRWJGL2Q0WjVjeHZXY2c1WXRFTnNtU1pUWlA4WFR2WUlnYzcxQmE1MEJ3PT0K",
-      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.51/CogniNote-0.1.51-macos-arm64-unsigned.app.tar.gz"
-    },
-    "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUpqNXJhcUFTVGt1cThBMDBrUWx3aURUVWJQaTRPNGlVOHdhLzcxSThkaE8rd3ZzUUtJWGFFRWVCM29uN2o0K05DdCt1UHVrNHh3cmRvMCs4NkttWkF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMTkxOTc0CWZpbGU6Q29nbmlOb3RlLTAuMS41MS13aW5kb3dzLXg2NC11bnNpZ25lZC1pbnN0YWxsZXIuZXhlClFCZDhIL3BUMzVjM01URWdXRitBaGhZVEhQYnArVzVSZHkrNW5yNjJ5NVk4NURxVGMwQUkza01IcWZ5M1kzSTMvMEU3K1Z3NnVMT1ZIVWZqck5VVEJnPT0K",
-      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.51/CogniNote-0.1.51-windows-x64-unsigned-installer.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUpSV2JMQ01WM2NxMlJTbmR6SVZBVlRDd0lmVE5ZY0xQb01QVjNibEFSdGl0aDVBUlovNzF3SlRqaDRMY21rK0dRMCtlNVprQ3M3R2VCTnRrVDBsRWdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMzA1MzQxCWZpbGU6Q29nbmlOb3RlLTAuMS42LW1hY29zLWFybTY0LXVuc2lnbmVkLmFwcC50YXIuZ3oKOXBJRUpDYmxXdlN3VzFUU3FCeHl4VGFiUUFsSmNhV1ltd0FPU0FMU0lqMkJrWHVYYlRnc1lOdGc1b29iMk5ob1hqQ1VnbUJsQkMvSG1MZ3IvQk52Q1E9PQo=",
+      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.6/CogniNote-0.1.6-macos-arm64-unsigned.app.tar.gz"
     }
   }
 }
