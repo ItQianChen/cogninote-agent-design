@@ -1,11 +1,15 @@
 {
   "version": "0.1.70",
-  "notes": "## 知记空间 0.1.70 更新内容\n\n### 新增与改进\n\n- Agent：支持模型动态调用联网搜索工具并展示网页来源。\n- Embedding：完善 Embedding 限速配置与补写索引，修复限速等待通知缺失。\n- Embedding：新增向量嵌入限速配置与补写索引功能。",
+  "notes": "## 知记空间 0.1.70 更新内容\r\n\r\n### 新增与改进\r\n\r\n- Agent：支持模型动态调用联网搜索工具并展示网页来源。\r\n- Embedding：完善 Embedding 限速配置与补写索引，修复限速等待通知缺失。\r\n- Embedding：新增向量嵌入限速配置与补写索引功能。",
   "pub_date": "2026-06-28T07:00:20.187Z",
   "platforms": {
     "darwin-aarch64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRU9COGNyVnV2cjVoU0F4NkxjTTI3S2Zhd1ZBUFhqMGdIdUFJNzFFaXhUTnpHSW11aHhpdW5RS0ZMUmpFTEQzMm5vdGdqaEU4OHFxMlQrVmlTOFMrUHdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyNjMwMDE4CWZpbGU6Q29nbmlOb3RlLTAuMS43MC1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6Cm5DOVZnSVY3VWFWNWZzdWVsRE1tTGRjZitxcVN5RWNXanF5YWp1VnFDL2cyblhHcTQ5eEJ5M1F2b3NpQzA5WncvaTJFdXM5bUJvV3pSbUhoWXRHL0RRPT0K",
       "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.70-test.1/CogniNote-0.1.70-macos-arm64-unsigned.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUNiNUNtVnMvdEFBeTJtMCtNYUl2OStUdXoxamxOaERlb0VTbUtYeDRKNS9nNCtXM2RpK1lTQS81K1l0TE13N2dpenJWcFUrQ1RZeENqV25XYTB4a3dzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyNjMwMzc4CWZpbGU6Q29nbmlOb3RlLTAuMS43MC13aW5kb3dzLXg2NC11bnNpZ25lZC1pbnN0YWxsZXIuZXhlCnovdmFZdlhqajF2bXlJSnp5Z3A4MUxDU3dEb1BKanF1Ry9ZMUZwaUErTURSdEIxcldXSEpzMU1ZNkF2QTBKWmxqcHcrY25JbEZGZXdJME1KTElCc0JnPT0K",
+      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.70-test.1/CogniNote-0.1.70-windows-x64-unsigned-installer.exe"
     }
   }
 }
