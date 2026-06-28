@@ -1,15 +1,11 @@
 {
-  "version": "0.1.51",
-  "notes": "## 知记空间 0.1.51 更新内容\r\n\r\n### 新增与改进\r\n\r\n- 应用更新：优化启动更新提示，支持Markdown更新说明和“不再提示”选项。",
-  "pub_date": "2026-06-23T14:03:13.921Z",
+  "version": "0.1.70",
+  "notes": "## 知记空间 0.1.70 更新内容\n\n### 新增与改进\n\n- Agent：支持模型动态调用联网搜索工具并展示网页来源。\n- Embedding：完善 Embedding 限速配置与补写索引，修复限速等待通知缺失。\n- Embedding：新增向量嵌入限速配置与补写索引功能。",
+  "pub_date": "2026-06-28T07:00:20.187Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRU01R1d2d1NlR0lDUi94Y2c1a3BlaDdsUG5kSWpzWW11L3JlMzgyTFB0eE9vU0JkcHZjVnZxVjRFL3BPOVlPcGoreU9pa0FsMzJ2eFRsS1laeDhHT3dFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMjIzMzkxCWZpbGU6Q29nbmlOb3RlLTAuMS41MS1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6CjFtMzE1NnFsMHhBanVoS09sdVVpTEc1OHJwNVVJQTZZQ0RTaUdhSDFPNDBUTUJEVTloR3FiK3M2OFZCdkU3aWdXME1sYWlBdE0vYlJsTnJvcmE2UkRBPT0K",
-      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.51-test.1/CogniNote-0.1.51-macos-arm64-unsigned.app.tar.gz"
-    },
-    "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUJ6aWRnU0lsdVVmUGtCZHFBbTNhVVdQM1oyRHJ5cS9vS1htUDAzTUFLSWJSWW9RSHJGamdnSHl2azI1Z05oOHc1UEdadFVxNVBRQVA0RXErYzRqWGdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMjIzNzg3CWZpbGU6Q29nbmlOb3RlLTAuMS41MS13aW5kb3dzLXg2NC11bnNpZ25lZC1pbnN0YWxsZXIuZXhlCklHZHlMMzB2aHZXUWZ5eE05QlBUWG53QXc3c2Jwa0J2M3FVOXhzbkQyRk5aajF5OVVEYlRQSXdyZzdJbFVaU1JuR1FTTUJnaEtZVWFqU1hJSW9zZEJBPT0K",
-      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.51-test.1/CogniNote-0.1.51-windows-x64-unsigned-installer.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRU9COGNyVnV2cjVoU0F4NkxjTTI3S2Zhd1ZBUFhqMGdIdUFJNzFFaXhUTnpHSW11aHhpdW5RS0ZMUmpFTEQzMm5vdGdqaEU4OHFxMlQrVmlTOFMrUHdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyNjMwMDE4CWZpbGU6Q29nbmlOb3RlLTAuMS43MC1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6Cm5DOVZnSVY3VWFWNWZzdWVsRE1tTGRjZitxcVN5RWNXanF5YWp1VnFDL2cyblhHcTQ5eEJ5M1F2b3NpQzA5WncvaTJFdXM5bUJvV3pSbUhoWXRHL0RRPT0K",
+      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.70-test.1/CogniNote-0.1.70-macos-arm64-unsigned.app.tar.gz"
     }
   }
 }
