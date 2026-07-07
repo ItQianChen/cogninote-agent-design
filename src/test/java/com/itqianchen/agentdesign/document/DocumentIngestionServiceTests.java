@@ -4,9 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
 import com.itqianchen.agentdesign.domain.enums.document.FileType;
+import com.itqianchen.agentdesign.domain.enums.search.SearchMode;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeChunk;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
 import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
+import com.itqianchen.agentdesign.domain.dto.search.SearchRequest;
+import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ScannedDocumentFile;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
@@ -37,6 +40,9 @@ class DocumentIngestionServiceTests {
     private DocumentRepository documentRepository;
 
     @Autowired
+    private KnowledgeStore knowledgeStore;
+
+    @Autowired
     private TestDatabaseCleaner databaseCleaner;
 
     @TempDir
@@ -45,6 +51,7 @@ class DocumentIngestionServiceTests {
     @BeforeEach
     void clearDatabase() {
         databaseCleaner.clearDocuments();
+        knowledgeStore.rebuildAll();
     }
 
     @Test
@@ -95,6 +102,43 @@ class DocumentIngestionServiceTests {
                 "page.html",
                 "archive.htm"
         );
+    }
+
+    @Test
+    void ingestFolderParsesHtmlAndHtmFilesAndIndexesKeywordSearch() throws Exception {
+        Files.writeString(tempDir.resolve("guide.html"), """
+                <!doctype html>
+                <html>
+                  <head><title>HTML Guide</title></head>
+                  <body>
+                    <main>
+                      <h1>Semantic Import</h1>
+                      <p>Local HTML content enters the knowledge base.</p>
+                    </main>
+                  </body>
+                </html>
+                """);
+        Files.writeString(tempDir.resolve("appendix.htm"), """
+                <!doctype html>
+                <html>
+                  <body><main><p>HTM appendix content.</p></main></body>
+                </html>
+                """);
+
+        IngestDocumentsResponse response = ingestionService.ingestFolder(tempDir.toString(), true);
+
+        assertThat(response.scannedCount()).isEqualTo(2);
+        assertThat(response.parsedCount()).isEqualTo(2);
+        assertThat(response.failedCount()).isZero();
+        assertThat(documentRepository.findAllOrderByUpdatedAtDesc())
+                .hasSize(2)
+                .allSatisfy(document -> {
+                    assertThat(document.status()).isEqualTo(DocumentStatus.PARSED);
+                    assertThat(document.fileType()).isEqualTo(FileType.HTML);
+                    assertThat(document.chunkCount()).isPositive();
+                });
+        assertThat(knowledgeStore.search(new SearchRequest("Semantic Import", SearchMode.KEYWORD, 5)).hits())
+                .anySatisfy(hit -> assertThat(hit.fileName()).isEqualTo("guide.html"));
     }
 
     @Test

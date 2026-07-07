@@ -109,6 +109,12 @@ PDF_OCR:tesseract-cli:v1:lang=chi_sim+eng:dpi=300
 
 ## 阶段 1：HTML / HTM 导入
 
+### 实现状态
+
+36-1 已落地，详见 [第 36-1 阶段计划：HTML / HTM 本地文档导入](phase-36-1-html-document-import-plan.md)。
+
+当前实现新增 `org.jsoup:jsoup`，版本为 `${jsoup.version}` / `1.22.2`；只解析本地静态 HTML 文件，不执行 JavaScript，不联网抓取，不引入 Apache Tika。
+
 ### 实现方案
 
 依赖选择：
@@ -129,7 +135,7 @@ PDF_OCR:tesseract-cli:v1:lang=chi_sim+eng:dpi=300
 解析规则：
 
 - 使用 `Jsoup.parse(path, null, path.toUri().toString())` 读取本地 HTML。
-- 删除 `script`、`style`、`noscript`、`svg`、`canvas`。
+- 删除 `script`、`style`、`noscript`、`svg`、`canvas`、`iframe`。
 - 优先抽取 `main`、`article`、`body`，找不到时使用整个 document body。
 - `title` 或第一个 `h1` 作为默认 heading。
 - 按 `h1-h6` 拆分 `ParsedSection`，没有标题时输出单 section。

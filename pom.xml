@@ -26,6 +26,7 @@
         <mybatis-spring-boot.version>3.0.5</mybatis-spring-boot.version>
         <poi.version>5.5.1</poi.version>
         <pdfbox.version>3.0.7</pdfbox.version>
+        <jsoup.version>1.22.2</jsoup.version>
         <lucene.version>10.4.0</lucene.version>
         <jtokkit.version>1.1.0</jtokkit.version>
         <spring-ai.version>1.1.2</spring-ai.version>
@@ -89,6 +90,11 @@
                     <artifactId>commons-logging</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>${jsoup.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.lucene</groupId>
