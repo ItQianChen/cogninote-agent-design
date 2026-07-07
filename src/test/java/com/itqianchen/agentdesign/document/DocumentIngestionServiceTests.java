@@ -14,10 +14,13 @@ import com.itqianchen.agentdesign.domain.vo.ingestion.ScannedDocumentFile;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -142,6 +145,26 @@ class DocumentIngestionServiceTests {
     }
 
     @Test
+    void ingestFolderParsesDocFileAndIndexesKeywordSearch() throws Exception {
+        Files.copy(fixture("legacy-note.doc"), tempDir.resolve("legacy-note.doc"), StandardCopyOption.REPLACE_EXISTING);
+
+        IngestDocumentsResponse response = ingestionService.ingestFolder(tempDir.toString(), true);
+
+        assertThat(response.scannedCount()).isEqualTo(1);
+        assertThat(response.parsedCount()).isEqualTo(1);
+        assertThat(response.failedCount()).isZero();
+        assertThat(documentRepository.findAllOrderByUpdatedAtDesc())
+                .singleElement()
+                .satisfies(document -> {
+                    assertThat(document.status()).isEqualTo(DocumentStatus.PARSED);
+                    assertThat(document.fileType()).isEqualTo(FileType.DOC);
+                    assertThat(document.chunkCount()).isPositive();
+                });
+        assertThat(knowledgeStore.search(new SearchRequest("line of text", SearchMode.KEYWORD, 5)).hits())
+                .anySatisfy(hit -> assertThat(hit.fileName()).isEqualTo("legacy-note.doc"));
+    }
+
+    @Test
     void deleteDocumentOnlyDeletesDatabaseRows() throws Exception {
         Path note = tempDir.resolve("delete-me.txt");
         // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
@@ -199,5 +222,10 @@ class DocumentIngestionServiceTests {
                 .hasSize(500)
                 .extracting(chunk -> chunk.chunkId())
                 .containsExactlyElementsOf(chunkIds.subList(0, 500));
+    }
+
+    private Path fixture(String name) throws Exception {
+        URL resource = Objects.requireNonNull(getClass().getResource("/fixtures/" + name));
+        return Path.of(resource.toURI());
     }
 }

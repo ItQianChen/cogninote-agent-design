@@ -159,6 +159,12 @@ PDF_OCR:tesseract-cli:v1:lang=chi_sim+eng:dpi=300
 
 ## 阶段 2：Word 97-2003 `.doc` 导入
 
+### 实现状态
+
+36-2 已落地，详见 [第 36-2 阶段计划：Word 97-2003 `.doc` 本地文档导入](phase-36-2-doc-document-import-plan.md)。
+
+当前实现新增 `org.apache.poi:poi-scratchpad`，版本复用 `${poi.version}` / `5.5.1`；只解析 Word 97-2003 二进制 `.doc` 正文，不执行宏，不抽取嵌入对象，不引入 Apache Tika，不改 SQLite / Lucene schema。parser signature 设计值固定为 `DOC:poi-hwpf:v1`，但本阶段仍不新增 schema 字段。
+
 ### 实现方案
 
 依赖选择：
@@ -174,7 +180,7 @@ PDF_OCR:tesseract-cli:v1:lang=chi_sim+eng:dpi=300
 新增：
 
 - `DocDocumentParser`
-- `DocDocumentParserTests`
+- `OfficeDocumentParserTests` 中的 DOC 覆盖用例
 
 解析规则：
 
@@ -349,7 +355,7 @@ DOC:poi-hwpf:v1
 - `FileType.fromFileName(...)` 覆盖 `.html`、`.htm`、`.doc`、大小写扩展名。
 - `DocumentParserRegistry` 能找到 HTML、DOC、PDF parser。
 - `HtmlDocumentParserTests` 覆盖标题、正文、代码块、脚本过滤。
-- `DocDocumentParserTests` 覆盖正常 `.doc` fixture 和损坏文件。
+- `OfficeDocumentParserTests` 覆盖正常 `.doc` fixture 和损坏文件。
 - `PdfDocumentParserTests` 覆盖文本型 PDF、空文本层 PDF、部分页面为空。
 - OCR 阶段增加 `TesseractCliOcrEngineTests`，用 fake executable 或 mock process runner，避免 CI 依赖真实 Tesseract。
 - `DocumentIngestionServiceTests` 覆盖新增文件类型扫描、失败记录和跳过逻辑。

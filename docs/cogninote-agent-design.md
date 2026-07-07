@@ -8,7 +8,7 @@
 
 第一版目标不是做一个大而全的 Agent 平台，而是做一个能真正落地的本地知识库问答工具：
 
-- 读取本地 Markdown、Word 文档和文本型 PDF
+- 读取本地 Markdown、Word DOCX / DOC 文档和文本型 PDF
 - 读取本地 HTML / HTM 文档
 - 建立本地混合检索索引
 - 通过用户配置的大模型进行问答
@@ -30,7 +30,7 @@
 - Vue 3 前端
 - 本地文件夹导入
 - Markdown / TXT 文本解析
-- Word 文档解析，第一版只支持 `.docx`
+- Word 文档解析，支持 `.docx` 和 Word 97-2003 `.doc`
 - 文本型 PDF 解析
 - Lucene 本地混合检索
 - 外部 Embedding API
@@ -46,7 +46,6 @@
 - Qdrant 适配
 - OCR 图片 PDF 识别
 - Obsidian 双链、标签、frontmatter 和关系图谱解析
-- 老式 `.doc` 文档解析
 - MCP Server
 - ACP / Codex 接入
 - Skill 市场
@@ -159,12 +158,12 @@ Spring Boot 后端
 - `.md`
 - `.txt`
 - `.docx`
+- `.doc`
 - `.html` / `.htm`
 - `.pdf`，仅支持有文本层的 PDF
 
 第一版不支持：
 
-- `.doc` 老式 Word 文档
 - 扫描件或图片型 PDF
 - Obsidian 专用语法解析
 
@@ -1083,6 +1082,7 @@ POST   /api/chat/stream/{requestId}/cancel
 - 支持选择本地目录
 - 支持 Markdown / TXT 解析
 - 支持 `.docx` 解析
+- 支持 Word 97-2003 `.doc` 解析
 - 支持 HTML / HTM 解析
 - 支持文本型 PDF 解析
 - 文本分块
@@ -1387,7 +1387,6 @@ POST   /api/chat/stream/{requestId}/cancel
 ### v0.2
 
 - Qdrant 适配
-- 老式 `.doc` 解析
 - 更完整的检索重排
 - 系统托盘
 
@@ -1414,7 +1413,7 @@ POST   /api/chat/stream/{requestId}/cancel
 控制方式：
 
 - 第一版只做 Lucene
-- 第一版只做 `.md`、`.txt`、`.docx`、`.html`、`.htm` 和文本型 `.pdf`
+- 第一版只做 `.md`、`.txt`、`.docx`、`.doc`、`.html`、`.htm` 和文本型 `.pdf`
 - 第一版只做问答和溯源
 - 其它都排到后续版本
 
@@ -1452,6 +1451,6 @@ POST   /api/chat/stream/{requestId}/cancel
 
 知记空间（CogniNote）第一版应聚焦为：
 
-> 一个 Java + Vue 实现的本地 Markdown / TXT / DOCX / HTML / 文本型 PDF 知识库问答工具，核心卖点是 SQLite + Lucene 的清晰存储分工、Lucene 混合检索、模型可配置、答案可溯源，并能打包成 Windows 桌面应用一键运行。
+> 一个 Java + Vue 实现的本地 Markdown / TXT / DOCX / DOC / HTML / 文本型 PDF 知识库问答工具，核心卖点是 SQLite + Lucene 的清晰存储分工、Lucene 混合检索、模型可配置、答案可溯源，并能打包成 Windows 桌面应用一键运行。
 
 只要第一版把这个闭环做扎实，它就已经不是普通 RAG Demo，而是一个能展示 Java 工程能力、搜索引擎能力、前端产品能力和 AI 应用落地能力的完整开源项目。

@@ -1,235 +1,86 @@
 package com.itqianchen.agentdesign.ingestion;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
 
+import com.itqianchen.agentdesign.domain.enums.document.FileType;
+import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
+import com.itqianchen.agentdesign.domain.support.ingestion.DocDocumentParser;
+import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
+import com.itqianchen.agentdesign.domain.support.ingestion.DocumentParserRegistry;
+import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
+import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
 import java.io.IOException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
 import java.io.OutputStream;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
+import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
+import java.util.List;
+import java.util.Objects;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
 import org.apache.pdfbox.pdmodel.PDPage;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
 import org.junit.jupiter.api.Test;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
 import org.junit.jupiter.api.io.TempDir;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.support.ingestion.PdfDocumentParser;
 
 class OfficeDocumentParserTests {
 
     @TempDir
     private Path tempDir;
+
+    @Test
+    void docParserSupportsOnlyLegacyDoc() {
+        DocDocumentParser parser = new DocDocumentParser();
+
+        assertThat(parser.supports(FileType.DOC)).isTrue();
+        assertThat(parser.supports(FileType.DOCX)).isFalse();
+    }
+
+    @Test
+    void documentParserRegistryFindsDocParser() {
+        DocDocumentParser parser = new DocDocumentParser();
+        DocumentParserRegistry registry = new DocumentParserRegistry(List.of(parser));
+
+        assertThat(registry.parserFor(FileType.DOC)).isSameAs(parser);
+    }
+
+    @Test
+    void docParserExtractsFixtureText() throws Exception {
+        ParsedDocument parsedDocument = new DocDocumentParser().parse(fixture("legacy-note.doc"));
+
+        assertThat(parsedDocument.fileType()).isEqualTo(FileType.DOC);
+        assertThat(parsedDocument.sections())
+                .singleElement()
+                .satisfies(section -> {
+                    assertThat(section.heading()).isNull();
+                    assertThat(section.pageNumber()).isNull();
+                    assertThat(section.content()).contains("This is a line of text.");
+                });
+        assertThat(parsedDocument.plainText()).contains("This is a line of text.");
+    }
+
+    @Test
+    void corruptDocFailsWithPathContext() throws Exception {
+        Path doc = tempDir.resolve("broken.doc");
+        Files.writeString(doc, "not a word binary file");
+
+        assertThatThrownBy(() -> new DocDocumentParser().parse(doc))
+                .isInstanceOf(DocumentParseException.class)
+                .hasMessageContaining("Failed to parse DOC file")
+                .hasMessageContaining("broken.doc");
+    }
+
+    @Test
+    void docxParserDoesNotClaimLegacyDoc() {
+        DocxDocumentParser parser = new DocxDocumentParser();
+
+        assertThat(parser.supports(FileType.DOCX)).isTrue();
+        assertThat(parser.supports(FileType.DOC)).isFalse();
+    }
 
     @Test
     void docxParserExtractsParagraphText() throws Exception {
@@ -238,6 +89,7 @@ class OfficeDocumentParserTests {
 
         ParsedDocument parsedDocument = new DocxDocumentParser().parse(docx);
 
+        assertThat(parsedDocument.fileType()).isEqualTo(FileType.DOCX);
         assertThat(parsedDocument.plainText()).contains("Docx paragraph");
     }
 
@@ -275,10 +127,14 @@ class OfficeDocumentParserTests {
                 .hasMessageContaining("no extractable text");
     }
 
+    private Path fixture(String name) throws Exception {
+        URL resource = Objects.requireNonNull(getClass().getResource("/fixtures/" + name));
+        return Path.of(resource.toURI());
+    }
+
     private void writeDocx(Path path, String text) throws IOException {
         try (XWPFDocument document = new XWPFDocument();
-             // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
-             OutputStream outputStream = java.nio.file.Files.newOutputStream(path)) {
+             OutputStream outputStream = Files.newOutputStream(path)) {
             XWPFParagraph paragraph = document.createParagraph();
             paragraph.createRun().setText(text);
             document.write(outputStream);
@@ -302,5 +158,3 @@ class OfficeDocumentParserTests {
         }
     }
 }
-
-
