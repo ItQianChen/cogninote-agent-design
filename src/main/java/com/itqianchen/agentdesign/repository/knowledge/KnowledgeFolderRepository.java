@@ -1,7 +1,5 @@
 package com.itqianchen.agentdesign.repository.knowledge;
 
-
-import com.itqianchen.agentdesign.domain.vo.knowledge.KnowledgeFolderSummary;
 import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolder;
 import com.itqianchen.agentdesign.domain.vo.knowledge.KnowledgeFolderSummary;
 import com.itqianchen.agentdesign.mapper.knowledge.KnowledgeFolderMapper;

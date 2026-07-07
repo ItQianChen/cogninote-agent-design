@@ -74,6 +74,7 @@ const RUN_OPERATION_LABELS = {
   REBUILD_INDEX: '重建索引',
   REPAIR_INDEX: '补写索引',
   SYNC: '同步目录',
+  REPARSE: '重新解析目录',
   ENABLE: '启用目录',
   DISABLE: '停用目录',
   DELETE: '删除目录'
@@ -111,6 +112,9 @@ function completionOperationLabel(run) {
   }
   if (run.operation === 'REPAIR_INDEX') {
     return '补写目录索引'
+  }
+  if (run.operation === 'REPARSE') {
+    return '重新解析目录'
   }
   return RUN_OPERATION_LABELS[run.operation] || run.operation || '维护任务'
 }
@@ -160,7 +164,7 @@ function buildCompletionMetrics(run) {
     return []
   }
   const metrics = []
-  if (run.operation === 'IMPORT') {
+  if (run.operation === 'IMPORT' || run.operation === 'REPARSE' || run.operation === 'SYNC') {
     metrics.push(
       { label: '扫描', value: run.scannedCount || 0 },
       { label: '解析', value: run.parsedCount || 0 },

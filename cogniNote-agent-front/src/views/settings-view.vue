@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ChevronUp } from 'lucide-vue-next'
 import DesktopUpdateSettingsPanel from '../components/desktop-update-settings-panel.vue'
+import OcrSettingsPanel from '../components/ocr-settings-panel.vue'
 import QueryContextualizerSettingsPanel from '../components/query-contextualizer-settings-panel.vue'
 import SystemStatusCard from '../components/system-status-card.vue'
 import WebSearchSettingsPanel from '../components/web-search-settings-panel.vue'
@@ -10,6 +11,7 @@ import { DEFAULT_SETTINGS_ITEM, SETTINGS_NAV_GROUPS, normalizeSettingsItem } fro
 import ModelConfigView from './model-config-view.vue'
 import { useChatSettingsStore } from '../stores/chat-settings'
 import { useModelConfigStore } from '../stores/model-config'
+import { useOcrSettingsStore } from '../stores/ocr-settings'
 import { useSearchStore } from '../stores/search'
 import { useSystemStore } from '../stores/system'
 import { THEME_OPTIONS, useThemeStore } from '../stores/theme'
@@ -28,6 +30,7 @@ const modelConfigStore = useModelConfigStore()
 const chatSettingsStore = useChatSettingsStore()
 const themeStore = useThemeStore()
 const webSearchSettingsStore = useWebSearchSettingsStore()
+const ocrSettingsStore = useOcrSettingsStore()
 const contentRef = ref(null)
 const showBackToTop = ref(false)
 const desktopVersion = ref('-')
@@ -119,6 +122,11 @@ async function loadActiveItemData(item) {
     return
   }
 
+  if (item === 'ocr') {
+    await ocrSettingsStore.fetchSettings({ force: true })
+    return
+  }
+
   if (item === 'model-chat') {
     await modelConfigStore.switchRole(modelConfigStore.ROLES.CHAT)
     return
@@ -187,6 +195,7 @@ function readRouteItem(item = route.query.item) {
       <DesktopUpdateSettingsPanel v-else-if="activeItem === 'app-update'" />
       <QueryContextualizerSettingsPanel v-else-if="activeItem === 'chat-retrieval'" />
       <WebSearchSettingsPanel v-else-if="activeItem === 'web-search'" />
+      <OcrSettingsPanel v-else-if="activeItem === 'ocr'" />
       <ModelConfigView
         v-else-if="activeItem === 'model-chat'"
         key="model-chat"

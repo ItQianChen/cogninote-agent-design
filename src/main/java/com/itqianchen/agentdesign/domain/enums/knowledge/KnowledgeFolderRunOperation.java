@@ -12,6 +12,9 @@ public enum KnowledgeFolderRunOperation {
     /** 同步本地目录差异。 */
     SYNC,
 
+    /** 强制重新解析目录内当前支持文件。 */
+    REPARSE,
+
     /** 重建目录或全库检索索引。 */
     REBUILD_INDEX,
 

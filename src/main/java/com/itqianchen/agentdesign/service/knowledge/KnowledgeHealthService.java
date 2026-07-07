@@ -73,7 +73,7 @@ public class KnowledgeHealthService {
     private static final int MAX_ISSUE_EXAMPLES = 5;
     private static final String PARSE_FAILED_DOCUMENT_MESSAGE = "解析失败，请检查文件是否损坏或是否包含可读取文本。";
     private static final String PDF_OCR_REQUIRED_DOCUMENT_MESSAGE =
-            "该 PDF 没有可抽取文本层；当前版本不会自动 OCR，可先用外部工具生成文本层后同步目录。";
+            "该 PDF 没有可抽取文本层；配置 OCR 后可重新解析目录，或先用外部工具生成文本层后同步目录。";
     private static final Pattern VERSION_FAMILY_TOKEN_PATTERN = Pattern.compile(
             "(?i)\\b(v\\d+(?:\\.\\d+)*|final|draft)\\b"
     );
@@ -633,7 +633,7 @@ public class KnowledgeHealthService {
                     KnowledgeHealthIssueCode.PDF_OCR_REQUIRED,
                     "WARNING",
                     "有 " + pdfOcrRequiredCount + " 个 PDF 没有可抽取文本层，需要 OCR 后才能进入知识库。",
-                    "SYNC_FOLDER",
+                    "REPARSE_FOLDER",
                     folderId,
                     pdfOcrRequiredCount
             ));

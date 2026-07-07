@@ -134,6 +134,18 @@ export const useKnowledgeFoldersStore = defineStore('knowledgeFolders', () => {
     }
   }
 
+  async function reparseFolder(id) {
+    ingestResult.value = null
+    rebuildResult.value = null
+    error.value = ''
+
+    try {
+      ingestResult.value = await maintenanceStore.reparseFolder(id)
+    } catch (err) {
+      error.value = `重新解析目录失败：${err.message}`
+    }
+  }
+
   async function toggleFolderEnabled(folder) {
     error.value = ''
 
@@ -189,6 +201,7 @@ export const useKnowledgeFoldersStore = defineStore('knowledgeFolders', () => {
     rebuildFolder,
     repairFolderIndex,
     syncFolder,
+    reparseFolder,
     toggleFolderEnabled,
     deleteFolder,
     toggleExpanded,

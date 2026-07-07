@@ -12,8 +12,8 @@
 2. HTML / HTM 导入。
 3. Word 97-2003 `.doc` 导入。
 4. PDF OCR 需求检测和用户可见诊断。
-5. 外部 Tesseract CLI OCR 可选能力。
-6. 内置 OCR 打包评估。
+5. 公共 OCR Provider 接入与 PDF 重新解析。
+6. 本地 / 离线 OCR 扩展评估。
 
 ## Core Judgment
 
@@ -21,7 +21,7 @@ HTML 和 `.doc` 值得先做，风险低、收益直接。PDF OCR 必须分层�
 
 - HTML 是本地知识库常见来源，`jsoup` 足够轻，能保持当前应用体积和解析边界可控。
 - `.doc` 可继续使用 Apache POI 生态，只需增加 `poi-scratchpad` 和一个 parser。
-- OCR 会引入 Tesseract、语言包、CPU/内存限制、临时文件、跨平台打包和重新解析策略，必须从检测开始，默认关闭。
+- OCR 会引入页面图片上传、按页费用、供应商鉴权、CPU/内存限制和重新解析策略，必须从检测开始，默认关闭，并清楚提示用户公共云 OCR 的数据边界。
 - 暂不引入 Apache Tika 全量解析包。Tika 能统一抽取很多格式，但会增加体积和复杂性；官方也提醒生产处理不可信文件时需要隔离、超时和内存限制。
 
 ## Current Boundaries
@@ -49,7 +49,7 @@ HTML 和 `.doc` 值得先做，风险低、收益直接。PDF OCR 必须分层�
 - 支持本地 `.html` 和 `.htm` 文件导入。
 - 支持 Word 97-2003 `.doc` 正文文本导入。
 - PDF 无文本层时能明确诊断为“需要 OCR”，而不是普通解析失败。
-- 提供可选外部 Tesseract CLI OCR，默认关闭。
+- 提供可选公共 OCR Provider 接入，第一版使用百度 OCR，默认关闭。
 - 保持未配置 OCR 的用户安装包体积和运行行为不变。
 - 为后续 parser 版本、OCR 语言和 OCR DPI 变化后的重新解析预留机制。
 
@@ -62,7 +62,7 @@ HTML 和 `.doc` 值得先做，风险低、收益直接。PDF OCR 必须分层�
 - 不承诺 OCR 版式还原，只把可搜索文本进入知识库。
 - 不支持联网抓取网页。HTML 导入只处理本地文件。
 - 不执行 Office 宏，不抽取嵌入对象。
-- 不把 Tesseract 语言包直接塞进第一版安装包。
+- 36-4 不实现 Tesseract CLI、本地离线 OCR 或内置语言包打包。
 
 ## 阶段 0：解析基础设施小改造
 
@@ -95,6 +95,7 @@ DOCX:poi-xwpf:v1
 DOC:poi-hwpf:v1
 PDF_TEXT:pdfbox:v1
 HTML:jsoup:v1
+PDF_OCR:baidu-ocr:v1:mode=STANDARD:lang=CHN_ENG:dpi=200
 PDF_OCR:tesseract-cli:v1:lang=chi_sim+eng:dpi=300
 ```
 
@@ -238,96 +239,95 @@ PDF has no extractable text layer; OCR is required: <path>
 - 全图片/空文本层 PDF 失败原因明确包含 OCR required。
 - 失败记录能进入前端导入结果，用户知道下一步是开启 OCR 或使用外部工具。
 
-## 阶段 4：外部 Tesseract CLI OCR 可选能力
+## 阶段 4：公共 OCR Provider 接入与 PDF 重新解析
+
+### 实现状态
+
+36-4 已落地，详见 [第 36-4 阶段计划：公共 OCR Provider 接入与 PDF 重新解析](phase-36-4-public-ocr-provider-plan.md)。
+
+当前实现第一版只启用 `BAIDU_OCR`，设置保存到 `app_settings` 的 `ocr.settings` JSON 快照。OCR 默认关闭，用户必须显式保存百度 OCR API Key / Secret Key 并启用后才会处理旧的 `OCR_REQUIRED` PDF。设置页会按本机配置诉求明文回显密钥；日志、异常、测试响应和维护运行记录不得输出密钥。
 
 ### 实现方案
 
-默认关闭，用户配置后才启用。第一版优先调用外部 `tesseract` 命令，不绑定 Tess4J，不打包语言包。
-
-配置项：
-
-```yaml
-app:
-  ingestion:
-    ocr:
-      enabled: false
-      tesseract-path: ""
-      languages: "chi_sim+eng"
-      dpi: 300
-      timeout-per-page-seconds: 30
-      max-pages: 200
-      max-image-megapixels: 40
-```
-
-新增接口：
+核心对象：
 
 ```text
+OcrProvider
 OcrEngine
-  NoopOcrEngine
-  TesseractCliOcrEngine
+OcrEngineRegistry
+BaiduOcrEngine
+OcrSettingsService
+```
+
+设置接口：
+
+```text
+GET  /api/ocr/settings
+PUT  /api/ocr/settings
+POST /api/ocr/test
+```
+
+维护接口：
+
+```text
+POST /api/knowledge-maintenance/runs/folders/{id}/reparse
 ```
 
 PDF OCR 流程：
 
 ```text
 PDFTextStripper extracts text layer
-  -> if enough text: return text sections
-  -> if no text and OCR disabled: OCR_REQUIRED
-  -> if no text and OCR enabled:
-       PDFRenderer.renderImageWithDPI(pageIndex, dpi)
-       write temp image
-       ProcessBuilder(tesseract, image, stdout, -l, languages)
-       collect page text
-       delete temp image
+  -> if any page has text: return text sections, do not OCR blank pages
+  -> if no page has text and OCR disabled/unavailable: OCR_REQUIRED
+  -> if no page has text and OCR enabled:
+       PDFRenderer.renderImageWithDPI(pageIndex, 200)
+       call BAIDU_OCR with page image
        return ParsedSection(pageText, null, pageNumber)
 ```
 
 实现约束：
 
-- 使用 `ProcessBuilder` 参数数组，不能拼 shell 字符串。
-- 临时文件必须写入应用临时目录或系统临时目录，并在 finally 中删除。
-- 每页必须有超时。
-- 超过 `max-pages` 或图片像素上限时拒绝 OCR，避免用户导入超大扫描件把机器跑满。
+- OCR 只处理 PDF 无文本层场景，不新增图片文件导入。
+- 有文本层 PDF 不混合 OCR 空白页，避免同一文档出现文本层和 OCR 双来源噪音。
+- `GET /api/ocr/settings` 允许本机设置页明文回显密钥；其他接口不得复用该 DTO。
+- `POST /api/ocr/test` 只验证百度鉴权和服务可用性，不上传用户文件，不返回密钥或 access token。
+- OCR 结果只进入 SQLite chunks 和 Lucene 索引，不修改用户原 PDF。
 - OCR 失败不覆盖已有成功解析结果，继续遵守现有 `FailedDocumentPolicy`。
-- OCR 结果只进入 SQLite chunks，不修改用户原 PDF。
+- `REPARSE` 忽略 `isUnchanged(...)`，用于 OCR 配置开启后重新处理旧的 `OCR_REQUIRED` 文档。
+- 普通 `SYNC` 仍保持增量跳过，`REBUILD_INDEX` 仍只负责索引重建。
 
 ### parser signature
 
-OCR 阶段必须解决重新解析问题。至少选一个方案：
+36-4 仍不新增 `parser_signature` 字段，先用显式 `REPARSE` 维护动作解决策略变化后的重新解析问题。
 
-方案 A：增加 `parser_signature` 字段。
+后续如需要 schema 字段，可使用以下设计值：
 
 ```text
-PDF_TEXT:v1
+PDF_TEXT:pdfbox:v1
+PDF_OCR:baidu-ocr:v1:mode=STANDARD:lang=CHN_ENG:dpi=200
 PDF_OCR:tesseract-cli:v1:lang=chi_sim+eng:dpi=300
 HTML:jsoup:v1
 DOC:poi-hwpf:v1
 ```
 
-当文件 hash 未变但 parser signature 变化时，重新解析。
-
-方案 B：增加显式“强制重新解析”维护动作。
-
-第一版可以先做 B，成本低；如果 OCR 设置会频繁变化，再补 A。
-
 ### 验收
 
 - 未配置 OCR 时，扫描 PDF 仍只提示需要 OCR。
-- 配置可用 Tesseract 后，扫描 PDF 能生成可搜索 chunk。
-- 中英文语言配置能传给 Tesseract。
-- 单页超时、命令不存在、语言包缺失时错误可读。
-- OCR 临时文件不会残留。
-- 大 PDF 不会无限占用 CPU 和内存。
+- 配置可用百度 OCR 后，无文本层 PDF 能重新解析为可搜索 chunk。
+- 文本型 PDF 不触发 OCR。
+- OCR 设置保存后能在设置页明文回显密钥，清空密钥会关闭 OCR。
+- 测试连接成功/失败都有明确反馈，且响应中不包含密钥。
+- 目录管理和健康诊断能引导用户对 `PDF_OCR_REQUIRED` 执行“配置 OCR”或“重新解析目录”。
 
-## 阶段 5：内置 OCR 打包评估
+## 阶段 5：本地 / 离线 OCR 扩展评估
 
 ### 目标
 
-在外部 CLI 方案稳定后，再评估是否把 OCR 引擎和语言包打进安装包。
+在公共 OCR Provider 方案稳定后，再评估是否补充本地离线 Provider 或内置 OCR 增强包。
 
 候选方案：
 
-- 打包 Tesseract CLI。
+- 外部 `TESSERACT_CLI` Provider。
 - 使用 Tess4J / JNA 绑定。
 - 引导用户安装系统 Tesseract。
 - 支持 OCRmyPDF sidecar 文本作为高级外部工具。
@@ -343,8 +343,8 @@ DOC:poi-hwpf:v1
 
 结论规则：
 
-- 如果内置 OCR 让安装包明显膨胀，默认继续使用外部 CLI。
-- 如果未来用户强依赖 OCR，可考虑单独 OCR 增强包或插件化能力。
+- 如果本地 OCR 让安装包明显膨胀，默认继续使用公共 OCR Provider 或外部 CLI。
+- 如果未来用户强依赖离线 OCR，可考虑单独 OCR 增强包或插件化能力。
 - 不把内置 OCR 和普通文档格式扩展混在同一次发布里。
 
 ## Data And Compatibility
@@ -364,7 +364,7 @@ DOC:poi-hwpf:v1
 - `HtmlDocumentParserTests` 覆盖标题、正文、代码块、脚本过滤。
 - `OfficeDocumentParserTests` 覆盖正常 `.doc` fixture 和损坏文件。
 - `PdfDocumentParserTests` 覆盖文本型 PDF、空文本层 PDF、部分页面为空。
-- OCR 阶段增加 `TesseractCliOcrEngineTests`，用 fake executable 或 mock process runner，避免 CI 依赖真实 Tesseract。
+- OCR 阶段增加 `OcrSettingsServiceTests`、`BaiduOcrEngineTests`、`PdfDocumentParserTests` 和维护队列测试，使用 fake HTTP client，避免 CI 调用真实百度 OCR。
 - `DocumentIngestionServiceTests` 覆盖新增文件类型扫描、失败记录和跳过逻辑。
 
 前端验证：
@@ -386,7 +386,7 @@ npm --prefix cogniNote-agent-front run build
 
 - HTML 和 `.doc` 回滚：移除新增 parser 和 `FileType` 枚举；已导入的 `HTML`/`DOC` 文档记录需要通过兼容清理脚本或维护动作删除，否则旧版本无法映射枚举。
 - OCR 检测回滚：恢复 `PdfDocumentParser` 原错误文案即可，不影响数据。
-- 外部 OCR 回滚：关闭 `app.ingestion.ocr.enabled`，保留普通 PDF 文本层解析。
+- 公共 OCR 回滚：关闭 `ocr.settings.enabled`，保留普通 PDF 文本层解析和 `OCR_REQUIRED` 诊断。
 - 内置 OCR 回滚：优先回滚打包资源和 native 加载，不改 SQLite schema。
 
 ## Acceptance Criteria
@@ -394,9 +394,10 @@ npm --prefix cogniNote-agent-front run build
 - HTML 和 `.doc` 能作为普通本地文档导入、切块、索引和 RAG 引用。
 - 现有 Markdown、TXT、DOCX、文本型 PDF 行为不回退。
 - 扫描件 PDF 在未开启 OCR 时给出明确“需要 OCR”提示。
-- 开启外部 Tesseract OCR 后，扫描件 PDF 能进入知识库并可搜索。
+- 开启 `BAIDU_OCR` 后，扫描件 PDF 能通过重新解析进入知识库并可搜索。
 - OCR 失败不会破坏已有解析成功的文档。
 - 默认安装包不因为 OCR 明显膨胀。
+- 公共 OCR 上传和按页费用风险已在设置页、README 和 API 文档中明确提示。
 - README、API 文档和阶段计划对支持格式、限制和安装要求描述一致。
 
 ## References
@@ -406,6 +407,9 @@ npm --prefix cogniNote-agent-front run build
 - [jsoup Extract attributes, text, and HTML](https://jsoup.org/cookbook/extracting-data/attributes-text-html)：HTML 文本抽取方法。
 - [jsoup API](https://jsoup.org/apidocs/org/jsoup/Jsoup)：从文件、路径和字符串解析 HTML。
 - [PDFBox PDFRenderer API](https://javadoc.io/static/org.apache.pdfbox/pdfbox/3.0.5/org/apache/pdfbox/rendering/PDFRenderer.html)：将 PDF 页面渲染成图片，供 OCR 使用。
+- [百度 OCR 价格详情](https://cloud.baidu.com/product-price/ocr.html)：公共 OCR 计费参考，实际费用以百度智能云控制台为准。
+- [百度通用场景文字识别价格](https://ai.baidu.com/ai-doc/OCR/9k3h7xuv6)：通用文字识别标准版和高精度版价格入口。
+- [百度 OCR 接口说明](https://cloud.baidu.com/doc/OCR/s/7kibizyfm)：百度 OCR API 调用说明。
 - [Tess4J API](https://tess4j.sourceforge.net/docs/docs-5.19/net/sourceforge/tess4j/Tesseract1.html)：Java/JNA 绑定 Tesseract 的可选方案。
 - [Tess4J GitHub](https://github.com/nguyenq/tess4j)：Tess4J 依赖 native library 和运行环境说明。
 - [Tesseract traineddata docs](https://tesseract-ocr.github.io/tessdoc/Data-Files.html)：语言包 fast/best/tessdata 差异。

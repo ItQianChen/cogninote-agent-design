@@ -1,23 +1,22 @@
 package com.itqianchen.agentdesign.service.document;
 
-
-import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
-import com.itqianchen.agentdesign.domain.enums.document.FileType;
-import com.itqianchen.agentdesign.domain.entity.document.KnowledgeChunk;
-import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
-import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentChunk;
-import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.exception.ingestion.PdfOcrRequiredException;
-import com.itqianchen.agentdesign.domain.support.ingestion.DocumentParserRegistry;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
-import com.itqianchen.agentdesign.domain.vo.ingestion.ScannedDocumentFile;
-import com.itqianchen.agentdesign.domain.support.ingestion.TextChunker;
-import com.itqianchen.agentdesign.domain.vo.search.IndexedChunk;
-import com.itqianchen.agentdesign.domain.vo.search.IndexedDocument;
-import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
 import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
 import com.itqianchen.agentdesign.domain.dto.document.IngestFailureResponse;
+import com.itqianchen.agentdesign.domain.entity.document.KnowledgeChunk;
+import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
+import com.itqianchen.agentdesign.domain.enums.document.FileType;
+import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
+import com.itqianchen.agentdesign.domain.exception.ingestion.PdfOcrRequiredException;
+import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
+import com.itqianchen.agentdesign.domain.support.ingestion.DocumentParserRegistry;
+import com.itqianchen.agentdesign.domain.support.ingestion.TextChunker;
+import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentChunk;
+import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
+import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
+import com.itqianchen.agentdesign.domain.vo.ingestion.ScannedDocumentFile;
+import com.itqianchen.agentdesign.domain.vo.search.IndexedChunk;
+import com.itqianchen.agentdesign.domain.vo.search.IndexedDocument;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -146,6 +145,25 @@ public class DocumentIngestionService {
     }
 
     /**
+     * 强制重新解析知识库目录。
+     *
+     * <p>REPARSE 会忽略未变化文件跳过逻辑，用于 OCR 配置开启后重新处理旧的 OCR_REQUIRED PDF。
+     * 单个文件普通解析失败时仍保留旧的 PARSED 结果，避免外部 OCR 或临时 I/O 波动破坏已有知识库。</p>
+     *
+     * @param knowledgeFolderId 知识库目录 ID
+     * @param folderPath 本地目录路径
+     * @param recursive 是否递归扫描
+     * @return 重新解析统计
+     */
+    public IngestDocumentsResponse reparseKnowledgeFolder(String knowledgeFolderId, String folderPath, boolean recursive) {
+        if (knowledgeFolderId == null || knowledgeFolderId.isBlank()) {
+            throw new DocumentParseException("Knowledge folder id is required");
+        }
+        return ingestFolder(folderPath, recursive, knowledgeFolderId,
+                FailedDocumentPolicy.PRESERVE_EXISTING_RECORD, true);
+    }
+
+    /**
      * 使用默认失败策略导入目录。
      *
      * @param folderPath 本地目录路径
@@ -172,6 +190,26 @@ public class DocumentIngestionService {
             String knowledgeFolderId,
             FailedDocumentPolicy failedDocumentPolicy
     ) {
+        return ingestFolder(folderPath, recursive, knowledgeFolderId, failedDocumentPolicy, false);
+    }
+
+    /**
+     * 按指定失败策略和解析模式导入目录。
+     *
+     * @param folderPath 本地目录路径
+     * @param recursive 是否递归扫描
+     * @param knowledgeFolderId 可选知识库目录 ID
+     * @param failedDocumentPolicy 解析失败时的记录策略
+     * @param forceReparse 是否忽略未变化文件跳过逻辑
+     * @return 导入统计
+     */
+    private IngestDocumentsResponse ingestFolder(
+            String folderPath,
+            boolean recursive,
+            String knowledgeFolderId,
+            FailedDocumentPolicy failedDocumentPolicy,
+            boolean forceReparse
+    ) {
         Path folder = Path.of(folderPath).toAbsolutePath().normalize();
         // 在入口处统一规范化路径，后续 documentId 和目录扫描都基于同一表示。
         if (!Files.isDirectory(folder)) {
@@ -181,7 +219,7 @@ public class DocumentIngestionService {
         List<Path> files = scanSupportedFiles(folder, recursive);
         IngestAccumulator accumulator = new IngestAccumulator(files.size());
         for (Path file : files) {
-            ingestFile(file, accumulator, knowledgeFolderId, failedDocumentPolicy);
+            ingestFile(file, accumulator, knowledgeFolderId, failedDocumentPolicy, forceReparse);
         }
 
         return accumulator.toResponse();
@@ -273,7 +311,8 @@ public class DocumentIngestionService {
             Path file,
             IngestAccumulator accumulator,
             String knowledgeFolderId,
-            FailedDocumentPolicy failedDocumentPolicy
+            FailedDocumentPolicy failedDocumentPolicy,
+            boolean forceReparse
     ) {
         Path normalizedFile = file.toAbsolutePath().normalize();
         Optional<FileType> optionalFileType = FileType.fromFileName(normalizedFile.getFileName().toString());
@@ -288,7 +327,7 @@ public class DocumentIngestionService {
             String documentId = documentIdentity.idForPath(normalizedFile.toString());
             Optional<KnowledgeDocument> existing = documentRepository.findById(documentId);
 
-            if (existing.isPresent() && isUnchanged(existing.get(), metadata)) {
+            if (!forceReparse && existing.isPresent() && isUnchanged(existing.get(), metadata)) {
                 assignKnowledgeFolderIfNeeded(existing.get(), knowledgeFolderId, now);
                 if (existing.get().indexedAt() == null) {
                     // SQLite 已有解析结果但索引缺失时，跳过重新解析，只补 Lucene 索引。

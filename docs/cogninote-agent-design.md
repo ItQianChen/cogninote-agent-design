@@ -8,7 +8,7 @@
 
 第一版目标不是做一个大而全的 Agent 平台，而是做一个能真正落地的本地知识库问答工具：
 
-- 读取本地 Markdown、Word DOCX / DOC 文档和文本型 PDF；无文本层 PDF 诊断为需 OCR
+- 读取本地 Markdown、Word DOCX / DOC 文档和文本型 PDF；无文本层 PDF 可诊断为需 OCR，并可在配置百度 OCR 后重新解析
 - 读取本地 HTML / HTM 文档
 - 建立本地混合检索索引
 - 通过用户配置的大模型进行问答
@@ -31,7 +31,7 @@
 - 本地文件夹导入
 - Markdown / TXT 文本解析
 - Word 文档解析，支持 `.docx` 和 Word 97-2003 `.doc`
-- 文本型 PDF 解析；无文本层 PDF 诊断为需 OCR
+- 文本型 PDF 解析；无文本层 PDF 诊断为需 OCR，并支持可选百度 OCR 重新解析
 - Lucene 本地混合检索
 - 外部 Embedding API
 - OpenAI-compatible 对话模型配置
@@ -44,7 +44,7 @@
 ### 第一版不做
 
 - Qdrant 适配
-- OCR 图片 PDF 识别
+- 本地离线 OCR 或内置 OCR 增强包
 - Obsidian 双链、标签、frontmatter 和关系图谱解析
 - MCP Server
 - ACP / Codex 接入
@@ -97,6 +97,7 @@ Vue 3 前端
       ├─ 系统与主题
       ├─ 知识库管理
       ├─ 联网搜索设置
+      ├─ OCR 识别设置
       └─ 模型配置
 
 Spring Boot 后端
@@ -160,11 +161,11 @@ Spring Boot 后端
 - `.docx`
 - `.doc`
 - `.html` / `.htm`
-- `.pdf`，仅支持有文本层的 PDF；无文本层 PDF 会记录为 `OCR_REQUIRED`
+- `.pdf`，优先解析文本层；无文本层 PDF 会记录为 `OCR_REQUIRED`，配置百度 OCR 后可重新解析为可搜索文本
 
 第一版不支持：
 
-- 自动 OCR 扫描件或图片型 PDF
+- 默认自动 OCR、图片文件导入和本地离线 OCR
 - Obsidian 专用语法解析
 
 说明：Obsidian 的普通笔记本质上仍是 Markdown 文件，第一版可以作为普通 `.md` 读取，但不解析 `[[双链]]`、标签、frontmatter 和关系图谱。
@@ -332,6 +333,8 @@ POST   /api/model-configs/settings/configs/{id}/activate
 
 第 35 阶段新增全局联网搜索设置，保存在 `app_settings` 的 `web-search.settings` JSON 快照中。MVP provider 固定为 `EXA`，配置项包括 `enabled`、`apiKey`、`maxResults`、`maxCallsPerTurn`、`timeoutMs` 和 `searchMode`。保存响应只返回 `apiKeyConfigured`，不会回显明文 Key；如果没有已保存或本次提交的新 Key，`enabled=true` 会被归一化为 `false`。
 
+第 36-4 阶段新增全局 OCR 设置，保存在 `app_settings` 的 `ocr.settings` JSON 快照中。第一版 provider 固定为 `BAIDU_OCR`，配置项包括 `enabled`、百度 `apiKey/secretKey`、识别模式、语言类型、方向检测和页数/超时/调用预算限制。设置页允许明文回显本机保存的密钥；日志、异常、测试响应和维护运行记录不得输出密钥。
+
 Prompt 文本统一放在 `src/main/resources/cogninote-prompts.yaml`。`application.yaml` 只通过 `spring.config.import=classpath:cogninote-prompts.yaml` 引入它，并保留服务端口、Spring AI 开关、日志、存储、检索、Embedding、聊天记忆等运行配置。聊天 Prompt 绑定到 `app.chat.prompts`，知识图谱抽取 Prompt 绑定到 `app.knowledge-graph.prompts`；业务代码只负责填充运行时变量和校验模型输出，不再内联大段 Prompt 文本。
 
 模型设置页使用 settings 快照接口作为页面事实来源：顶部 Active 卡片、左侧配置列表和右侧编辑表单由同一份 `ModelConfigSettingsResponse` 驱动。前端 `model-config` store 只保留一个当前编辑 `form`，不要在组件内再复制第二份表单状态；否则容易出现“列表和 Active 有数据，但右侧表单没有回显”的状态分叉。设置页切到“模型”时默认加载 `CHAT` 快照，点击 “Embedding 模型” 时再加载 `EMBEDDING` 快照。模型页不显示整块加载遮罩，避免页签切换时闪烁刺眼。
@@ -463,6 +466,7 @@ AI 回答的 Markdown 质量不只取决于前端渲染器，也取决于后端�
 
 - 系统：显示应用状态、数据目录、索引目录，并提供跟随系统、日间和夜间主题切换。
 - 知识库：复用知识库管理能力。
+- 策略：承载联网搜索和 OCR 识别设置。
 - 模型：复用模型配置能力。
 
 主题偏好保存在前端 `localStorage` 的 `cogninote-theme` 中，并通过 `html.theme-dark` / `html.theme-light` 类控制全局样式。默认主题为 `system`，实际生效主题根据系统浅色/深色偏好解析。
@@ -793,7 +797,7 @@ CREATE TABLE knowledge_graph_views (
 
 `chat_sessions` 与 `chat_messages` 是第十三阶段新增的聊天记忆事实来源。SQLite 保存全量消息；`summary` 和 `summary_message_sequence` 只描述已被摘要覆盖的历史范围，模型输入仍由 `ConversationMemorySnapshotService` 按 active Chat 上下文窗口选择“摘要 + 最近原文消息”，不写死固定条数。删除会话是物理删除，会同时移除会话行和对应消息；第十八阶段新增 `chat_messages.agent_type`，用于标记消息所属 Agent，并在普通对话和知识库模式切换时隔离跨 Agent 记忆污染。第 29 阶段新增 `chat_messages.references_json`，用于保存 user 消息引用的助手回复片段；旧库启动时由 schema 初始化自动补列，旧消息按空引用列表处理。
 
-`app_settings` 是第 23 阶段新增的全局应用设置表，当前用于保存 `chat.query-contextualizer.mode`。它的优先级高于 `COGNINOTE_QUERY_CONTEXTUALIZER_MODE` 和旧的 `COGNINOTE_QUERY_CONTEXTUALIZER_ENABLED=false` 兼容开关。
+`app_settings` 是第 23 阶段新增的全局应用设置表，当前用于保存 `chat.query-contextualizer.mode`、`web-search.settings` 和 `ocr.settings`。聊天补全策略的优先级高于 `COGNINOTE_QUERY_CONTEXTUALIZER_MODE` 和旧的 `COGNINOTE_QUERY_CONTEXTUALIZER_ENABLED=false` 兼容开关；OCR 设置包含本机明文密钥，只有 OCR 设置接口允许返回。
 
 第 25 阶段新增知识图谱表。`knowledge_graph_chunk_extractions` 是跨 scope 复用的单 chunk 模型抽取缓存，命中条件是 `content_hash + prompt_version + model_config_id + EXTRACTED` 一致；`knowledge_graph_nodes`、`knowledge_graph_edges`、`knowledge_graph_evidence` 和 `knowledge_graph_views` 是按 scope 合并出的派生层，可从抽取缓存全量重建；`knowledge_graph_runs` 保存用户生成图谱的运行历史和进度恢复快照。`knowledge_graph_edges.relation_type` 保存归一化后的 8 类内部粗分类，用于合并、筛选、统计和配色；`knowledge_graph_edges.display_label` 保存模型输出并由后端校验的中文短关系谓词，用于画布边标签、邻接表和证据标题；`knowledge_graph_edges.description` 保存中文完整关系说明，用于 Inspector、邻接表详情和证据抽屉。SQLite 外键默认未开启，删除知识库目录或 scope 图谱时必须继续使用显式 SQL 清理；用户删除某个已有图谱只清理该 scope 的 nodes、edges、evidence、views 和 runs，不删除原始目录、文档、chunks 或 `knowledge_graph_chunk_extractions`。
 
@@ -1010,9 +1014,12 @@ GET    /api/knowledge-health/runs?scopeType=KNOWLEDGE_FOLDER&scopeId=...
 GET    /api/knowledge-health/runs/page?scopeType=KNOWLEDGE_FOLDER&scopeId=...
 
 POST   /api/knowledge-maintenance/runs/rebuild-index
+POST   /api/knowledge-maintenance/runs/repair-index
 POST   /api/knowledge-maintenance/runs/import-folder
 POST   /api/knowledge-maintenance/runs/folders/{id}/sync
+POST   /api/knowledge-maintenance/runs/folders/{id}/reparse
 POST   /api/knowledge-maintenance/runs/folders/{id}/rebuild
+POST   /api/knowledge-maintenance/runs/folders/{id}/repair-index
 POST   /api/knowledge-maintenance/runs/folders/{id}/enabled
 POST   /api/knowledge-maintenance/runs/folders/{id}/delete
 GET    /api/knowledge-maintenance/runs/queue
@@ -1050,6 +1057,9 @@ PUT    /api/chat/settings
 GET    /api/web-search/settings
 PUT    /api/web-search/settings
 POST   /api/web-search/test
+GET    /api/ocr/settings
+PUT    /api/ocr/settings
+POST   /api/ocr/test
 
 POST   /api/chat/stream
 POST   /api/chat/stream/{requestId}/cancel
@@ -1061,11 +1071,13 @@ POST   /api/chat/stream/{requestId}/cancel
 
 `GET /api/web-search/settings`、`PUT /api/web-search/settings` 和 `POST /api/web-search/test` 用于联网搜索全局配置。MVP provider 固定为 `EXA`；保存接口允许写入 API Key，但响应只返回 `apiKeyConfigured`。聊天请求只有显式传 `useWebSearch=true` 且全局设置可用时，后端才会挂载 `WebSearchTools`。
 
+`GET /api/ocr/settings`、`PUT /api/ocr/settings` 和 `POST /api/ocr/test` 用于 OCR 全局配置。第一版 provider 固定为 `BAIDU_OCR`；设置接口允许明文返回本机保存的 API Key / Secret Key，测试接口只验证百度鉴权与服务可用性，不上传用户文件，也不返回密钥或 access token。
+
 `POST /api/chat/stream` 支持可选 `references` 数组。每个引用包含 `id`、`messageId` 和 `snippet`，用于把用户选中的助手回复片段注入本轮模型上下文。服务端会限制最多 5 个片段、单片段 1200 字符、总片段 4000 字符，并按 `messageId + snippet` 去重。会话详情中的消息响应会返回 `references`，用于刷新后恢复用户消息上的引用标签和预览。
 
 `GET /api/knowledge-health`、`GET /api/knowledge-health/folders/{id}`、`GET /api/knowledge-health/runs` 和 `GET /api/knowledge-health/runs/page` 用于知识库问答可用性诊断和维护历史查询。它们只读当前 SQLite、Lucene 索引字段、本地文件元数据和图谱派生视图时间，不会自动同步、重建、启停或删除。`issues[].action` 只表达建议动作，前端需要继续调用 `/api/knowledge-maintenance/runs/**`、图谱接口或设置页入口执行用户确认后的修复动作。
 
-`/api/knowledge-maintenance/runs/**` 是知识库维护任务队列接口。导入目录、同步目录、补写索引、重建目录索引、重建全部索引、启用、停用和删除目录都通过该接口入队。`GET /queue` 用于页面刷新后恢复当前任务和等待队列；`GET /{runId}/events` 使用 SSE 推送 `maintenance-run-snapshot`、`maintenance-run-started`、`maintenance-run-progress`、`maintenance-run-completed`、`maintenance-run-failed` 和 `maintenance-queue-updated` 等事件；`POST /{runId}/cancel` 只允许取消 `QUEUED` 任务，运行中的任务执行到安全完成点。
+`/api/knowledge-maintenance/runs/**` 是知识库维护任务队列接口。导入目录、同步目录、重新解析目录、补写索引、重建目录索引、重建全部索引、启用、停用和删除目录都通过该接口入队。`GET /queue` 用于页面刷新后恢复当前任务和等待队列；`GET /{runId}/events` 使用 SSE 推送 `maintenance-run-snapshot`、`maintenance-run-started`、`maintenance-run-progress`、`maintenance-run-completed`、`maintenance-run-failed` 和 `maintenance-queue-updated` 等事件；`POST /{runId}/cancel` 只允许取消 `QUEUED` 任务，运行中的任务执行到安全完成点。
 
 ## 11. 开发里程碑
 
@@ -1086,6 +1098,7 @@ POST   /api/chat/stream/{requestId}/cancel
 - 支持 HTML / HTM 解析
 - 支持文本型 PDF 解析
 - 支持无文本层 PDF 的 OCR 需求诊断
+- 支持配置百度 OCR 后重新解析无文本层 PDF
 - 文本分块
 - SQLite 保存文档元数据和 Chunk 文本
 
@@ -1383,6 +1396,15 @@ POST   /api/chat/stream/{requestId}/cancel
 - SSE 新增 `tool` 事件，网页来源以 `sourceType=WEB` 合并到 assistant sources；旧本地来源缺少 `sourceType` 时按 `LOCAL` 兼容。
 - 设置中心新增“策略 -> 联网搜索”页面，提供配置说明、调用策略说明、Exa 文档入口、Key 门控、连接测试和夜间模式适配。
 
+### Milestone 36：文档格式扩展与公共 OCR Provider
+
+- `FileType` 支持多扩展名，新增 `.markdown`、`.html`、`.htm` 和 `.doc` 识别。
+- 新增 HTML / HTM 本地文档解析，基于 jsoup 抽取正文、标题、代码块和表格文本。
+- 新增 Word 97-2003 `.doc` 解析，基于 POI HWPF / `WordExtractor` 抽取正文。
+- PDF 无文本层时持久化为 `OCR_REQUIRED`，健康诊断生成 `PDF_OCR_REQUIRED`。
+- 设置中心新增“策略 -> OCR 识别”，第一版接入 `BAIDU_OCR`；密钥保存在本机并可在设置页明文回显。
+- 新增 `REPARSE` 维护动作，用于 OCR 配置开启后重新解析目录内无文本层 PDF。
+
 ## 12. 后续版本规划
 
 ### v0.2
@@ -1393,7 +1415,7 @@ POST   /api/chat/stream/{requestId}/cancel
 
 ### v0.3
 
-- OCR 图片 PDF 自动识别
+- 更多 OCR Provider、本地离线 OCR 或 OCR 增强包评估
 - 更多联网搜索 provider 与自托管搜索适配
 - 自动生成本地知识条目
 - 知识构建模式
@@ -1452,6 +1474,6 @@ POST   /api/chat/stream/{requestId}/cancel
 
 知记空间（CogniNote）第一版应聚焦为：
 
-> 一个 Java + Vue 实现的本地 Markdown / TXT / DOCX / DOC / HTML / 文本型 PDF 知识库问答工具，无文本层 PDF 会诊断为需 OCR；核心卖点是 SQLite + Lucene 的清晰存储分工、Lucene 混合检索、模型可配置、答案可溯源，并能打包成 Windows 桌面应用一键运行。
+> 一个 Java + Vue 实现的本地 Markdown / TXT / DOCX / DOC / HTML / PDF 知识库问答工具，文本型 PDF 直接入库，无文本层 PDF 可诊断为需 OCR 并在配置百度 OCR 后重新解析；核心卖点是 SQLite + Lucene 的清晰存储分工、Lucene 混合检索、模型可配置、答案可溯源，并能打包成 Windows 桌面应用一键运行。
 
 只要第一版把这个闭环做扎实，它就已经不是普通 RAG Demo，而是一个能展示 Java 工程能力、搜索引擎能力、前端产品能力和 AI 应用落地能力的完整开源项目。

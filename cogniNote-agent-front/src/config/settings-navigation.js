@@ -36,7 +36,8 @@ export const SETTINGS_NAV_GROUPS = [
     label: '策略',
     items: [
       { id: 'chat-retrieval', label: '聊天与检索' },
-      { id: 'web-search', label: '联网搜索' }
+      { id: 'web-search', label: '联网搜索' },
+      { id: 'ocr', label: 'OCR 识别' }
     ]
   }
 ]

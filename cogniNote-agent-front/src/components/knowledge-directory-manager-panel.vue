@@ -20,6 +20,7 @@ import {
   confirmDeleteKnowledgeFolder,
   confirmDisableFolder,
   confirmRebuildFolderIndex,
+  confirmReparseFolder,
   confirmSyncFolder
 } from '../composables/use-knowledge-maintenance-confirm'
 import { useKnowledgeFoldersStore } from '../stores/knowledge-folders'
@@ -48,6 +49,7 @@ const HEALTH_STATUS_LABELS = {
 const RUN_OPERATION_LABELS = {
   IMPORT: '导入',
   SYNC: '同步',
+  REPARSE: '重解析',
   REBUILD_INDEX: '重建',
   REPAIR_INDEX: '补写',
   ENABLE: '启用',
@@ -266,6 +268,16 @@ async function rebuildFolderIndex(folder) {
     return
   }
   await knowledgeStore.rebuildFolder(folder.id)
+}
+
+async function reparseFolder(folder) {
+  if (!folder?.enabled || isFolderRunning(folder)) {
+    return
+  }
+  if (!await confirmReparseFolder(folder)) {
+    return
+  }
+  await knowledgeStore.reparseFolder(folder.id)
 }
 
 async function toggleFolderEnabled(folder) {
@@ -487,6 +499,12 @@ async function refreshDirectories() {
                 </el-button>
                 <template #dropdown>
                 <el-dropdown-menu>
+                    <el-dropdown-item
+                      :disabled="!folder.enabled || isFolderRunning(folder)"
+                      @click="reparseFolder(folder)"
+                    >
+                      重新解析目录
+                    </el-dropdown-item>
                     <el-dropdown-item
                       :disabled="!folder.enabled || isFolderRunning(folder)"
                       @click="rebuildFolderIndex(folder)"

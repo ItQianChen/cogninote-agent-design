@@ -1,16 +1,18 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { AlertTriangle, BrainCircuit, ChevronRight, Copy, Database, FolderSync, GitBranch, RotateCcw } from 'lucide-vue-next'
+import { AlertTriangle, BrainCircuit, ChevronRight, Copy, Database, FolderSync, GitBranch, RotateCcw, ScanText } from 'lucide-vue-next'
 import KnowledgeHealthIssueDetailDialog from './knowledge-health-issue-detail-dialog.vue'
 import {
   confirmRebuildAllIndex,
+  confirmReparseFolder,
   confirmSyncFolder
 } from '../composables/use-knowledge-maintenance-confirm'
 import { useKnowledgeHealthIssueIgnore } from '../composables/use-knowledge-health-issue-ignore'
 import { useKnowledgeFoldersStore } from '../stores/knowledge-folders'
 import { useKnowledgeHealthStore } from '../stores/knowledge-health'
 import { useKnowledgeMaintenanceStore } from '../stores/knowledge-maintenance'
+import { useOcrSettingsStore } from '../stores/ocr-settings'
 import { useSearchStore } from '../stores/search'
 import { formatTime } from '../utils/formatters'
 import { buildIssueCategories, issueMetaText } from '../utils/knowledge-health-issues'
@@ -18,6 +20,7 @@ import { buildIssueCategories, issueMetaText } from '../utils/knowledge-health-i
 const knowledgeStore = useKnowledgeFoldersStore()
 const healthStore = useKnowledgeHealthStore()
 const maintenanceStore = useKnowledgeMaintenanceStore()
+const ocrSettingsStore = useOcrSettingsStore()
 const searchStore = useSearchStore()
 const isIssueDetailDialogOpen = ref(false)
 const selectedIssueSection = ref(null)
@@ -72,6 +75,9 @@ const canRepairFolder = computed(() => Boolean(currentFolder.value?.enabled && h
 const globalIssues = computed(() => (healthStore.health?.issues || []).filter((issue) => issue.scopeType === 'ALL' && !issue.scopeId))
 const hasFolderSyncIssues = computed(() => problemSections.value.some((section) => section.action === 'SYNC_FOLDER'))
 const hasFolderIndexIssues = computed(() => problemSections.value.some((section) => section.action === 'REPAIR_INDEX'))
+const hasFolderOcrIssues = computed(() => Boolean(
+  folderHealth.value?.issues?.some((issue) => issue.code === 'PDF_OCR_REQUIRED')
+))
 const systemProblemSections = computed(() =>
   buildIssueCategories(globalIssues.value, ignoredIssueKeys.value).map((section) => ({
     ...section,
@@ -93,6 +99,10 @@ const ignoredGlobalIssueCount = computed(() =>
 )
 const selectedFolderRun = computed(() => maintenanceStore.activeRunForFolder(healthStore.selectedFolderId))
 
+onMounted(() => {
+  ocrSettingsStore.fetchSettings()
+})
+
 // issue.action 是后端建议；抽屉只映射到同步、重建、配置这类显式且可恢复的操作。
 async function syncSelectedFolder() {
   if (!healthStore.selectedFolderId) {
@@ -102,6 +112,16 @@ async function syncSelectedFolder() {
     return
   }
   await knowledgeStore.syncFolder(healthStore.selectedFolderId)
+}
+
+async function reparseSelectedFolder() {
+  if (!healthStore.selectedFolderId) {
+    return
+  }
+  if (!await confirmReparseFolder(currentFolder.value)) {
+    return
+  }
+  await knowledgeStore.reparseFolder(healthStore.selectedFolderId)
 }
 
 async function rebuildGlobalIndex() {
@@ -164,6 +184,23 @@ function openIssueSection(section) {
     </div>
 
     <div class="knowledge-health-drawer__actions">
+      <el-button
+        v-if="hasFolderOcrIssues && ocrSettingsStore.available"
+        :disabled="!canRepairFolder || Boolean(selectedFolderRun)"
+        :loading="selectedFolderRun?.status === 'RUNNING' || selectedFolderRun?.status === 'CANCELLING'"
+        @click="reparseSelectedFolder"
+      >
+        <ScanText aria-hidden="true" />
+        <span>{{ selectedFolderRun ? '维护中' : '重新解析' }}</span>
+      </el-button>
+      <RouterLink
+        v-else-if="hasFolderOcrIssues"
+        class="knowledge-header-link"
+        :to="{ name: 'settings', query: { item: 'ocr' } }"
+      >
+        <ScanText aria-hidden="true" />
+        <span>配置 OCR</span>
+      </RouterLink>
       <el-button
         v-if="hasFolderSyncIssues"
         :disabled="!canRepairFolder || Boolean(selectedFolderRun)"

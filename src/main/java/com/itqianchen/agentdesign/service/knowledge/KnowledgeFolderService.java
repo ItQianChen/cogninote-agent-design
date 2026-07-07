@@ -200,6 +200,47 @@ public class KnowledgeFolderService {
     }
 
     /**
+     * 强制重新解析目录文件。
+     *
+     * <p>该动作不只是补索引，会重新读取和解析所有当前支持文件；用于 OCR 配置开启后处理旧的
+     * OCR_REQUIRED PDF。不存在于本地目录的旧记录会同步删除。</p>
+     *
+     * @param id 知识库目录 ID
+     * @return 重新解析统计
+     */
+    public IngestDocumentsResponse reparseFolder(String id) {
+        long startedAt = System.currentTimeMillis();
+        KnowledgeFolder folder = requireFolder(id);
+        if (!folder.enabled()) {
+            throw new DocumentParseException("Knowledge folder is disabled: " + folder.displayName());
+        }
+
+        Set<String> currentDocumentIds = ingestionService.scanDocumentIds(
+                folder.folderPath(),
+                folder.recursive()
+        );
+        IngestDocumentsResponse response = ingestionService.reparseKnowledgeFolder(
+                folder.id(),
+                folder.folderPath(),
+                folder.recursive()
+        );
+        deleteMissingLocalDocuments(folder.id(), currentDocumentIds);
+        long now = System.currentTimeMillis();
+        knowledgeFolderRepository.markIngested(folder.id(), now);
+        markFolderIndexedIfAllParsedDocumentsIndexed(folder.id(), now);
+        log.info("knowledge_folder_reparsed folderId={} folderPath={} scanned={} parsed={} skipped={} failed={} durationMs={}",
+                folder.id(),
+                folder.folderPath(),
+                response.scannedCount(),
+                response.parsedCount(),
+                response.skippedCount(),
+                response.failedCount(),
+                now - startedAt
+        );
+        return response;
+    }
+
+    /**
      * 重新扫描目录并重建目录索引。
      *
      * @param id 知识库目录 ID

@@ -17,6 +17,10 @@ export function enqueueSyncFolder(id) {
   return requestJson(`/api/knowledge-maintenance/runs/folders/${encodeURIComponent(id)}/sync`, jsonOptions('POST', {}))
 }
 
+export function enqueueReparseFolder(id) {
+  return requestJson(`/api/knowledge-maintenance/runs/folders/${encodeURIComponent(id)}/reparse`, jsonOptions('POST', {}))
+}
+
 export function enqueueRebuildFolder(id) {
   return requestJson(`/api/knowledge-maintenance/runs/folders/${encodeURIComponent(id)}/rebuild`, jsonOptions('POST', {}))
 }

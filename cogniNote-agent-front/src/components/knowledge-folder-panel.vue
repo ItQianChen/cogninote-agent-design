@@ -31,6 +31,7 @@ const HEALTH_STATUS_LABELS = {
 const RUN_OPERATION_LABELS = {
   IMPORT: '导入',
   SYNC: '同步',
+  REPARSE: '重解析',
   REBUILD_INDEX: '重建',
   REPAIR_INDEX: '补写',
   ENABLE: '启用',

@@ -148,6 +148,7 @@ class KnowledgeHealthControllerTests {
                 .andExpect(jsonPath("$.data.status").value("WARNING"))
                 .andExpect(jsonPath("$.data.issues.length()").value(1))
                 .andExpect(jsonPath("$.data.issues[0].code").value("PDF_OCR_REQUIRED"))
+                .andExpect(jsonPath("$.data.issues[0].action").value("REPARSE_FOLDER"))
                 .andExpect(jsonPath("$.data.failedDocuments.length()").value(1))
                 .andExpect(jsonPath("$.data.failedDocuments[0].message").value(startsWith("该 PDF 没有可抽取文本层")));
 

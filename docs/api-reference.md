@@ -84,7 +84,7 @@ GET /api/system/status
 GET /api/documents
 ```
 
-返回已导入文档列表，按更新时间倒序排列。文档 `status` 当前支持 `PARSED`、`SKIPPED`、`FAILED`、`OCR_REQUIRED`；`OCR_REQUIRED` 表示 PDF 没有可抽取文本层，当前版本不会自动 OCR。
+返回已导入文档列表，按更新时间倒序排列。文档 `status` 当前支持 `PARSED`、`SKIPPED`、`FAILED`、`OCR_REQUIRED`；`OCR_REQUIRED` 表示 PDF 没有可抽取文本层。用户配置并启用 OCR 后，可以同步或重新解析目录让这类 PDF 进入知识库。
 
 ### 导入目录
 
@@ -150,7 +150,7 @@ POST /api/knowledge-folders/import
 POST /api/knowledge-folders/{id}/sync
 ```
 
-扫描已导入目录中的支持文件，只解析新增或修改的文件，并为缺失索引的旧文档补写 Lucene；未变化文件会跳过，不做整目录索引重建。若 PDF 没有可抽取文本层，会记录为 `OCR_REQUIRED` 并计入 `failedCount`，但不会自动 OCR。若本地目录中某个旧文件已被删除，同步会删除应用内对应文档/chunks/索引记录，但不触碰用户文件系统。同步目录必须处于启用状态。
+扫描已导入目录中的支持文件，只解析新增或修改的文件，并为缺失索引的旧文档补写 Lucene；未变化文件会跳过，不做整目录索引重建。若 PDF 没有可抽取文本层且 OCR 未启用，会记录为 `OCR_REQUIRED` 并计入 `failedCount`；若 OCR 已启用且配置可用，则会按页识别并写入 chunks / Lucene。若本地目录中某个旧文件已被删除，同步会删除应用内对应文档/chunks/索引记录，但不触碰用户文件系统。同步目录必须处于启用状态。
 
 响应体 `data` 为本次扫描统计：
 
@@ -268,7 +268,7 @@ GET /api/knowledge-health
 }
 ```
 
-`status` 支持 `HEALTHY`、`WARNING`、`ERROR`、`DISABLED`、`EMPTY`。`issues[].action` 是建议动作，例如 `SYNC_FOLDER`、`REPAIR_INDEX`、`REBUILD_INDEX`、`DELETE_FOLDER`，前端仍需调用对应维护接口执行。停用目录返回 `DISABLED`，作为用户主动排除检索范围的维护状态，不计入全库问题数量或 `WARNING/ERROR`。
+`status` 支持 `HEALTHY`、`WARNING`、`ERROR`、`DISABLED`、`EMPTY`。`issues[].action` 是建议动作，例如 `SYNC_FOLDER`、`REPARSE_FOLDER`、`REPAIR_INDEX`、`REBUILD_INDEX`、`DELETE_FOLDER`，前端仍需调用对应维护接口执行。停用目录返回 `DISABLED`，作为用户主动排除检索范围的维护状态，不计入全库问题数量或 `WARNING/ERROR`。
 
 第 32 阶段新增的 `summary.luceneDocumentCount` 和 `summary.luceneChunkCount` 来自 Lucene reader 实际统计；`summary.indexConsistent=false` 表示 SQLite 中应已索引的文档/chunk 与 Lucene reader 统计不一致；`summary.embeddingConfigured=false` 表示当前没有可用 Embedding，向量或混合检索需要配置向量模型。
 
@@ -281,7 +281,7 @@ GET /api/knowledge-health
 | `FOLDER_NOT_FOUND` | `ERROR` | 目录路径当前不可访问 | 删除目录记录或重新导入正确目录 |
 | `NO_DOCUMENTS` | `WARNING` | 启用目录没有文档记录 | 同步目录或检查递归扫描 |
 | `PARSE_FAILED` | `WARNING` | 存在解析失败文档 | 修复源文件后同步目录 |
-| `PDF_OCR_REQUIRED` | `WARNING` | PDF 没有可抽取文本层，需 OCR 后才能进入知识库 | 使用外部工具生成文本层后同步目录 |
+| `PDF_OCR_REQUIRED` | `WARNING` | PDF 没有可抽取文本层，需 OCR 后才能进入知识库 | 配置 OCR 后重新解析目录 |
 | `UNINDEXED_DOCUMENTS` | `ERROR` | 已解析文档尚未进入 Lucene，常见原因是 Embedding 供应商限流后仍未写入索引 | 补写索引 |
 | `STALE_LOCAL_FILES` | `WARNING` | 本地文件大小或修改时间已变化 | 同步目录 |
 | `MISSING_LOCAL_FILES` | `WARNING` | 已记录文件在本地不存在 | 同步目录清理应用内记录 |
@@ -331,9 +331,9 @@ GET /api/knowledge-health/folders/{id}
 GET /api/knowledge-health/runs?scopeType=KNOWLEDGE_FOLDER&scopeId=folder-xxx&limit=20
 ```
 
-`scopeType` 可省略；支持 `ALL`、`KNOWLEDGE_FOLDER`、`UNASSIGNED`。返回导入、同步、补写索引、重建索引、启停和删除的最近记录。
+`scopeType` 可省略；支持 `ALL`、`KNOWLEDGE_FOLDER`、`UNASSIGNED`。返回导入、同步、重新解析、补写索引、重建索引、启停和删除的最近记录。
 
-运行记录 `operation` 支持 `IMPORT`、`SYNC`、`REPAIR_INDEX`、`REBUILD_INDEX`、`ENABLE`、`DISABLE`、`DELETE`；`status` 支持 `QUEUED`、`RUNNING`、`CANCELLING`、`CANCELLED`、`COMPLETED`、`COMPLETED_WITH_WARNINGS`、`FAILED`。`phase`、`currentItem`、`queuedAt`、`startedAt`、`completedAt`、`durationMs` 和 `queuePosition` 用于前端展示当前队列和历史详情。
+运行记录 `operation` 支持 `IMPORT`、`SYNC`、`REPARSE`、`REPAIR_INDEX`、`REBUILD_INDEX`、`ENABLE`、`DISABLE`、`DELETE`；`status` 支持 `QUEUED`、`RUNNING`、`CANCELLING`、`CANCELLED`、`COMPLETED`、`COMPLETED_WITH_WARNINGS`、`FAILED`。`phase`、`currentItem`、`queuedAt`、`startedAt`、`completedAt`、`durationMs` 和 `queuePosition` 用于前端展示当前队列和历史详情。
 
 分页查询维护记录：
 
@@ -365,6 +365,7 @@ POST /api/knowledge-maintenance/runs/rebuild-index
 POST /api/knowledge-maintenance/runs/repair-index
 POST /api/knowledge-maintenance/runs/import-folder
 POST /api/knowledge-maintenance/runs/folders/{id}/sync
+POST /api/knowledge-maintenance/runs/folders/{id}/reparse
 POST /api/knowledge-maintenance/runs/folders/{id}/rebuild
 POST /api/knowledge-maintenance/runs/folders/{id}/repair-index
 POST /api/knowledge-maintenance/runs/folders/{id}/enabled
@@ -391,6 +392,8 @@ POST /api/knowledge-maintenance/runs/folders/{id}/delete
 入队成功返回 `KnowledgeFolderRunResponse`。如果同一 scope、同一 operation 已有 `QUEUED/RUNNING/CANCELLING` 任务，后端返回已有任务，避免重复入队。
 
 `repair-index` 只处理 `status=PARSED AND indexed_at IS NULL` 的文档，SQLite chunks 是事实来源；它不扫描文件系统、不重新解析 PDF，也不重建已经索引成功的文档。该接口主要用于 Embedding 供应商限流后补写少量缺失 Lucene 条目。全库补写使用 `POST /api/knowledge-maintenance/runs/repair-index`，目录补写使用 `POST /api/knowledge-maintenance/runs/folders/{id}/repair-index`。
+
+`reparse` 会重新读取并解析目录内当前支持文件，忽略未变化文件跳过逻辑，主要用于开启 OCR 后处理旧的 `OCR_REQUIRED` PDF。它不修改用户原始文件；OCR 结果只写入 SQLite chunks 和 Lucene 索引。
 
 ### 查询队列
 
@@ -1045,6 +1048,105 @@ POST /api/web-search/test
   "success": true,
   "message": "OK",
   "resultCount": 5
+}
+```
+
+## OCR 设置
+
+第 36-4 阶段新增 OCR 设置 API。设置保存在 SQLite `app_settings` 的 `ocr.settings` JSON 快照中，第一版 provider 固定为 `BAIDU_OCR`。OCR 默认关闭；启用后，无文本层 PDF 会按页渲染为图片并上传到百度 OCR，可能产生按页调用费用。
+
+设置页允许明文读取本机保存的 `apiKey` / `secretKey`，便于用户核对和修改；但日志、异常消息、OCR 测试响应和维护运行记录不得输出密钥。
+
+### 查询 OCR 设置
+
+```text
+GET /api/ocr/settings
+```
+
+响应 `data`：
+
+```json
+{
+  "enabled": false,
+  "provider": "BAIDU_OCR",
+  "available": false,
+  "baidu": {
+    "apiKey": "",
+    "secretKey": "",
+    "apiKeyConfigured": false,
+    "secretKeyConfigured": false,
+    "recognitionMode": "STANDARD",
+    "languageType": "CHN_ENG",
+    "detectDirection": true
+  },
+  "limits": {
+    "maxPagesPerDocument": 200,
+    "timeoutPerPageSeconds": 20,
+    "monthlyCallBudget": 1000
+  }
+}
+```
+
+字段说明：
+
+| 字段 | 说明 |
+| --- | --- |
+| `enabled` | OCR 是否实际启用。没有 API Key 或 Secret Key 时，后端会归一化为 `false`。 |
+| `provider` | 当前固定为 `BAIDU_OCR`，保留字段用于后续 provider 扩展。 |
+| `available` | 当前设置是否具备运行 OCR 的必要条件。 |
+| `baidu.apiKey` / `baidu.secretKey` | 本机保存的百度 OCR 密钥明文，只在该设置接口返回。 |
+| `baidu.recognitionMode` | `STANDARD` 或 `ACCURATE`。 |
+| `baidu.languageType` | 百度 OCR 语言类型，默认 `CHN_ENG`。 |
+| `baidu.detectDirection` | 是否开启方向检测。 |
+| `limits.maxPagesPerDocument` | 单个 PDF 最多 OCR 页数，范围 `1` 到 `500`。 |
+| `limits.timeoutPerPageSeconds` | 单页 OCR 请求超时，范围 `3` 到 `120` 秒。 |
+| `limits.monthlyCallBudget` | 本地提示用月调用预算，范围 `1` 到 `1000000`，不等同于百度账单。 |
+
+### 保存 OCR 设置
+
+```text
+PUT /api/ocr/settings
+```
+
+请求体：
+
+```json
+{
+  "enabled": true,
+  "provider": "BAIDU_OCR",
+  "baidu": {
+    "apiKey": "baidu-api-key",
+    "secretKey": "baidu-secret-key",
+    "recognitionMode": "STANDARD",
+    "languageType": "CHN_ENG",
+    "detectDirection": true
+  },
+  "limits": {
+    "maxPagesPerDocument": 200,
+    "timeoutPerPageSeconds": 20,
+    "monthlyCallBudget": 1000
+  }
+}
+```
+
+`apiKey` / `secretKey` 为 `null` 或字段省略时沿用旧值；传入空字符串表示清空。响应字段与查询接口一致，并会继续明文回显保存后的本机密钥。
+
+### 测试 OCR 连接
+
+```text
+POST /api/ocr/test
+```
+
+该接口只验证百度 OCR 鉴权 token 与服务可用性，不主动识别用户文件。响应不得包含 API Key、Secret Key 或 access token。
+
+响应 `data`：
+
+```json
+{
+  "success": true,
+  "message": "百度 OCR 鉴权通过。",
+  "provider": "BAIDU_OCR",
+  "mode": "STANDARD"
 }
 ```
 

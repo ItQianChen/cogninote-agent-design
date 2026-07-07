@@ -4,15 +4,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
 import com.itqianchen.agentdesign.domain.enums.document.FileType;
+import com.itqianchen.agentdesign.domain.dto.ocr.OcrSettingsRequest;
+import com.itqianchen.agentdesign.domain.enums.ocr.BaiduOcrRecognitionMode;
+import com.itqianchen.agentdesign.domain.enums.ocr.OcrProvider;
 import com.itqianchen.agentdesign.domain.enums.search.SearchMode;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeChunk;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
+import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolder;
 import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
 import com.itqianchen.agentdesign.domain.dto.search.SearchRequest;
 import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
+import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ScannedDocumentFile;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
+import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRepository;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
+import com.itqianchen.agentdesign.service.ocr.BaiduAccessToken;
+import com.itqianchen.agentdesign.service.ocr.BaiduOcrClient;
+import com.itqianchen.agentdesign.service.ocr.BaiduOcrRecognitionRequest;
+import com.itqianchen.agentdesign.service.ocr.BaiduOcrRecognitionResponse;
+import com.itqianchen.agentdesign.service.ocr.OcrSettingsService;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
 import java.io.IOException;
 import java.net.URL;
@@ -31,7 +42,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
@@ -49,7 +63,19 @@ class DocumentIngestionServiceTests {
     private DocumentRepository documentRepository;
 
     @Autowired
+    private KnowledgeFolderRepository knowledgeFolderRepository;
+
+    @Autowired
     private KnowledgeStore knowledgeStore;
+
+    @Autowired
+    private DocumentIdentity documentIdentity;
+
+    @Autowired
+    private OcrSettingsService ocrSettingsService;
+
+    @Autowired
+    private TestBaiduOcrClient testBaiduOcrClient;
 
     @Autowired
     private TestDatabaseCleaner databaseCleaner;
@@ -61,6 +87,14 @@ class DocumentIngestionServiceTests {
     void clearDatabase() {
         databaseCleaner.clearDocuments();
         knowledgeStore.rebuildAll();
+        testBaiduOcrClient.reset();
+        ocrSettingsService.update(new OcrSettingsRequest(
+                false,
+                OcrProvider.BAIDU_OCR,
+                new OcrSettingsRequest.BaiduSettings("", "",
+                        BaiduOcrRecognitionMode.STANDARD, "CHN_ENG", true),
+                new OcrSettingsRequest.Limits(200, 20, 1000)
+        ));
     }
 
     @Test
@@ -195,11 +229,12 @@ class DocumentIngestionServiceTests {
 
     @Test
     void syncKnowledgeFolderMarksNewNoTextPdfAsOcrRequired() throws Exception {
+        String folderId = upsertKnowledgeFolder("folder-sync-ocr-new");
         Path pdf = tempDir.resolve("sync-scanned.pdf");
         writeBlankPdf(pdf);
 
         IngestDocumentsResponse response = ingestionService.syncKnowledgeFolder(
-                "folder-sync-ocr-new",
+                folderId,
                 tempDir.toString(),
                 true
         );
@@ -209,7 +244,7 @@ class DocumentIngestionServiceTests {
         assertThat(documentRepository.findAllOrderByUpdatedAtDesc())
                 .singleElement()
                 .satisfies(document -> {
-                    assertThat(document.knowledgeFolderId()).isEqualTo("folder-sync-ocr-new");
+                    assertThat(document.knowledgeFolderId()).isEqualTo(folderId);
                     assertThat(document.fileType()).isEqualTo(FileType.PDF);
                     assertThat(document.status()).isEqualTo(DocumentStatus.OCR_REQUIRED);
                     assertThat(document.chunkCount()).isZero();
@@ -219,9 +254,10 @@ class DocumentIngestionServiceTests {
 
     @Test
     void syncKnowledgeFolderReplacesExistingParsedPdfWithOcrRequired() throws Exception {
+        String folderId = upsertKnowledgeFolder("folder-sync-ocr-existing");
         Path pdf = tempDir.resolve("replace-me.pdf");
         writeTextPdf(pdf, "Searchable text before replacement");
-        ingestionService.ingestKnowledgeFolder("folder-sync-ocr-existing", tempDir.toString(), true);
+        ingestionService.ingestKnowledgeFolder(folderId, tempDir.toString(), true);
         KnowledgeDocument parsedDocument = documentRepository.findAllOrderByUpdatedAtDesc().getFirst();
 
         assertThat(parsedDocument.status()).isEqualTo(DocumentStatus.PARSED);
@@ -231,7 +267,7 @@ class DocumentIngestionServiceTests {
 
         writeBlankPdf(pdf);
         IngestDocumentsResponse response = ingestionService.syncKnowledgeFolder(
-                "folder-sync-ocr-existing",
+                folderId,
                 tempDir.toString(),
                 true
         );
@@ -246,6 +282,44 @@ class DocumentIngestionServiceTests {
                 });
         assertThat(documentRepository.findChunksByDocumentId(parsedDocument.id())).isEmpty();
         assertThat(knowledgeStore.status().indexedChunkCount()).isZero();
+    }
+
+    @Test
+    void reparseKnowledgeFolderUsesOcrForPreviousOcrRequiredPdf() throws Exception {
+        String folderId = upsertKnowledgeFolder("folder-reparse-ocr");
+        Path pdf = tempDir.resolve("reparse-scanned.pdf");
+        writeBlankPdf(pdf);
+        ingestionService.ingestKnowledgeFolder(folderId, tempDir.toString(), true);
+        KnowledgeDocument ocrRequired = documentRepository.findAllOrderByUpdatedAtDesc().getFirst();
+        assertThat(ocrRequired.status()).isEqualTo(DocumentStatus.OCR_REQUIRED);
+
+        testBaiduOcrClient.words = List.of("ocr integration token");
+        ocrSettingsService.update(new OcrSettingsRequest(
+                true,
+                OcrProvider.BAIDU_OCR,
+                new OcrSettingsRequest.BaiduSettings("api-key", "secret-key",
+                        BaiduOcrRecognitionMode.STANDARD, "CHN_ENG", true),
+                new OcrSettingsRequest.Limits(200, 20, 1000)
+        ));
+
+        IngestDocumentsResponse response = ingestionService.reparseKnowledgeFolder(
+                folderId,
+                tempDir.toString(),
+                true
+        );
+
+        assertThat(response.scannedCount()).isEqualTo(1);
+        assertThat(response.parsedCount()).isEqualTo(1);
+        assertThat(response.failedCount()).isZero();
+        assertThat(documentRepository.findById(ocrRequired.id()))
+                .hasValueSatisfying(document -> {
+                    assertThat(document.status()).isEqualTo(DocumentStatus.PARSED);
+                    assertThat(document.fileType()).isEqualTo(FileType.PDF);
+                    assertThat(document.chunkCount()).isPositive();
+                    assertThat(document.indexedAt()).isNotNull();
+                });
+        assertThat(knowledgeStore.search(new SearchRequest("ocr integration token", SearchMode.KEYWORD, 5)).hits())
+                .anySatisfy(hit -> assertThat(hit.fileName()).isEqualTo("reparse-scanned.pdf"));
     }
 
     @Test
@@ -334,6 +408,55 @@ class DocumentIngestionServiceTests {
                 contentStream.endText();
             }
             document.save(path.toFile());
+        }
+    }
+
+    private String upsertKnowledgeFolder(String idPrefix) {
+        long now = System.currentTimeMillis();
+        Path folder = tempDir.toAbsolutePath().normalize();
+        String folderId = knowledgeFolderRepository.findByFolderPath(folder.toString())
+                .map(KnowledgeFolder::id)
+                .orElseGet(() -> idPrefix + "-" + documentIdentity.idForPath(folder.toString()).substring(0, 16));
+        knowledgeFolderRepository.upsert(new KnowledgeFolder(
+                folderId,
+                folder.toString(),
+                folder.getFileName().toString(),
+                true,
+                true,
+                null,
+                null,
+                now,
+                now
+        ));
+        return folderId;
+    }
+
+    @TestConfiguration
+    static class OcrTestConfig {
+
+        @Bean
+        @Primary
+        TestBaiduOcrClient testBaiduOcrClient() {
+            return new TestBaiduOcrClient();
+        }
+    }
+
+    static class TestBaiduOcrClient implements BaiduOcrClient {
+
+        private List<String> words = List.of("test ocr text");
+
+        private void reset() {
+            words = List.of("test ocr text");
+        }
+
+        @Override
+        public BaiduAccessToken fetchAccessToken(String apiKey, String secretKey, int timeoutSeconds) {
+            return new BaiduAccessToken("test-access-token", 3600);
+        }
+
+        @Override
+        public BaiduOcrRecognitionResponse recognizeImage(BaiduOcrRecognitionRequest request) {
+            return new BaiduOcrRecognitionResponse(null, null, words);
         }
     }
 }

@@ -1,11 +1,12 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { BrainCircuit, Database, GitBranch, RotateCcw, XCircle } from 'lucide-vue-next'
+import { BrainCircuit, Database, GitBranch, RotateCcw, ScanText, XCircle } from 'lucide-vue-next'
 import { confirmRebuildAllIndex } from '../composables/use-knowledge-maintenance-confirm'
 import { useKnowledgeHealthIssueIgnore } from '../composables/use-knowledge-health-issue-ignore'
 import { useKnowledgeGraphStore } from '../stores/knowledge-graph'
 import { useKnowledgeMaintenanceStore } from '../stores/knowledge-maintenance'
+import { useOcrSettingsStore } from '../stores/ocr-settings'
 import { useSearchStore } from '../stores/search'
 import {
   canRebuildGraphExample,
@@ -30,6 +31,7 @@ const emit = defineEmits(['update:modelValue'])
 
 const graphStore = useKnowledgeGraphStore()
 const maintenanceStore = useKnowledgeMaintenanceStore()
+const ocrSettingsStore = useOcrSettingsStore()
 const searchStore = useSearchStore()
 const {
   isIssueIgnored,
@@ -46,6 +48,10 @@ const activeIssues = computed(() => issues.value.filter((issue) => !isIssueIgnor
 const ignoredIssues = computed(() => issues.value.filter((issue) => isIssueIgnored(issue)))
 const affectedCount = computed(() => activeIssues.value.reduce((total, issue) => total + (issue.count || 1), 0))
 const dialogTitle = computed(() => props.section?.title ? `${props.section.title} · 诊断详情` : '诊断详情')
+
+onMounted(() => {
+  ocrSettingsStore.fetchSettings()
+})
 
 async function rebuildGlobalIndex() {
   if (!await confirmRebuildAllIndex()) {
@@ -78,6 +84,14 @@ async function rebuildGraphExample(example) {
   await graphStore.rebuild()
 }
 
+async function reparseIssueFolder(issue) {
+  if (!issue?.scopeId || maintenanceStore.hasActiveRun) {
+    return
+  }
+  await maintenanceStore.reparseFolder(issue.scopeId)
+  ElMessage.success('重新解析任务已加入维护队列')
+}
+
 function handleIgnoreIssue(issue) {
   ignoreIssue(issue)
   ElMessage.success('已忽略该诊断提示')
@@ -97,6 +111,9 @@ function issueActionIcon(issue) {
   }
   if (issue?.code === 'GRAPH_STALE') {
     return GitBranch
+  }
+  if (issue?.code === 'PDF_OCR_REQUIRED') {
+    return ScanText
   }
   return XCircle
 }
@@ -216,6 +233,33 @@ function exampleDocumentItems(example) {
           >
             <BrainCircuit aria-hidden="true" />
             <span>配置向量模型</span>
+          </RouterLink>
+          <el-button
+            v-else-if="issue.code === 'PDF_OCR_REQUIRED' && ocrSettingsStore.available && issue.scopeId"
+            :loading="maintenanceStore.isEnqueueing"
+            :disabled="maintenanceStore.hasActiveRun"
+            @click="reparseIssueFolder(issue)"
+          >
+            <ScanText aria-hidden="true" />
+            <span>重新解析目录</span>
+          </el-button>
+          <RouterLink
+            v-else-if="issue.code === 'PDF_OCR_REQUIRED' && !ocrSettingsStore.available"
+            class="knowledge-header-link"
+            :to="{ name: 'settings', query: { item: 'ocr' } }"
+            @click="isOpen = false"
+          >
+            <ScanText aria-hidden="true" />
+            <span>配置 OCR</span>
+          </RouterLink>
+          <RouterLink
+            v-else-if="issue.code === 'PDF_OCR_REQUIRED'"
+            class="knowledge-header-link"
+            :to="{ name: 'knowledge', query: { panel: 'directories' } }"
+            @click="isOpen = false"
+          >
+            <ScanText aria-hidden="true" />
+            <span>查看目录管理</span>
           </RouterLink>
           <el-button v-if="isIssueIgnored(issue)" @click="handleRestoreIssue(issue)">
             恢复提示

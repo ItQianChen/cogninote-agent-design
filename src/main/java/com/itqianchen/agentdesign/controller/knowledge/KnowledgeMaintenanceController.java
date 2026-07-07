@@ -53,6 +53,11 @@ public class KnowledgeMaintenanceController {
         return ApiResponse.ok(queueService.enqueueFolderSync(id));
     }
 
+    @PostMapping("/folders/{id}/reparse")
+    public ApiResponse<KnowledgeFolderRunResponse> reparseFolder(@PathVariable String id) {
+        return ApiResponse.ok(queueService.enqueueFolderReparse(id));
+    }
+
     @PostMapping("/folders/{id}/rebuild")
     public ApiResponse<KnowledgeFolderRunResponse> rebuildFolder(@PathVariable String id) {
         return ApiResponse.ok(queueService.enqueueFolderRebuild(id));

@@ -1,22 +1,18 @@
 package com.itqianchen.agentdesign.service.knowledge;
 
-
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
 import com.itqianchen.agentdesign.common.api.ResourceNotFoundException;
-import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolderRun;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
-import com.itqianchen.agentdesign.domain.exception.knowledge.KnowledgeMaintenanceException;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
 import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
 import com.itqianchen.agentdesign.domain.dto.index.RebuildIndexResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRebuildResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRunResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeMaintenanceQueueResponse;
+import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolderRun;
+import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
+import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
+import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
+import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
+import com.itqianchen.agentdesign.domain.exception.knowledge.KnowledgeMaintenanceException;
+import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRunRepository;
 import com.itqianchen.agentdesign.service.index.IndexService;
 import java.nio.file.Files;
@@ -130,6 +126,10 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
 
     public KnowledgeFolderRunResponse enqueueFolderSync(String folderId) {
         return enqueue(folderTask(folderId, KnowledgeFolderRunOperation.SYNC));
+    }
+
+    public KnowledgeFolderRunResponse enqueueFolderReparse(String folderId) {
+        return enqueue(folderTask(folderId, KnowledgeFolderRunOperation.REPARSE));
     }
 
     public KnowledgeFolderRunResponse enqueueFolderRebuild(String folderId) {
@@ -358,6 +358,7 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
         return switch (request.operation()) {
             case IMPORT -> importFolder(request);
             case SYNC -> syncFolder(request);
+            case REPARSE -> reparseFolder(request);
             case REPAIR_INDEX -> request.scopeType() == KnowledgeFolderRunScopeType.ALL
                     ? repairAllIndex()
                     : repairFolderIndex(request);
@@ -382,6 +383,13 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
     private KnowledgeMaintenanceCompletion syncFolder(MaintenanceTaskRequest request) {
         IngestDocumentsResponse response = runService.withoutRecording(
                 () -> folderService.syncFolder(request.scopeId())
+        );
+        return ingestCompletion(response);
+    }
+
+    private KnowledgeMaintenanceCompletion reparseFolder(MaintenanceTaskRequest request) {
+        IngestDocumentsResponse response = runService.withoutRecording(
+                () -> folderService.reparseFolder(request.scopeId())
         );
         return ingestCompletion(response);
     }
@@ -518,6 +526,7 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
         return switch (operation) {
             case IMPORT -> "IMPORTING";
             case SYNC -> "SYNCING";
+            case REPARSE -> "REPARSING";
             case REPAIR_INDEX -> "INDEXING";
             case REBUILD_INDEX -> "INDEXING";
             case ENABLE -> "ENABLING";
