@@ -71,6 +71,9 @@ public class KnowledgeHealthService {
     private static final int DEFAULT_RUN_PAGE_SIZE = 10;
     private static final int MAX_RUN_PAGE_SIZE = 100;
     private static final int MAX_ISSUE_EXAMPLES = 5;
+    private static final String PARSE_FAILED_DOCUMENT_MESSAGE = "解析失败，请检查文件是否损坏或是否包含可读取文本。";
+    private static final String PDF_OCR_REQUIRED_DOCUMENT_MESSAGE =
+            "该 PDF 没有可抽取文本层；当前版本不会自动 OCR，可先用外部工具生成文本层后同步目录。";
     private static final Pattern VERSION_FAMILY_TOKEN_PATTERN = Pattern.compile(
             "(?i)\\b(v\\d+(?:\\.\\d+)*|final|draft)\\b"
     );
@@ -197,7 +200,7 @@ public class KnowledgeHealthService {
 
         List<KnowledgeDocument> documents = documentRepository.findByKnowledgeFolderIdOrderByUpdatedAtDesc(folderId);
         FolderHealthProbe probe = probeDocuments(summary.folder(), documents);
-        List<KnowledgeHealthIssueResponse> issues = folderIssues(summary, probe);
+        List<KnowledgeHealthIssueResponse> issues = folderIssues(summary, probe, documents);
         KnowledgeHealthStatus status = folderStatus(summary, probe, issues);
         List<KnowledgeFolderRunResponse> runs = runRepository.findRuns(
                         KnowledgeFolderRunScopeType.KNOWLEDGE_FOLDER,
@@ -212,7 +215,7 @@ public class KnowledgeHealthService {
                 folderId,
                 status,
                 issues,
-                problemDocuments(documents, DocumentStatus.FAILED, "解析失败，请检查文件是否损坏或是否包含可读取文本。"),
+                failedProblemDocuments(documents),
                 unindexedDocuments(documents),
                 probe.missingLocalFiles(),
                 probe.staleLocalFiles(),
@@ -455,7 +458,7 @@ public class KnowledgeHealthService {
                 summary.folder().id()
         );
         FolderHealthProbe probe = probeDocuments(summary.folder(), documents);
-        List<KnowledgeHealthIssueResponse> issues = folderIssues(summary, probe);
+        List<KnowledgeHealthIssueResponse> issues = folderIssues(summary, probe, documents);
         return new FolderHealthSnapshot(
                 summary,
                 folderStatus(summary, probe, issues),
@@ -582,10 +585,16 @@ public class KnowledgeHealthService {
      * @param probe 文件系统探针结果
      * @return 目录级健康问题
      */
-    private List<KnowledgeHealthIssueResponse> folderIssues(KnowledgeFolderSummary summary, FolderHealthProbe probe) {
+    private List<KnowledgeHealthIssueResponse> folderIssues(
+            KnowledgeFolderSummary summary,
+            FolderHealthProbe probe,
+            List<KnowledgeDocument> documents
+    ) {
         List<KnowledgeHealthIssueResponse> issues = new ArrayList<>();
         KnowledgeFolder folder = summary.folder();
         String folderId = folder.id();
+        int parseFailedCount = documentStatusCount(documents, DocumentStatus.FAILED);
+        int pdfOcrRequiredCount = documentStatusCount(documents, DocumentStatus.OCR_REQUIRED);
         if (!folder.enabled()) {
             return List.of();
         }
@@ -609,14 +618,24 @@ public class KnowledgeHealthService {
                     1
             ));
         }
-        if (summary.failedCount() > 0) {
+        if (parseFailedCount > 0) {
             issues.add(issue(
                     KnowledgeHealthIssueCode.PARSE_FAILED,
                     "WARNING",
-                    "有 " + summary.failedCount() + " 个文档解析失败，搜索和 RAG 可能缺失内容。",
+                    "有 " + parseFailedCount + " 个文档解析失败，搜索和 RAG 可能缺失内容。",
                     "SYNC_FOLDER",
                     folderId,
-                    summary.failedCount()
+                    parseFailedCount
+            ));
+        }
+        if (pdfOcrRequiredCount > 0) {
+            issues.add(issue(
+                    KnowledgeHealthIssueCode.PDF_OCR_REQUIRED,
+                    "WARNING",
+                    "有 " + pdfOcrRequiredCount + " 个 PDF 没有可抽取文本层，需要 OCR 后才能进入知识库。",
+                    "SYNC_FOLDER",
+                    folderId,
+                    pdfOcrRequiredCount
             ));
         }
         if (summary.unindexedCount() > 0) {
@@ -1340,28 +1359,40 @@ public class KnowledgeHealthService {
     }
 
     /**
-     * 按文档解析状态筛选问题文档。
+     * 找出无法进入检索的问题文档。
+     *
+     * <p>OCR_REQUIRED 与 FAILED 都不会写入 chunk 或索引，但用户处理方式不同，因此详情文案按状态拆分。</p>
      *
      * @param documents 目录下的文档记录
-     * @param status 需要筛选的文档状态
-     * @param message 展示给用户的处理建议
-     * @return 问题文档列表
+     * @return 失败或需要 OCR 的问题文档列表
      */
-    private List<KnowledgeProblemDocumentResponse> problemDocuments(
-            List<KnowledgeDocument> documents,
-            DocumentStatus status,
-            String message
-    ) {
+    private List<KnowledgeProblemDocumentResponse> failedProblemDocuments(List<KnowledgeDocument> documents) {
         return documents.stream()
-                .filter(document -> document.status() == status)
-                .map(document -> KnowledgeProblemDocumentResponse.from(document, message))
+                .filter(document -> document.status() == DocumentStatus.FAILED
+                        || document.status() == DocumentStatus.OCR_REQUIRED)
+                .map(document -> KnowledgeProblemDocumentResponse.from(
+                        document,
+                        problemDocumentMessage(document.status())
+                ))
                 .toList();
+    }
+
+    private static String problemDocumentMessage(DocumentStatus status) {
+        return status == DocumentStatus.OCR_REQUIRED
+                ? PDF_OCR_REQUIRED_DOCUMENT_MESSAGE
+                : PARSE_FAILED_DOCUMENT_MESSAGE;
+    }
+
+    private static int documentStatusCount(List<KnowledgeDocument> documents, DocumentStatus status) {
+        return (int) documents.stream()
+                .filter(document -> document.status() == status)
+                .count();
     }
 
     /**
      * 找出已经解析但尚未写入检索索引的文档。
      *
-     * <p>只有 PARSED 文档才应进入索引，FAILED 文档会由解析失败问题单独展示。</p>
+     * <p>只有 PARSED 文档才应进入索引，FAILED/OCR_REQUIRED 文档会由失败问题单独展示。</p>
      *
      * @param documents 目录下的文档记录
      * @return 未索引文档列表
@@ -1688,6 +1719,7 @@ public class KnowledgeHealthService {
                 case FOLDER_NOT_FOUND -> "有 " + count + " 个目录当前不可访问。";
                 case NO_DOCUMENTS -> "有 " + count + " 个启用目录没有文档记录。";
                 case PARSE_FAILED -> "有 " + count + " 个文档解析失败。";
+                case PDF_OCR_REQUIRED -> "有 " + count + " 个 PDF 需要 OCR 后才能进入知识库。";
                 case UNINDEXED_DOCUMENTS -> "有 " + count + " 个已解析文档尚未进入索引。";
                 case STALE_LOCAL_FILES -> "有 " + count + " 个本地文件疑似已变化。";
                 case NEW_LOCAL_FILES -> "有 " + count + " 个本地新增文件尚未同步到知识库。";

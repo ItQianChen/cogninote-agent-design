@@ -8,7 +8,7 @@
 
 第一版目标不是做一个大而全的 Agent 平台，而是做一个能真正落地的本地知识库问答工具：
 
-- 读取本地 Markdown、Word DOCX / DOC 文档和文本型 PDF
+- 读取本地 Markdown、Word DOCX / DOC 文档和文本型 PDF；无文本层 PDF 诊断为需 OCR
 - 读取本地 HTML / HTM 文档
 - 建立本地混合检索索引
 - 通过用户配置的大模型进行问答
@@ -31,7 +31,7 @@
 - 本地文件夹导入
 - Markdown / TXT 文本解析
 - Word 文档解析，支持 `.docx` 和 Word 97-2003 `.doc`
-- 文本型 PDF 解析
+- 文本型 PDF 解析；无文本层 PDF 诊断为需 OCR
 - Lucene 本地混合检索
 - 外部 Embedding API
 - OpenAI-compatible 对话模型配置
@@ -160,11 +160,11 @@ Spring Boot 后端
 - `.docx`
 - `.doc`
 - `.html` / `.htm`
-- `.pdf`，仅支持有文本层的 PDF
+- `.pdf`，仅支持有文本层的 PDF；无文本层 PDF 会记录为 `OCR_REQUIRED`
 
 第一版不支持：
 
-- 扫描件或图片型 PDF
+- 自动 OCR 扫描件或图片型 PDF
 - Obsidian 专用语法解析
 
 说明：Obsidian 的普通笔记本质上仍是 Markdown 文件，第一版可以作为普通 `.md` 读取，但不解析 `[[双链]]`、标签、frontmatter 和关系图谱。
@@ -1085,6 +1085,7 @@ POST   /api/chat/stream/{requestId}/cancel
 - 支持 Word 97-2003 `.doc` 解析
 - 支持 HTML / HTM 解析
 - 支持文本型 PDF 解析
+- 支持无文本层 PDF 的 OCR 需求诊断
 - 文本分块
 - SQLite 保存文档元数据和 Chunk 文本
 
@@ -1392,7 +1393,7 @@ POST   /api/chat/stream/{requestId}/cancel
 
 ### v0.3
 
-- OCR 图片 PDF
+- OCR 图片 PDF 自动识别
 - 更多联网搜索 provider 与自托管搜索适配
 - 自动生成本地知识条目
 - 知识构建模式
@@ -1451,6 +1452,6 @@ POST   /api/chat/stream/{requestId}/cancel
 
 知记空间（CogniNote）第一版应聚焦为：
 
-> 一个 Java + Vue 实现的本地 Markdown / TXT / DOCX / DOC / HTML / 文本型 PDF 知识库问答工具，核心卖点是 SQLite + Lucene 的清晰存储分工、Lucene 混合检索、模型可配置、答案可溯源，并能打包成 Windows 桌面应用一键运行。
+> 一个 Java + Vue 实现的本地 Markdown / TXT / DOCX / DOC / HTML / 文本型 PDF 知识库问答工具，无文本层 PDF 会诊断为需 OCR；核心卖点是 SQLite + Lucene 的清晰存储分工、Lucene 混合检索、模型可配置、答案可溯源，并能打包成 Windows 桌面应用一键运行。
 
 只要第一版把这个闭环做扎实，它就已经不是普通 RAG Demo，而是一个能展示 Java 工程能力、搜索引擎能力、前端产品能力和 AI 应用落地能力的完整开源项目。

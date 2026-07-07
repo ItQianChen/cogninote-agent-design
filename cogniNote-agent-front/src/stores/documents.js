@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 import { deleteDocumentRecord, ingestDocuments as requestIngest, listDocuments } from '../api/documents-api'
 import { useSearchStore } from './search'
 
+const FAILED_DOCUMENT_STATUSES = new Set(['FAILED', 'OCR_REQUIRED'])
+
 /**
  * 管理未归属文档列表和目录导入表单。
  *
@@ -19,7 +21,7 @@ export const useDocumentsStore = defineStore('documents', () => {
 
   const stats = computed(() => {
     const parsed = documents.value.filter((document) => document.status === 'PARSED').length
-    const failed = documents.value.filter((document) => document.status === 'FAILED').length
+    const failed = documents.value.filter((document) => FAILED_DOCUMENT_STATUSES.has(document.status)).length
     const chunks = documents.value.reduce((total, document) => total + document.chunkCount, 0)
     return { parsed, failed, chunks }
   })

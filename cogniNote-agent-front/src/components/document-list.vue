@@ -2,6 +2,13 @@
 // document-list 负责 文档管理 页面或组件的状态组织、用户交互和后端同步。
 import { formatFileSize, formatTime } from '../utils/formatters'
 
+const DOCUMENT_STATUS_LABELS = {
+  PARSED: '已解析',
+  SKIPPED: '已跳过',
+  FAILED: '失败',
+  OCR_REQUIRED: '需 OCR'
+}
+
 defineProps({
   documents: {
     type: Array,
@@ -14,6 +21,10 @@ defineProps({
 })
 
 defineEmits(['refresh', 'delete'])
+
+function documentStatusLabel(status) {
+  return DOCUMENT_STATUS_LABELS[status] || status || '未知'
+}
 </script>
 
 <template>
@@ -33,7 +44,7 @@ defineEmits(['refresh', 'delete'])
           <div class="document-title-line">
             <h4>{{ document.fileName }}</h4>
             <span :class="['status-chip', `status-chip--${document.status.toLowerCase()}`]">
-              {{ document.status }}
+              {{ documentStatusLabel(document.status) }}
             </span>
           </div>
           <p class="path-text">{{ document.sourcePath }}</p>

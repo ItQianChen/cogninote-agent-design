@@ -84,7 +84,7 @@ GET /api/system/status
 GET /api/documents
 ```
 
-返回已导入文档列表，按更新时间倒序排列。
+返回已导入文档列表，按更新时间倒序排列。文档 `status` 当前支持 `PARSED`、`SKIPPED`、`FAILED`、`OCR_REQUIRED`；`OCR_REQUIRED` 表示 PDF 没有可抽取文本层，当前版本不会自动 OCR。
 
 ### 导入目录
 
@@ -102,6 +102,8 @@ POST /api/documents/ingest
 ```
 
 导入成功后会写入 SQLite，并同步更新 Lucene 索引。导入失败的文件会返回失败摘要，不删除用户原始文件。
+
+响应中的 `failedCount` 表示当前不能进入知识库检索的文档数，包含普通解析失败和 `OCR_REQUIRED` 文档。
 
 旧前端或临时脚本仍可使用该接口；当前知识库页面优先使用 `/api/knowledge-folders` 目录管理接口。
 
@@ -148,7 +150,7 @@ POST /api/knowledge-folders/import
 POST /api/knowledge-folders/{id}/sync
 ```
 
-扫描已导入目录中的支持文件，只解析新增或修改的文件，并为缺失索引的旧文档补写 Lucene；未变化文件会跳过，不做整目录索引重建。若本地目录中某个旧文件已被删除，同步会删除应用内对应文档/chunks/索引记录，但不触碰用户文件系统。同步目录必须处于启用状态。
+扫描已导入目录中的支持文件，只解析新增或修改的文件，并为缺失索引的旧文档补写 Lucene；未变化文件会跳过，不做整目录索引重建。若 PDF 没有可抽取文本层，会记录为 `OCR_REQUIRED` 并计入 `failedCount`，但不会自动 OCR。若本地目录中某个旧文件已被删除，同步会删除应用内对应文档/chunks/索引记录，但不触碰用户文件系统。同步目录必须处于启用状态。
 
 响应体 `data` 为本次扫描统计：
 
@@ -270,7 +272,7 @@ GET /api/knowledge-health
 
 第 32 阶段新增的 `summary.luceneDocumentCount` 和 `summary.luceneChunkCount` 来自 Lucene reader 实际统计；`summary.indexConsistent=false` 表示 SQLite 中应已索引的文档/chunk 与 Lucene reader 统计不一致；`summary.embeddingConfigured=false` 表示当前没有可用 Embedding，向量或混合检索需要配置向量模型。
 
-第 34 阶段新增的 `summary.answerReady` 表示当前资料是否具备基础问答条件；`searchableDocumentCount` 表示已解析且已索引的文档数；`syncIssueCount` 汇总本地新增、变化和缺失；`retrievalIssueCount` 汇总解析失败、未索引、索引不一致和 Embedding 降级；`conflictIssueCount` 汇总重复内容和疑似版本冲突；`graphStaleCount` 表示已生成图谱落后于当前资料状态的 scope 数量。
+第 34 阶段新增的 `summary.answerReady` 表示当前资料是否具备基础问答条件；`searchableDocumentCount` 表示已解析且已索引的文档数；`syncIssueCount` 汇总本地新增、变化和缺失；`retrievalIssueCount` 汇总解析失败、需 OCR、未索引、索引不一致和 Embedding 降级；`conflictIssueCount` 汇总重复内容和疑似版本冲突；`graphStaleCount` 表示已生成图谱落后于当前资料状态的 scope 数量。`summary.failedCount` 包含 `FAILED` 和 `OCR_REQUIRED` 文档。
 
 当前问题代码：
 
@@ -279,6 +281,7 @@ GET /api/knowledge-health
 | `FOLDER_NOT_FOUND` | `ERROR` | 目录路径当前不可访问 | 删除目录记录或重新导入正确目录 |
 | `NO_DOCUMENTS` | `WARNING` | 启用目录没有文档记录 | 同步目录或检查递归扫描 |
 | `PARSE_FAILED` | `WARNING` | 存在解析失败文档 | 修复源文件后同步目录 |
+| `PDF_OCR_REQUIRED` | `WARNING` | PDF 没有可抽取文本层，需 OCR 后才能进入知识库 | 使用外部工具生成文本层后同步目录 |
 | `UNINDEXED_DOCUMENTS` | `ERROR` | 已解析文档尚未进入 Lucene，常见原因是 Embedding 供应商限流后仍未写入索引 | 补写索引 |
 | `STALE_LOCAL_FILES` | `WARNING` | 本地文件大小或修改时间已变化 | 同步目录 |
 | `MISSING_LOCAL_FILES` | `WARNING` | 已记录文件在本地不存在 | 同步目录清理应用内记录 |

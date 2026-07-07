@@ -1,7 +1,6 @@
 package com.itqianchen.agentdesign.service.document;
 
 
-import com.itqianchen.agentdesign.domain.support.ingestion.DocumentParserRegistry;
 import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
 import com.itqianchen.agentdesign.domain.enums.document.FileType;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeChunk;
@@ -9,6 +8,7 @@ import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
 import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentChunk;
 import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
 import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
+import com.itqianchen.agentdesign.domain.exception.ingestion.PdfOcrRequiredException;
 import com.itqianchen.agentdesign.domain.support.ingestion.DocumentParserRegistry;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ScannedDocumentFile;
@@ -91,7 +91,7 @@ public class DocumentIngestionService {
     /**
      * 导入知识库目录并把文档归属到指定文件夹。
      *
-     * <p>这是用户主动导入动作，解析失败会写入 FAILED 记录，便于前端显示失败文件。</p>
+     * <p>这是用户主动导入动作，解析失败会写入失败状态记录，便于前端显示失败文件。</p>
      *
      * @param knowledgeFolderId 知识库目录 ID
      * @param folderPath 本地目录路径
@@ -108,8 +108,8 @@ public class DocumentIngestionService {
     /**
      * 同步知识库目录的文件差异。
      *
-     * <p>同步会跳过未变化文件，只解析新增或修改文件，并为索引缺失的旧文档补写 Lucene；
-     * 单个文件临时不可读时保留旧解析结果，避免例行同步破坏已有知识。</p>
+     * <p>同步会跳过未变化文件，只解析新增或修改文件，并为索引缺失的旧文档补写 Lucene。
+     * 单个文件临时不可读时保留旧解析结果；PDF 无文本层属于稳定内容状态，会覆盖为 OCR_REQUIRED。</p>
      *
      * @param knowledgeFolderId 知识库目录 ID
      * @param folderPath 本地目录路径
@@ -126,7 +126,8 @@ public class DocumentIngestionService {
     /**
      * 重建知识库目录。
      *
-     * <p>重建属于维护动作，单个文件临时不可读时保留旧解析结果，避免把可用知识误覆盖成失败状态。</p>
+     * <p>重建属于维护动作，单个文件临时不可读时保留旧解析结果；PDF 无文本层属于稳定内容状态，
+     * 会覆盖为 OCR_REQUIRED，避免旧文本继续被检索。</p>
      *
      * @param knowledgeFolderId 知识库目录 ID
      * @param folderPath 本地目录路径
@@ -138,8 +139,8 @@ public class DocumentIngestionService {
             throw new DocumentParseException("Knowledge folder id is required");
         }
         /*
-         * 目录重建是维护动作，不能因为某个文件临时不可读就覆盖旧的 PARSED/chunks。
-         * SQLite 是事实来源，失败文件会返回给调用方并写日志，旧解析结果继续保留。
+         * 目录重建是维护动作，普通解析失败不能覆盖旧的 PARSED/chunks。
+         * OCR_REQUIRED 会在失败处理里强制落库，因为当前文件已经无法提供文本层。
          */
         return ingestFolder(folderPath, recursive, knowledgeFolderId, FailedDocumentPolicy.PRESERVE_EXISTING_RECORD);
     }
@@ -426,7 +427,8 @@ public class DocumentIngestionService {
     ) {
         String documentId = documentIdentity.idForPath(normalizedFile.toString());
 
-        if (failedDocumentPolicy == FailedDocumentPolicy.REPLACE_WITH_FAILED_RECORD) {
+        DocumentStatus failureStatus = statusForFailure(ex);
+        if (shouldReplaceFailureRecord(failedDocumentPolicy, failureStatus)) {
             long fileSize = safeFileSize(normalizedFile);
             long lastModified = safeLastModified(normalizedFile);
             String contentHash = safeContentHash(normalizedFile);
@@ -440,7 +442,7 @@ public class DocumentIngestionService {
                     fileSize,
                     lastModified,
                     contentHash,
-                    DocumentStatus.FAILED,
+                    failureStatus,
                     null,
                     existingCreatedAtOrNow(documentId, now),
                     now,
@@ -450,7 +452,7 @@ public class DocumentIngestionService {
             try {
                 ingestionPersistence.replaceFailedDocument(failedDocument);
             } catch (RuntimeException persistenceEx) {
-                // 即使 SQLite 无法写入 FAILED 标记，也要把解析失败反馈给调用方。
+                // 即使 SQLite 无法写入失败标记，也要把解析失败反馈给调用方。
                 // 批量导入不能因为单个失败记录持久化异常而整体中断。
                 log.warn("document_failure_record_failed documentId={} fileName={}",
                         documentId,
@@ -468,6 +470,36 @@ public class DocumentIngestionService {
         }
         accumulator.failedCount++;
         accumulator.failures.add(new IngestFailureResponse(normalizedFile.toString(), ex.getMessage()));
+    }
+
+    /**
+     * 将解析异常映射为持久化状态。
+     *
+     * <p>OCR_REQUIRED 是用户可处理的 PDF 文本层缺失诊断；其他异常继续归入通用 FAILED。</p>
+     *
+     * @param ex 导入异常
+     * @return 文档失败状态
+     */
+    private static DocumentStatus statusForFailure(RuntimeException ex) {
+        return ex instanceof PdfOcrRequiredException ? DocumentStatus.OCR_REQUIRED : DocumentStatus.FAILED;
+    }
+
+    /**
+     * 判断失败是否需要替换 SQLite 记录。
+     *
+     * <p>普通解析失败可能是临时 I/O 或损坏文件，维护动作下保留旧结果；OCR_REQUIRED 表示当前 PDF
+     * 缺少文本层，继续保留旧 chunk 会让搜索命中过期内容。</p>
+     *
+     * @param failedDocumentPolicy 失败记录策略
+     * @param failureStatus 已归类的失败状态
+     * @return 是否写入失败记录并清理旧 chunk / 索引
+     */
+    private static boolean shouldReplaceFailureRecord(
+            FailedDocumentPolicy failedDocumentPolicy,
+            DocumentStatus failureStatus
+    ) {
+        return failedDocumentPolicy == FailedDocumentPolicy.REPLACE_WITH_FAILED_RECORD
+                || failureStatus == DocumentStatus.OCR_REQUIRED;
     }
 
     /**
@@ -604,7 +636,8 @@ public class DocumentIngestionService {
     /**
      * 控制解析失败时是否覆盖已有文档记录。
      *
-     * <p>用户主动导入要暴露 FAILED 状态；目录重建要保护旧的 PARSED 结果。</p>
+     * <p>用户主动导入要暴露失败状态；目录同步/重建要保护旧的 PARSED 结果，但 OCR_REQUIRED
+     * 这类确定性内容状态仍会替换旧记录。</p>
      */
     private enum FailedDocumentPolicy {
         REPLACE_WITH_FAILED_RECORD,

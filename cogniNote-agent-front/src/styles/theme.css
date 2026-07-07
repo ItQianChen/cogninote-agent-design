@@ -170,7 +170,8 @@ body {
 }
 
 .status-pill--loading,
-.status-chip--skipped {
+.status-chip--skipped,
+.status-chip--ocr_required {
   color: var(--color-warning);
   background: var(--color-warning-soft);
 }

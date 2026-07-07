@@ -4,6 +4,8 @@ import { pickKnowledgeFolder } from '../api/desktop-api'
 import { listKnowledgeFolders } from '../api/knowledge-folders-api'
 import { useKnowledgeMaintenanceStore } from './knowledge-maintenance'
 
+const FAILED_DOCUMENT_STATUSES = new Set(['FAILED', 'OCR_REQUIRED'])
+
 /**
  * 管理知识库目录树、目录级操作和展开状态。
  *
@@ -30,7 +32,7 @@ export const useKnowledgeFoldersStore = defineStore('knowledgeFolders', () => {
 
   const stats = computed(() => {
     const parsed = allDocuments.value.filter((document) => document.status === 'PARSED').length
-    const failed = allDocuments.value.filter((document) => document.status === 'FAILED').length
+    const failed = allDocuments.value.filter((document) => FAILED_DOCUMENT_STATUSES.has(document.status)).length
     const chunks = allDocuments.value.reduce((total, document) => total + document.chunkCount, 0)
     return {
       folderCount: folders.value.length,

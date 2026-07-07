@@ -14,6 +14,7 @@ import com.itqianchen.agentdesign.domain.vo.ingestion.ScannedDocumentFile;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,6 +22,11 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -165,6 +171,84 @@ class DocumentIngestionServiceTests {
     }
 
     @Test
+    void ingestFolderMarksNoTextPdfAsOcrRequired() throws Exception {
+        Path pdf = tempDir.resolve("scanned.pdf");
+        writeBlankPdf(pdf);
+
+        IngestDocumentsResponse response = ingestionService.ingestFolder(tempDir.toString(), true);
+
+        assertThat(response.scannedCount()).isEqualTo(1);
+        assertThat(response.failedCount()).isEqualTo(1);
+        assertThat(response.failures())
+                .singleElement()
+                .satisfies(failure -> assertThat(failure.message()).contains("OCR is required"));
+        assertThat(documentRepository.findAllOrderByUpdatedAtDesc())
+                .singleElement()
+                .satisfies(document -> {
+                    assertThat(document.fileType()).isEqualTo(FileType.PDF);
+                    assertThat(document.status()).isEqualTo(DocumentStatus.OCR_REQUIRED);
+                    assertThat(document.chunkCount()).isZero();
+                    assertThat(document.indexedAt()).isNull();
+                });
+        assertThat(knowledgeStore.search(new SearchRequest("scanned", SearchMode.KEYWORD, 5)).hits()).isEmpty();
+    }
+
+    @Test
+    void syncKnowledgeFolderMarksNewNoTextPdfAsOcrRequired() throws Exception {
+        Path pdf = tempDir.resolve("sync-scanned.pdf");
+        writeBlankPdf(pdf);
+
+        IngestDocumentsResponse response = ingestionService.syncKnowledgeFolder(
+                "folder-sync-ocr-new",
+                tempDir.toString(),
+                true
+        );
+
+        assertThat(response.scannedCount()).isEqualTo(1);
+        assertThat(response.failedCount()).isEqualTo(1);
+        assertThat(documentRepository.findAllOrderByUpdatedAtDesc())
+                .singleElement()
+                .satisfies(document -> {
+                    assertThat(document.knowledgeFolderId()).isEqualTo("folder-sync-ocr-new");
+                    assertThat(document.fileType()).isEqualTo(FileType.PDF);
+                    assertThat(document.status()).isEqualTo(DocumentStatus.OCR_REQUIRED);
+                    assertThat(document.chunkCount()).isZero();
+                    assertThat(document.indexedAt()).isNull();
+                });
+    }
+
+    @Test
+    void syncKnowledgeFolderReplacesExistingParsedPdfWithOcrRequired() throws Exception {
+        Path pdf = tempDir.resolve("replace-me.pdf");
+        writeTextPdf(pdf, "Searchable text before replacement");
+        ingestionService.ingestKnowledgeFolder("folder-sync-ocr-existing", tempDir.toString(), true);
+        KnowledgeDocument parsedDocument = documentRepository.findAllOrderByUpdatedAtDesc().getFirst();
+
+        assertThat(parsedDocument.status()).isEqualTo(DocumentStatus.PARSED);
+        assertThat(parsedDocument.indexedAt()).isNotNull();
+        assertThat(documentRepository.findChunksByDocumentId(parsedDocument.id())).isNotEmpty();
+        assertThat(knowledgeStore.status().indexedChunkCount()).isPositive();
+
+        writeBlankPdf(pdf);
+        IngestDocumentsResponse response = ingestionService.syncKnowledgeFolder(
+                "folder-sync-ocr-existing",
+                tempDir.toString(),
+                true
+        );
+
+        assertThat(response.scannedCount()).isEqualTo(1);
+        assertThat(response.failedCount()).isEqualTo(1);
+        assertThat(documentRepository.findById(parsedDocument.id()))
+                .hasValueSatisfying(document -> {
+                    assertThat(document.status()).isEqualTo(DocumentStatus.OCR_REQUIRED);
+                    assertThat(document.chunkCount()).isZero();
+                    assertThat(document.indexedAt()).isNull();
+                });
+        assertThat(documentRepository.findChunksByDocumentId(parsedDocument.id())).isEmpty();
+        assertThat(knowledgeStore.status().indexedChunkCount()).isZero();
+    }
+
+    @Test
     void deleteDocumentOnlyDeletesDatabaseRows() throws Exception {
         Path note = tempDir.resolve("delete-me.txt");
         // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
@@ -227,5 +311,29 @@ class DocumentIngestionServiceTests {
     private Path fixture(String name) throws Exception {
         URL resource = Objects.requireNonNull(getClass().getResource("/fixtures/" + name));
         return Path.of(resource.toURI());
+    }
+
+    private void writeBlankPdf(Path path) throws Exception {
+        Files.deleteIfExists(path);
+        try (PDDocument document = new PDDocument()) {
+            document.addPage(new PDPage());
+            document.save(path.toFile());
+        }
+    }
+
+    private void writeTextPdf(Path path, String text) throws IOException {
+        Files.deleteIfExists(path);
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+                contentStream.beginText();
+                contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+                contentStream.newLineAtOffset(64, 700);
+                contentStream.showText(text);
+                contentStream.endText();
+            }
+            document.save(path.toFile());
+        }
     }
 }

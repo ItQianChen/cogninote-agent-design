@@ -1,6 +1,7 @@
 package com.itqianchen.agentdesign.knowledge;
 
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -14,6 +15,7 @@ import com.itqianchen.agentdesign.domain.enums.document.FileType;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
 import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolder;
 import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
+import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRepository;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
@@ -56,6 +58,8 @@ class KnowledgeHealthControllerTests {
 
     @Autowired
     private DocumentRepository documentRepository;
+
+    private final DocumentIdentity documentIdentity = new DocumentIdentity();
 
     @TempDir
     private Path tempDir;
@@ -120,6 +124,71 @@ class KnowledgeHealthControllerTests {
                 .andExpect(jsonPath("$.data.issues[0].code").value("MISSING_LOCAL_FILES"))
                 .andExpect(jsonPath("$.data.missingLocalFiles.length()").value(1))
                 .andExpect(jsonPath("$.data.missingLocalFiles[0].fileName").value("missing-after-import.txt"));
+    }
+
+    @Test
+    void folderHealthReportsPdfOcrRequiredWithoutGenericParseFailure() throws Exception {
+        long now = System.currentTimeMillis();
+        String folderId = "folder-ocr-required";
+        folderRepository.upsert(new KnowledgeFolder(
+                folderId,
+                tempDir.toAbsolutePath().normalize().toString(),
+                "OCR Required Folder",
+                true,
+                true,
+                now,
+                now,
+                now,
+                now
+        ));
+        upsertProblemDocument(folderId, "scanned.pdf", FileType.PDF, DocumentStatus.OCR_REQUIRED, now);
+
+        mockMvc.perform(get("/api/knowledge-health/folders/{id}", folderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WARNING"))
+                .andExpect(jsonPath("$.data.issues.length()").value(1))
+                .andExpect(jsonPath("$.data.issues[0].code").value("PDF_OCR_REQUIRED"))
+                .andExpect(jsonPath("$.data.failedDocuments.length()").value(1))
+                .andExpect(jsonPath("$.data.failedDocuments[0].message").value(startsWith("该 PDF 没有可抽取文本层")));
+
+        mockMvc.perform(get("/api/knowledge-health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.summary.failedCount").value(1))
+                .andExpect(jsonPath("$.data.issues[*].code", hasItem("PDF_OCR_REQUIRED")))
+                .andExpect(jsonPath("$.data.issues[*].code", not(hasItem("PARSE_FAILED"))));
+    }
+
+    @Test
+    void folderHealthSeparatesPdfOcrRequiredFromParseFailed() throws Exception {
+        long now = System.currentTimeMillis();
+        String folderId = "folder-mixed-failures";
+        folderRepository.upsert(new KnowledgeFolder(
+                folderId,
+                tempDir.toAbsolutePath().normalize().toString(),
+                "Mixed Failures Folder",
+                true,
+                true,
+                now,
+                now,
+                now,
+                now
+        ));
+        upsertProblemDocument(folderId, "scanned.pdf", FileType.PDF, DocumentStatus.OCR_REQUIRED, now);
+        upsertProblemDocument(folderId, "broken.txt", FileType.TEXT, DocumentStatus.FAILED, now);
+
+        mockMvc.perform(get("/api/knowledge-health/folders/{id}", folderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WARNING"))
+                .andExpect(jsonPath("$.data.issues[*].code", hasItem("PDF_OCR_REQUIRED")))
+                .andExpect(jsonPath("$.data.issues[*].code", hasItem("PARSE_FAILED")))
+                .andExpect(jsonPath("$.data.failedDocuments.length()").value(2));
+
+        mockMvc.perform(get("/api/knowledge-health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.summary.failedCount").value(2))
+                .andExpect(jsonPath("$.data.folders[0].failedCount").value(2))
+                .andExpect(jsonPath("$.data.issues[*].code", hasItem("PDF_OCR_REQUIRED")))
+                .andExpect(jsonPath("$.data.issues[*].code", hasItem("PARSE_FAILED")));
     }
 
     @Test
@@ -240,5 +309,32 @@ class KnowledgeHealthControllerTests {
                         ))))
                 .andExpect(status().isOk());
         return databaseCleaner.findAnyKnowledgeFolderId();
+    }
+
+    private void upsertProblemDocument(
+            String folderId,
+            String fileName,
+            FileType fileType,
+            DocumentStatus status,
+            long now
+    ) throws Exception {
+        Path path = tempDir.resolve(fileName);
+        Files.writeString(path, "placeholder");
+        Path normalizedPath = path.toAbsolutePath().normalize();
+        documentRepository.upsertDocument(new KnowledgeDocument(
+                documentIdentity.idForPath(normalizedPath.toString()),
+                folderId,
+                normalizedPath.toString(),
+                fileName,
+                fileType,
+                Files.size(path),
+                Files.getLastModifiedTime(path).toMillis(),
+                "hash-" + fileName,
+                status,
+                null,
+                now,
+                now,
+                0
+        ));
     }
 }

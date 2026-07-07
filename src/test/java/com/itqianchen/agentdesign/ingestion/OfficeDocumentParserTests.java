@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.itqianchen.agentdesign.domain.enums.document.FileType;
 import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
+import com.itqianchen.agentdesign.domain.exception.ingestion.PdfOcrRequiredException;
 import com.itqianchen.agentdesign.domain.support.ingestion.DocDocumentParser;
 import com.itqianchen.agentdesign.domain.support.ingestion.DocxDocumentParser;
 import com.itqianchen.agentdesign.domain.support.ingestion.DocumentParserRegistry;
@@ -115,6 +116,27 @@ class OfficeDocumentParserTests {
     }
 
     @Test
+    void pdfParserKeepsTextPagesWhenOtherPagesAreBlank() throws Exception {
+        Path pdf = tempDir.resolve("mixed.pdf");
+        try (PDDocument document = new PDDocument()) {
+            document.addPage(new PDPage());
+            PDPage textPage = new PDPage();
+            document.addPage(textPage);
+            writePageText(document, textPage, "Only this page has text");
+            document.save(pdf.toFile());
+        }
+
+        ParsedDocument parsedDocument = new PdfDocumentParser().parse(pdf);
+
+        assertThat(parsedDocument.sections())
+                .singleElement()
+                .satisfies(section -> {
+                    assertThat(section.pageNumber()).isEqualTo(2);
+                    assertThat(section.content()).contains("Only this page has text");
+                });
+    }
+
+    @Test
     void emptyPdfFailsAsNoTextLayer() throws Exception {
         Path pdf = tempDir.resolve("empty.pdf");
         try (PDDocument document = new PDDocument()) {
@@ -123,8 +145,20 @@ class OfficeDocumentParserTests {
         }
 
         assertThatThrownBy(() -> new PdfDocumentParser().parse(pdf))
+                .isInstanceOf(PdfOcrRequiredException.class)
                 .isInstanceOf(DocumentParseException.class)
-                .hasMessageContaining("no extractable text");
+                .hasMessageContaining("OCR is required");
+    }
+
+    @Test
+    void corruptPdfFailsAsGenericParseError() throws Exception {
+        Path pdf = tempDir.resolve("corrupt.pdf");
+        Files.writeString(pdf, "not a real pdf");
+
+        assertThatThrownBy(() -> new PdfDocumentParser().parse(pdf))
+                .isInstanceOf(DocumentParseException.class)
+                .isNotInstanceOf(PdfOcrRequiredException.class)
+                .hasMessageContaining("Failed to parse PDF file");
     }
 
     private Path fixture(String name) throws Exception {
@@ -146,15 +180,19 @@ class OfficeDocumentParserTests {
             for (String pageText : pageTexts) {
                 PDPage page = new PDPage();
                 document.addPage(page);
-                try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
-                    contentStream.beginText();
-                    contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
-                    contentStream.newLineAtOffset(64, 700);
-                    contentStream.showText(pageText);
-                    contentStream.endText();
-                }
+                writePageText(document, page, pageText);
             }
             document.save(path.toFile());
+        }
+    }
+
+    private void writePageText(PDDocument document, PDPage page, String text) throws IOException {
+        try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+            contentStream.beginText();
+            contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+            contentStream.newLineAtOffset(64, 700);
+            contentStream.showText(text);
+            contentStream.endText();
         }
     }
 }

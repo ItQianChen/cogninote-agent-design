@@ -204,6 +204,12 @@ PDF_OCR:tesseract-cli:v1:lang=chi_sim+eng:dpi=300
 
 ## 阶段 3：PDF OCR 需求检测和用户可见诊断
 
+### 实现状态
+
+36-3 已落地，详见 [第 36-3 阶段计划：PDF OCR 需求检测和用户可见诊断](phase-36-3-pdf-ocr-required-diagnosis-plan.md)。
+
+当前实现只把没有可抽取文本层的 PDF 诊断为 `OCR_REQUIRED`，并在健康诊断中展示 `PDF_OCR_REQUIRED`；不执行 OCR，不引入 Tesseract/Tika，不改 SQLite/Lucene schema。
+
 ### 实现方案
 
 先不做 OCR，只把“需要 OCR”的状态从普通失败里分出来。
@@ -211,14 +217,15 @@ PDF_OCR:tesseract-cli:v1:lang=chi_sim+eng:dpi=300
 改造点：
 
 - `PdfDocumentParser` 继续优先用 `PDFTextStripper` 抽文本层。
-- 当所有页都无可用文本时，抛出明确错误：
+- 当所有页都无可用文本时，抛出 `PdfOcrRequiredException`；损坏、加密或不可读 PDF 仍是普通 `DocumentParseException`。
+- OCR 需求异常使用明确错误：
 
 ```text
 PDF has no extractable text layer; OCR is required: <path>
 ```
 
-- 可选新增 `DocumentParseException` 子类型或错误 code，例如 `OCR_REQUIRED`。
-- 健康诊断和导入失败详情将该类失败展示为“扫描件 PDF，需要 OCR”。
+- 导入链路将该类失败持久化为 `DocumentStatus.OCR_REQUIRED`，仍计入 `failedCount` 并清理旧 chunks / Lucene 索引。
+- 健康诊断和导入失败详情将该类失败展示为“PDF 没有可抽取文本层，需要 OCR”，避免把空白 PDF 误称为扫描件。
 
 ### 风险
 

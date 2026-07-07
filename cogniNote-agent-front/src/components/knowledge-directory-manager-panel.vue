@@ -65,6 +65,13 @@ const RUN_STATUS_LABELS = {
   FAILED: '失败'
 }
 
+const DOCUMENT_STATUS_LABELS = {
+  PARSED: '已解析',
+  SKIPPED: '已跳过',
+  FAILED: '失败',
+  OCR_REQUIRED: '需 OCR'
+}
+
 const normalizedFolderSearchKeyword = computed(() => normalizeSearchText(folderSearchKeyword.value))
 const directoryStats = computed(() => {
   const folders = knowledgeStore.folders
@@ -151,6 +158,10 @@ function healthStatusLabel(status) {
 
 function healthStatusClass(status) {
   return `status-chip--health-${String(status || 'unknown').toLowerCase()}`
+}
+
+function documentStatusLabel(status) {
+  return DOCUMENT_STATUS_LABELS[status] || status || '未知'
 }
 
 function folderIssueCount(folder) {
@@ -504,7 +515,7 @@ async function refreshDirectories() {
                 <div class="document-title-line">
                   <h4>{{ document.fileName }}</h4>
                   <span :class="['status-chip', `status-chip--${document.status.toLowerCase()}`]">
-                    {{ document.status }}
+                    {{ documentStatusLabel(document.status) }}
                   </span>
                 </div>
                 <p class="path-text">{{ document.sourcePath }}</p>
@@ -536,7 +547,7 @@ async function refreshDirectories() {
                 <div class="document-title-line">
                   <h4>{{ document.fileName }}</h4>
                   <span :class="['status-chip', `status-chip--${document.status.toLowerCase()}`]">
-                    {{ document.status }}
+                    {{ documentStatusLabel(document.status) }}
                   </span>
                 </div>
                 <p class="path-text">{{ document.sourcePath }}</p>

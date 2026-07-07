@@ -39,6 +39,11 @@
   background: #f8d7da;
 }
 
+.status-chip--ocr_required {
+  color: #7a4a08;
+  background: #fff2bf;
+}
+
 .status-chip--skipped {
   color: #715300;
   background: #fff2bf;

@@ -2,6 +2,7 @@ package com.itqianchen.agentdesign.domain.support.ingestion;
 
 
 import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
+import com.itqianchen.agentdesign.domain.exception.ingestion.PdfOcrRequiredException;
 import com.itqianchen.agentdesign.domain.interfaces.ingestion.DocumentParser;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedSection;
@@ -49,22 +50,21 @@ public class PdfDocumentParser implements DocumentParser {
         try (PDDocument document = Loader.loadPDF(path.toFile())) {
             PDFTextStripper stripper = new PDFTextStripper();
             stripper.setSortByPosition(true);
-            stripper.setPageEnd("\f");
-
-            String fullText = stripper.getText(document);
-            String[] pageTexts = fullText.split("\f", -1);
             List<ParsedSection> sections = new ArrayList<>();
 
             for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); pageIndex++) {
-                String pageText = pageIndex < pageTexts.length ? pageTexts[pageIndex] : "";
+                // 逐页抽取才能在前置空白页存在时保留真实页码；整篇按分页符拆分会丢失空白页位置。
+                stripper.setStartPage(pageIndex + 1);
+                stripper.setEndPage(pageIndex + 1);
+                String pageText = stripper.getText(document);
                 if (pageText != null && !pageText.isBlank()) {
                     sections.add(new ParsedSection(pageText, null, pageIndex + 1));
                 }
             }
 
             if (sections.isEmpty()) {
-                // 抽取结果为空通常意味着 PDF 没有文本层；当前阶段不做 OCR。
-                throw new DocumentParseException("PDF has no extractable text layer: " + path);
+                // 抽取结果为空通常意味着 PDF 没有文本层；当前阶段只诊断，不执行 OCR。
+                throw new PdfOcrRequiredException("PDF has no extractable text layer; OCR is required: " + path);
             }
 
             return new ParsedDocument(FileType.PDF, sections);

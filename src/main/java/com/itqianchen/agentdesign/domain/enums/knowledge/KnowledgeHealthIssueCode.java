@@ -15,6 +15,9 @@ public enum KnowledgeHealthIssueCode {
     /** 存在解析失败的文档。 */
     PARSE_FAILED,
 
+    /** 存在没有可抽取文本层、需要 OCR 的 PDF。 */
+    PDF_OCR_REQUIRED,
+
     /** 已解析文档尚未写入检索索引。 */
     UNINDEXED_DOCUMENTS,
 

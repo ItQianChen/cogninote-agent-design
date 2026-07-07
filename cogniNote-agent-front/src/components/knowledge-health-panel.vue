@@ -81,6 +81,7 @@ const TERMINAL_STATUSES = new Set(['CANCELLED', 'COMPLETED', 'COMPLETED_WITH_WAR
 const RUN_OPERATION_OPTIONS = Object.entries(RUN_OPERATION_LABELS).map(([value, label]) => ({ value, label }))
 const RUN_STATUS_OPTIONS = Object.entries(RUN_STATUS_LABELS).map(([value, label]) => ({ value, label }))
 const ISSUE_CATEGORY_ICONS = {
+  'file-ingest': ShieldAlert,
   retrieval: Database,
   capability: BrainCircuit,
   graph: GitBranch,
