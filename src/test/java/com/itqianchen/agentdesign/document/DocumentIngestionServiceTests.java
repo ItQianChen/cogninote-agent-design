@@ -7,6 +7,7 @@ import com.itqianchen.agentdesign.domain.enums.document.FileType;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeChunk;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
 import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
+import com.itqianchen.agentdesign.domain.vo.ingestion.ScannedDocumentFile;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
@@ -66,6 +67,34 @@ class DocumentIngestionServiceTests {
                     assertThat(document.chunkCount()).isEqualTo(1);
                     assertThat(document.sourcePath()).contains("note.md");
                 });
+    }
+
+    @Test
+    void scanDocumentFilesIncludesPlannedDocumentFormatsWithoutParsing() throws Exception {
+        Files.writeString(tempDir.resolve("note.md"), "# Note");
+        Files.writeString(tempDir.resolve("note.markdown"), "# Alias");
+        Files.writeString(tempDir.resolve("plain.txt"), "Plain text");
+        Files.writeString(tempDir.resolve("modern.docx"), "placeholder");
+        Files.writeString(tempDir.resolve("legacy.doc"), "placeholder");
+        Files.writeString(tempDir.resolve("paper.pdf"), "placeholder");
+        Files.writeString(tempDir.resolve("page.html"), "<main>Page</main>");
+        Files.writeString(tempDir.resolve("archive.htm"), "<main>Archive</main>");
+        Files.writeString(tempDir.resolve("image.png"), "ignored");
+
+        List<String> fileNames = ingestionService.scanDocumentFiles(tempDir.toString(), true).stream()
+                .map(ScannedDocumentFile::fileName)
+                .toList();
+
+        assertThat(fileNames).containsExactlyInAnyOrder(
+                "note.md",
+                "note.markdown",
+                "plain.txt",
+                "modern.docx",
+                "legacy.doc",
+                "paper.pdf",
+                "page.html",
+                "archive.htm"
+        );
     }
 
     @Test
