@@ -97,7 +97,7 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
     }
 
     /**
-     * 为空库写入默认 Chat 和 Embedding 模型配置。
+     * 为空库写入默认 Chat、Embedding 和 Vision 模型配置。
      */
     private void initializeDefaultModelConfigsIfEmpty() {
         if (databaseSchemaMapper.countModelConfigs() > 0) {
@@ -135,6 +135,24 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
                 ModelConfigDefaults.EMBEDDING_TOKENS_PER_MINUTE,
                 ModelConfigDefaults.EMBEDDING_BATCH_SIZE,
                 null,
+                null,
+                null,
+                now,
+                now
+        );
+        insertInitialModelConfig(
+                ModelConfigDefaults.ACTIVE_VISION_CONFIG_ID,
+                ModelConfigRole.VISION.name(),
+                ModelConfigDefaults.PROVIDER.name(),
+                ModelConfigDefaults.VISION_DISPLAY_NAME,
+                ModelConfigDefaults.BASE_URL,
+                "",
+                ModelConfigDefaults.VISION_MODEL,
+                null,
+                null,
+                null,
+                null,
+                ModelConfigDefaults.VISION_TEMPERATURE,
                 null,
                 null,
                 now,

@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.itqianchen.agentdesign.domain.dto.ocr.OcrTestResponse;
 import com.itqianchen.agentdesign.domain.enums.document.FileType;
-import com.itqianchen.agentdesign.domain.enums.ocr.BaiduOcrRecognitionMode;
 import com.itqianchen.agentdesign.domain.enums.ocr.OcrProvider;
 import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
 import com.itqianchen.agentdesign.domain.exception.ingestion.PdfOcrRequiredException;
@@ -92,11 +91,7 @@ class PdfDocumentParserTests {
     private static OcrSettingsSnapshot enabledSettings() {
         return new OcrSettingsSnapshot(
                 true,
-                OcrProvider.BAIDU_OCR,
-                "api-key",
-                "secret-key",
-                BaiduOcrRecognitionMode.STANDARD,
-                "CHN_ENG",
+                OcrProvider.MODEL_VISION,
                 true,
                 200,
                 20,
@@ -134,7 +129,7 @@ class PdfDocumentParserTests {
 
         @Override
         public boolean supports(OcrProvider provider) {
-            return provider == OcrProvider.BAIDU_OCR;
+            return provider == OcrProvider.MODEL_VISION;
         }
 
         @Override
@@ -144,7 +139,7 @@ class PdfDocumentParserTests {
 
         @Override
         public OcrTestResponse test(OcrSettingsSnapshot settings) {
-            return new OcrTestResponse(true, "ok", settings.provider(), settings.recognitionMode());
+            return new OcrTestResponse(true, "ok", settings.provider(), "vision-model");
         }
     }
 }

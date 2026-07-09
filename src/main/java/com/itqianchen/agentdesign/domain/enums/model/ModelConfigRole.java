@@ -6,5 +6,6 @@ package com.itqianchen.agentdesign.domain.enums.model;
  */
 public enum ModelConfigRole {
     CHAT,
-    EMBEDDING
+    EMBEDDING,
+    VISION
 }

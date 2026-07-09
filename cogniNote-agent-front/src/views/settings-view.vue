@@ -134,6 +134,11 @@ async function loadActiveItemData(item) {
 
   if (item === 'model-embedding') {
     await modelConfigStore.switchRole(modelConfigStore.ROLES.EMBEDDING)
+    return
+  }
+
+  if (item === 'model-vision') {
+    await modelConfigStore.switchRole(modelConfigStore.ROLES.VISION)
   }
 }
 
@@ -202,9 +207,14 @@ function readRouteItem(item = route.query.item) {
         :initial-role="modelConfigStore.ROLES.CHAT"
       />
       <ModelConfigView
-        v-else
+        v-else-if="activeItem === 'model-embedding'"
         key="model-embedding"
         :initial-role="modelConfigStore.ROLES.EMBEDDING"
+      />
+      <ModelConfigView
+        v-else
+        key="model-vision"
+        :initial-role="modelConfigStore.ROLES.VISION"
       />
 
       <button

@@ -67,7 +67,7 @@ class DatabaseSchemaInitializerTests {
                     "display_label"
             );
             assertThat(indexColumnNames(sqlSession, "idx_kg_edges_scope_triple_migration")).isEmpty();
-            assertThat(queryInt(sqlSession, "SELECT COUNT(*) FROM model_configs")).isEqualTo(2);
+            assertThat(queryInt(sqlSession, "SELECT COUNT(*) FROM model_configs")).isEqualTo(3);
             assertThat(queryInt(sqlSession, """
                     SELECT COUNT(*)
                     FROM model_configs
@@ -86,6 +86,17 @@ class DatabaseSchemaInitializerTests {
                       AND provider = 'DASHSCOPE'
                       AND model_name = 'text-embedding-v4'
                       AND embedding_dimensions = 1024
+                      AND context_window_tokens IS NULL
+                      AND is_active = 1
+                    """)).isEqualTo(1);
+            assertThat(queryInt(sqlSession, """
+                    SELECT COUNT(*)
+                    FROM model_configs
+                    WHERE id = 'active-vision'
+                      AND role = 'VISION'
+                      AND provider = 'DASHSCOPE'
+                      AND model_name = 'qwen3-vl-plus'
+                      AND embedding_dimensions IS NULL
                       AND context_window_tokens IS NULL
                       AND is_active = 1
                     """)).isEqualTo(1);

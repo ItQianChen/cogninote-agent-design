@@ -7,5 +7,6 @@ package com.itqianchen.agentdesign.domain.enums.model;
 public enum ModelCapability {
     CHAT,
     EMBEDDING,
+    VISION,
     UNKNOWN
 }

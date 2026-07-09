@@ -22,7 +22,8 @@ public record ModelConfigUpsertRequest(
         @Min(1) @Max(10000) Integer embeddingRequestsPerMinute,
         @Min(1000) @Max(10000000) Integer embeddingTokensPerMinute,
         @Min(1) @Max(128) Integer embeddingBatchSize,
-        @Min(1024) @Max(2000000) Integer contextWindowTokens
+        @Min(1024) @Max(2000000) Integer contextWindowTokens,
+        Boolean clearApiKey
 ) {
     /**
      * 转换为服务层使用的模型配置请求。
@@ -40,7 +41,7 @@ public record ModelConfigUpsertRequest(
                 baseUrl,
                 apiKey,
                 modelName,
-                "CHAT".equals(normalizedRole) ? modelName : null,
+                "CHAT".equals(normalizedRole) || "VISION".equals(normalizedRole) ? modelName : null,
                 "EMBEDDING".equals(normalizedRole) ? modelName : null,
                 embeddingDimensions,
                 embeddingRequestsPerMinute,

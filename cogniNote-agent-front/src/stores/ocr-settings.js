@@ -8,16 +8,15 @@ import {
 
 const DEFAULT_SETTINGS = {
   enabled: false,
-  provider: 'BAIDU_OCR',
+  engine: 'MODEL_VISION',
   available: false,
-  baidu: {
-    apiKey: '',
-    secretKey: '',
+  visionModel: {
+    id: '',
+    provider: 'DASHSCOPE',
+    displayName: 'DashScope Vision',
+    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
     apiKeyConfigured: false,
-    secretKeyConfigured: false,
-    recognitionMode: 'STANDARD',
-    languageType: 'CHN_ENG',
-    detectDirection: true
+    modelName: 'qwen3-vl-plus'
   },
   limits: {
     maxPagesPerDocument: 200,
@@ -27,7 +26,7 @@ const DEFAULT_SETTINGS = {
 }
 
 export const useOcrSettingsStore = defineStore('ocrSettings', () => {
-  const settings = ref({ ...DEFAULT_SETTINGS, baidu: { ...DEFAULT_SETTINGS.baidu }, limits: { ...DEFAULT_SETTINGS.limits } })
+  const settings = ref(normalizeSettings(DEFAULT_SETTINGS))
   const loaded = ref(false)
   const loading = ref(false)
   const saving = ref(false)
@@ -36,16 +35,14 @@ export const useOcrSettingsStore = defineStore('ocrSettings', () => {
   const message = ref('')
   const lastTestResult = ref(null)
 
-  const credentialsReady = computed(() => Boolean(
-    settings.value.baidu.apiKey.trim() && settings.value.baidu.secretKey.trim()
-  ))
+  const credentialsReady = computed(() => Boolean(settings.value.visionModel.apiKeyConfigured))
   const canEnable = computed(() => credentialsReady.value)
   const available = computed(() => Boolean(settings.value.enabled && settings.value.available))
   const statusLabel = computed(() => {
     if (!settings.value.enabled) {
       return 'OCR 未启用'
     }
-    return available.value ? 'OCR 可用' : 'OCR 未配置'
+    return available.value ? '模型 OCR 可用' : '视觉模型未配置'
   })
 
   async function fetchSettings({ force = false } = {}) {
@@ -70,9 +67,9 @@ export const useOcrSettingsStore = defineStore('ocrSettings', () => {
     settings.value = normalizeSettings({
       ...settings.value,
       ...patch,
-      baidu: {
-        ...settings.value.baidu,
-        ...(patch.baidu || {})
+      visionModel: {
+        ...settings.value.visionModel,
+        ...(patch.visionModel || {})
       },
       limits: {
         ...settings.value.limits,
@@ -141,14 +138,11 @@ export const useOcrSettingsStore = defineStore('ocrSettings', () => {
 })
 
 function normalizeSettings(value) {
-  const baidu = {
-    ...DEFAULT_SETTINGS.baidu,
-    ...(value?.baidu || {})
+  const engine = normalizeEngine(value?.engine || value?.provider)
+  const visionModel = {
+    ...DEFAULT_SETTINGS.visionModel,
+    ...(value?.visionModel || {})
   }
-  const apiKey = String(baidu.apiKey || '')
-  const secretKey = String(baidu.secretKey || '')
-  const apiKeyConfigured = Boolean(baidu.apiKeyConfigured || apiKey.trim())
-  const secretKeyConfigured = Boolean(baidu.secretKeyConfigured || secretKey.trim())
   const limits = {
     ...DEFAULT_SETTINGS.limits,
     ...(value?.limits || {})
@@ -156,44 +150,42 @@ function normalizeSettings(value) {
   return {
     ...DEFAULT_SETTINGS,
     ...value,
-    provider: 'BAIDU_OCR',
-    baidu: {
-      ...baidu,
-      apiKey,
-      secretKey,
-      apiKeyConfigured,
-      secretKeyConfigured,
-      recognitionMode: baidu.recognitionMode === 'ACCURATE' ? 'ACCURATE' : 'STANDARD',
-      languageType: String(baidu.languageType || DEFAULT_SETTINGS.baidu.languageType).toUpperCase(),
-      detectDirection: baidu.detectDirection !== false
+    engine,
+    visionModel: {
+      ...visionModel,
+      id: String(visionModel.id || ''),
+      provider: String(visionModel.provider || DEFAULT_SETTINGS.visionModel.provider),
+      displayName: String(visionModel.displayName || DEFAULT_SETTINGS.visionModel.displayName),
+      baseUrl: String(visionModel.baseUrl || DEFAULT_SETTINGS.visionModel.baseUrl),
+      apiKeyConfigured: Boolean(visionModel.apiKeyConfigured),
+      modelName: String(visionModel.modelName || DEFAULT_SETTINGS.visionModel.modelName)
     },
     limits: {
       maxPagesPerDocument: clampInteger(limits.maxPagesPerDocument, 1, 500, DEFAULT_SETTINGS.limits.maxPagesPerDocument),
       timeoutPerPageSeconds: clampInteger(limits.timeoutPerPageSeconds, 3, 120, DEFAULT_SETTINGS.limits.timeoutPerPageSeconds),
       monthlyCallBudget: clampInteger(limits.monthlyCallBudget, 1, 1000000, DEFAULT_SETTINGS.limits.monthlyCallBudget)
     },
-    enabled: Boolean(value?.enabled && apiKey.trim() && secretKey.trim()),
-    available: Boolean(value?.available && apiKey.trim() && secretKey.trim())
+    enabled: Boolean(value?.enabled),
+    available: Boolean(value?.enabled && value?.available && visionModel.apiKeyConfigured)
   }
 }
 
 function toPayload(value) {
   return {
     enabled: value.enabled,
-    provider: value.provider,
-    baidu: {
-      apiKey: value.baidu.apiKey,
-      secretKey: value.baidu.secretKey,
-      recognitionMode: value.baidu.recognitionMode,
-      languageType: value.baidu.languageType,
-      detectDirection: value.baidu.detectDirection
-    },
+    engine: 'MODEL_VISION',
+    provider: 'MODEL_VISION',
     limits: {
       maxPagesPerDocument: value.limits.maxPagesPerDocument,
       timeoutPerPageSeconds: value.limits.timeoutPerPageSeconds,
       monthlyCallBudget: value.limits.monthlyCallBudget
     }
   }
+}
+
+function normalizeEngine(engine) {
+  const normalized = String(engine || '').trim().toUpperCase()
+  return normalized === 'BAIDU_OCR' || !normalized ? 'MODEL_VISION' : normalized
 }
 
 function clampInteger(value, min, max, fallback) {

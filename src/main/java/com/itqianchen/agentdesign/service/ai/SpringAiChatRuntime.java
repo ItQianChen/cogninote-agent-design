@@ -8,9 +8,13 @@ import java.util.Locale;
 import java.util.Map;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.content.Media;
+import org.springframework.util.MimeType;
 import reactor.core.publisher.Flux;
 
 /**
@@ -139,6 +143,38 @@ final class SpringAiChatRuntime implements AiChatRuntime {
                 .chatResponse();
         String text = extractText(response);
         return text == null ? "" : text;
+    }
+
+    /**
+     * 同步获取模型对图片的文本输出。
+     *
+     * <p>该路径用于 PDF OCR，直接使用 ChatModel + Media，避免把图片识别混入带记忆和工具的聊天链路。</p>
+     *
+     * @param systemPrompt 系统提示词
+     * @param userMessage 用户提示词
+     * @param imageBytes 图片字节
+     * @param mimeType 图片 MIME 类型
+     * @return 模型文本或空字符串
+     */
+    @Override
+    public String callImage(String systemPrompt, String userMessage, byte[] imageBytes, MimeType mimeType) {
+        try {
+            UserMessage message = UserMessage.builder()
+                    .text(userMessage)
+                    .media(Media.builder()
+                            .mimeType(mimeType)
+                            .data(imageBytes)
+                            .build())
+                    .build();
+            ChatResponse response = chatModel.call(new Prompt(List.of(
+                    new SystemMessage(systemPrompt),
+                    message
+            )));
+            String text = extractText(response);
+            return text == null ? "" : text;
+        } catch (RuntimeException ex) {
+            throw new ModelConfigurationException(providerLabel + " vision call failed: " + ex.getMessage(), ex);
+        }
     }
 
     /**

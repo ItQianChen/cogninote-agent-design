@@ -1,29 +1,27 @@
 package com.itqianchen.agentdesign.domain.dto.ocr;
 
-import com.itqianchen.agentdesign.domain.enums.ocr.BaiduOcrRecognitionMode;
 import com.itqianchen.agentdesign.domain.enums.ocr.OcrProvider;
 
 /**
  * OCR 设置响应。
  *
- * <p>该响应会按用户本机设置中心诉求回显 apiKey/secretKey 明文；其他接口不得复用该 DTO。</p>
+ * <p>密钥归属模型配置接口，本响应只暴露视觉模型摘要和 OCR 运行限制。</p>
  */
 public record OcrSettingsResponse(
         boolean enabled,
-        OcrProvider provider,
+        OcrProvider engine,
         boolean available,
-        BaiduSettings baidu,
+        VisionModelSettings visionModel,
         Limits limits
 ) {
 
-    public record BaiduSettings(
-            String apiKey,
-            String secretKey,
+    public record VisionModelSettings(
+            String id,
+            String provider,
+            String displayName,
+            String baseUrl,
             boolean apiKeyConfigured,
-            boolean secretKeyConfigured,
-            BaiduOcrRecognitionMode recognitionMode,
-            String languageType,
-            boolean detectDirection
+            String modelName
     ) {
     }
 

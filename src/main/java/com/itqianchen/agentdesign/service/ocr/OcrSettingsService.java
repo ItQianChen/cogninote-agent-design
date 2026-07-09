@@ -5,9 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itqianchen.agentdesign.domain.dto.ocr.OcrSettingsRequest;
 import com.itqianchen.agentdesign.domain.dto.ocr.OcrSettingsResponse;
 import com.itqianchen.agentdesign.domain.dto.ocr.OcrTestResponse;
-import com.itqianchen.agentdesign.domain.enums.ocr.BaiduOcrRecognitionMode;
+import com.itqianchen.agentdesign.domain.entity.model.ModelConfig;
 import com.itqianchen.agentdesign.domain.enums.ocr.OcrProvider;
 import com.itqianchen.agentdesign.repository.settings.AppSettingRepository;
+import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -16,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * OCR 全局设置服务。
  *
- * <p>设置存入 app_settings 的 JSON 快照；密钥只允许在本服务和 Provider 调用链内流转。</p>
+ * <p>设置存入 app_settings 的 JSON 快照；视觉模型密钥归属 model_configs，避免 OCR 设置重复保存凭据。</p>
  */
 @Service
 public class OcrSettingsService implements OcrSettingsProvider {
@@ -27,15 +28,18 @@ public class OcrSettingsService implements OcrSettingsProvider {
     private final AppSettingRepository appSettingRepository;
     private final ObjectMapper objectMapper;
     private final OcrEngineRegistry ocrEngineRegistry;
+    private final ModelConfigService modelConfigService;
 
     public OcrSettingsService(
             AppSettingRepository appSettingRepository,
             ObjectMapper objectMapper,
-            OcrEngineRegistry ocrEngineRegistry
+            OcrEngineRegistry ocrEngineRegistry,
+            ModelConfigService modelConfigService
     ) {
         this.appSettingRepository = appSettingRepository;
         this.objectMapper = objectMapper;
         this.ocrEngineRegistry = ocrEngineRegistry;
+        this.modelConfigService = modelConfigService;
     }
 
     @Transactional
@@ -48,22 +52,12 @@ public class OcrSettingsService implements OcrSettingsProvider {
         OcrSettingsSnapshot current = snapshot();
         OcrSettingsSnapshot updated = normalize(new StoredSettings(
                 request.enabled() == null ? current.enabled() : request.enabled(),
-                request.provider() == null ? current.provider() : request.provider(),
-                request.baidu() == null || request.baidu().apiKey() == null
-                        ? current.apiKey()
-                        : safeTrim(request.baidu().apiKey()),
-                request.baidu() == null || request.baidu().secretKey() == null
-                        ? current.secretKey()
-                        : safeTrim(request.baidu().secretKey()),
-                request.baidu() == null || request.baidu().recognitionMode() == null
-                        ? current.recognitionMode()
-                        : request.baidu().recognitionMode(),
-                request.baidu() == null || request.baidu().languageType() == null
-                        ? current.languageType()
-                        : request.baidu().languageType(),
-                request.baidu() == null || request.baidu().detectDirection() == null
-                        ? current.detectDirection()
-                        : request.baidu().detectDirection(),
+                requestedProvider(request.engine(), request.provider(), current.provider()),
+                null,
+                null,
+                null,
+                null,
+                null,
                 request.limits() == null || request.limits().maxPagesPerDocument() == null
                         ? current.maxPagesPerDocument()
                         : request.limits().maxPagesPerDocument(),
@@ -83,29 +77,30 @@ public class OcrSettingsService implements OcrSettingsProvider {
     public OcrSettingsSnapshot snapshot() {
         return appSettingRepository.findValue(SETTINGS_KEY)
                 .map(this::decode)
-                .map(OcrSettingsService::normalize)
+                .map(this::normalize)
                 .orElseGet(this::initializeDefaults);
     }
 
     @Transactional
     public OcrTestResponse test() {
         OcrSettingsSnapshot settings = snapshot();
+        ModelConfig visionConfig = modelConfigService.activeVisionOrDefault();
         if (!settings.enabled()) {
-            return new OcrTestResponse(false, "OCR 未启用。", settings.provider(), settings.recognitionMode());
+            return new OcrTestResponse(false, "OCR 未启用。", settings.provider(), visionConfig.modelName());
         }
-        if (!settings.credentialsConfigured()) {
-            return new OcrTestResponse(false, "百度 OCR API Key 或 Secret Key 未配置。", settings.provider(),
-                    settings.recognitionMode());
+        if (!settings.visionModelConfigured()) {
+            return new OcrTestResponse(false, "视觉识别模型 API Key 未配置。", settings.provider(),
+                    visionConfig.modelName());
         }
         try {
             return ocrEngineRegistry.engineFor(settings.provider()).test(settings);
         } catch (OcrProviderException ex) {
-            return new OcrTestResponse(false, ex.getMessage(), settings.provider(), settings.recognitionMode());
+            return new OcrTestResponse(false, ex.getMessage(), settings.provider(), visionConfig.modelName());
         }
     }
 
     private OcrSettingsSnapshot initializeDefaults() {
-        OcrSettingsSnapshot defaults = OcrSettingsSnapshot.defaults();
+        OcrSettingsSnapshot defaults = normalize(storedDefaults());
         appSettingRepository.save(SETTINGS_KEY, encode(defaults));
         return defaults;
     }
@@ -115,11 +110,11 @@ public class OcrSettingsService implements OcrSettingsProvider {
             return objectMapper.writeValueAsString(new StoredSettings(
                     snapshot.enabled(),
                     snapshot.provider(),
-                    snapshot.apiKey(),
-                    snapshot.secretKey(),
-                    snapshot.recognitionMode(),
-                    snapshot.languageType(),
-                    snapshot.detectDirection(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
                     snapshot.maxPagesPerDocument(),
                     snapshot.timeoutPerPageSeconds(),
                     snapshot.monthlyCallBudget()
@@ -138,33 +133,38 @@ public class OcrSettingsService implements OcrSettingsProvider {
         }
     }
 
-    private static OcrSettingsSnapshot normalize(StoredSettings settings) {
-        OcrProvider provider = settings.provider() == null ? OcrProvider.BAIDU_OCR : settings.provider();
-        String apiKey = safeTrim(settings.apiKey());
-        String secretKey = safeTrim(settings.secretKey());
-        BaiduOcrRecognitionMode mode = settings.recognitionMode() == null
-                ? BaiduOcrRecognitionMode.STANDARD
-                : settings.recognitionMode();
-        String languageType = safeTrim(settings.languageType()).isBlank()
-                ? "CHN_ENG"
-                : safeTrim(settings.languageType()).toUpperCase();
-        boolean detectDirection = settings.detectDirection();
-        int maxPages = Math.clamp(settings.maxPagesPerDocument(), 1, 500);
-        int timeoutSeconds = Math.clamp(settings.timeoutPerPageSeconds(), 3, 120);
-        int monthlyBudget = Math.clamp(settings.monthlyCallBudget(), 1, 1_000_000);
-        boolean enabled = settings.enabled() && !apiKey.isBlank() && !secretKey.isBlank();
+    private OcrSettingsSnapshot normalize(StoredSettings settings) {
+        OcrProvider provider = normalizeStoredProvider(settings.provider());
+        int maxPages = Math.clamp(defaultIfUnset(settings.maxPagesPerDocument(), 200), 1, 500);
+        int timeoutSeconds = Math.clamp(defaultIfUnset(settings.timeoutPerPageSeconds(), 20), 3, 120);
+        int monthlyBudget = Math.clamp(defaultIfUnset(settings.monthlyCallBudget(), 1000), 1, 1_000_000);
+        boolean migratedFromBaidu = settings.provider() == OcrProvider.BAIDU_OCR;
+        boolean enabled = settings.enabled() && provider == OcrProvider.MODEL_VISION && !migratedFromBaidu;
         return new OcrSettingsSnapshot(
                 enabled,
                 provider,
-                apiKey,
-                secretKey,
-                mode,
-                languageType,
-                detectDirection,
+                modelConfigService.activeVisionOrDefault().hasApiKey(),
                 maxPages,
                 timeoutSeconds,
                 monthlyBudget
         );
+    }
+
+    private static OcrProvider requestedProvider(
+            OcrProvider engine,
+            OcrProvider provider,
+            OcrProvider fallback
+    ) {
+        OcrProvider requested = engine == null ? provider : engine;
+        return requested == null ? fallback : requested;
+    }
+
+    private static OcrProvider normalizeStoredProvider(OcrProvider provider) {
+        return provider == null || provider == OcrProvider.BAIDU_OCR ? OcrProvider.MODEL_VISION : provider;
+    }
+
+    private static int defaultIfUnset(int value, int fallback) {
+        return value <= 0 ? fallback : value;
     }
 
     private static StoredSettings storedDefaults() {
@@ -172,30 +172,30 @@ public class OcrSettingsService implements OcrSettingsProvider {
         return new StoredSettings(
                 defaults.enabled(),
                 defaults.provider(),
-                defaults.apiKey(),
-                defaults.secretKey(),
-                defaults.recognitionMode(),
-                defaults.languageType(),
-                defaults.detectDirection(),
+                null,
+                null,
+                null,
+                null,
+                null,
                 defaults.maxPagesPerDocument(),
                 defaults.timeoutPerPageSeconds(),
                 defaults.monthlyCallBudget()
         );
     }
 
-    private static OcrSettingsResponse toResponse(OcrSettingsSnapshot snapshot) {
+    private OcrSettingsResponse toResponse(OcrSettingsSnapshot snapshot) {
+        ModelConfig visionConfig = modelConfigService.activeVisionOrDefault();
         return new OcrSettingsResponse(
                 snapshot.enabled(),
                 snapshot.provider(),
                 snapshot.available(),
-                new OcrSettingsResponse.BaiduSettings(
-                        snapshot.apiKey(),
-                        snapshot.secretKey(),
-                        !snapshot.apiKey().isBlank(),
-                        !snapshot.secretKey().isBlank(),
-                        snapshot.recognitionMode(),
-                        snapshot.languageType(),
-                        snapshot.detectDirection()
+                new OcrSettingsResponse.VisionModelSettings(
+                        visionConfig.id(),
+                        visionConfig.provider().name(),
+                        visionConfig.displayName(),
+                        visionConfig.baseUrl(),
+                        visionConfig.hasApiKey(),
+                        visionConfig.modelName()
                 ),
                 new OcrSettingsResponse.Limits(
                         snapshot.maxPagesPerDocument(),
@@ -205,18 +205,14 @@ public class OcrSettingsService implements OcrSettingsProvider {
         );
     }
 
-    private static String safeTrim(String value) {
-        return value == null ? "" : value.trim();
-    }
-
     private record StoredSettings(
             boolean enabled,
             OcrProvider provider,
             String apiKey,
             String secretKey,
-            BaiduOcrRecognitionMode recognitionMode,
+            String recognitionMode,
             String languageType,
-            boolean detectDirection,
+            Boolean detectDirection,
             int maxPagesPerDocument,
             int timeoutPerPageSeconds,
             int monthlyCallBudget

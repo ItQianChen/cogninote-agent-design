@@ -12,7 +12,7 @@
 2. HTML / HTM 导入。
 3. Word 97-2003 `.doc` 导入。
 4. PDF OCR 需求检测和用户可见诊断。
-5. 公共 OCR Provider 接入与 PDF 重新解析。
+5. 视觉模型 OCR 接入与 PDF 重新解析。
 6. 本地 / 离线 OCR 扩展评估。
 
 ## Core Judgment
@@ -21,7 +21,7 @@ HTML 和 `.doc` 值得先做，风险低、收益直接。PDF OCR 必须分层�
 
 - HTML 是本地知识库常见来源，`jsoup` 足够轻，能保持当前应用体积和解析边界可控。
 - `.doc` 可继续使用 Apache POI 生态，只需增加 `poi-scratchpad` 和一个 parser。
-- OCR 会引入页面图片上传、按页费用、供应商鉴权、CPU/内存限制和重新解析策略，必须从检测开始，默认关闭，并清楚提示用户公共云 OCR 的数据边界。
+- OCR 会引入页面图片上传、模型 token / 图片费用、供应商鉴权、CPU/内存限制和重新解析策略，必须从检测开始，默认关闭，并清楚提示用户视觉模型服务商的数据边界。
 - 暂不引入 Apache Tika 全量解析包。Tika 能统一抽取很多格式，但会增加体积和复杂性；官方也提醒生产处理不可信文件时需要隔离、超时和内存限制。
 
 ## Current Boundaries
@@ -49,7 +49,7 @@ HTML 和 `.doc` 值得先做，风险低、收益直接。PDF OCR 必须分层�
 - 支持本地 `.html` 和 `.htm` 文件导入。
 - 支持 Word 97-2003 `.doc` 正文文本导入。
 - PDF 无文本层时能明确诊断为“需要 OCR”，而不是普通解析失败。
-- 提供可选公共 OCR Provider 接入，第一版使用百度 OCR，默认关闭。
+- 提供可选视觉模型 OCR 接入，第一版使用独立 `VISION` 模型配置，默认关闭。
 - 保持未配置 OCR 的用户安装包体积和运行行为不变。
 - 为后续 parser 版本、OCR 语言和 OCR DPI 变化后的重新解析预留机制。
 
@@ -95,7 +95,7 @@ DOCX:poi-xwpf:v1
 DOC:poi-hwpf:v1
 PDF_TEXT:pdfbox:v1
 HTML:jsoup:v1
-PDF_OCR:baidu-ocr:v1:mode=STANDARD:lang=CHN_ENG:dpi=200
+PDF_OCR:model-vision:v1:provider=DASHSCOPE:model=qwen3-vl-plus:dpi=200
 PDF_OCR:tesseract-cli:v1:lang=chi_sim+eng:dpi=300
 ```
 
@@ -239,13 +239,13 @@ PDF has no extractable text layer; OCR is required: <path>
 - 全图片/空文本层 PDF 失败原因明确包含 OCR required。
 - 失败记录能进入前端导入结果，用户知道下一步是开启 OCR 或使用外部工具。
 
-## 阶段 4：公共 OCR Provider 接入与 PDF 重新解析
+## 阶段 4：视觉模型 OCR 接入与 PDF 重新解析
 
 ### 实现状态
 
-36-4 已落地，详见 [第 36-4 阶段计划：公共 OCR Provider 接入与 PDF 重新解析](phase-36-4-public-ocr-provider-plan.md)。
+36-4 已落地，详见 [第 36-4 阶段计划：视觉模型 OCR 与 PDF 重新解析](phase-36-4-public-ocr-provider-plan.md)。
 
-当前实现第一版只启用 `BAIDU_OCR`，设置保存到 `app_settings` 的 `ocr.settings` JSON 快照。OCR 默认关闭，用户必须显式保存百度 OCR API Key / Secret Key 并启用后才会处理旧的 `OCR_REQUIRED` PDF。设置页会按本机配置诉求明文回显密钥；日志、异常、测试响应和维护运行记录不得输出密钥。
+当前实现第一版启用 `MODEL_VISION`，设置保存到 `app_settings` 的 `ocr.settings` JSON 快照。OCR 默认关闭，用户必须显式配置独立 `VISION` 模型 API Key 并启用后才会处理旧的 `OCR_REQUIRED` PDF。模型配置页按本机配置诉求明文回显密钥；日志、异常、测试响应和维护运行记录不得输出密钥。旧 `BAIDU_OCR` 设置只作为迁移输入读取，归一化为 `MODEL_VISION` 且默认关闭。
 
 ### 实现方案
 
@@ -255,8 +255,9 @@ PDF has no extractable text layer; OCR is required: <path>
 OcrProvider
 OcrEngine
 OcrEngineRegistry
-BaiduOcrEngine
+ModelVisionOcrEngine
 OcrSettingsService
+ModelConfigService(VISION)
 ```
 
 设置接口：
@@ -279,9 +280,9 @@ PDF OCR 流程：
 PDFTextStripper extracts text layer
   -> if any page has text: return text sections, do not OCR blank pages
   -> if no page has text and OCR disabled/unavailable: OCR_REQUIRED
-  -> if no page has text and OCR enabled:
+  -> if no page has text and model OCR enabled:
        PDFRenderer.renderImageWithDPI(pageIndex, 200)
-       call BAIDU_OCR with page image
+       call VISION model with page image
        return ParsedSection(pageText, null, pageNumber)
 ```
 
@@ -289,8 +290,8 @@ PDFTextStripper extracts text layer
 
 - OCR 只处理 PDF 无文本层场景，不新增图片文件导入。
 - 有文本层 PDF 不混合 OCR 空白页，避免同一文档出现文本层和 OCR 双来源噪音。
-- `GET /api/ocr/settings` 允许本机设置页明文回显密钥；其他接口不得复用该 DTO。
-- `POST /api/ocr/test` 只验证百度鉴权和服务可用性，不上传用户文件，不返回密钥或 access token。
+- OCR 设置只保存开关和限制；密钥归属 `VISION` 模型配置，设置响应只返回视觉模型摘要。
+- `POST /api/ocr/test` 使用后端生成的小测试图片验证视觉模型图片输入能力，不上传用户文件，不返回密钥。
 - OCR 结果只进入 SQLite chunks 和 Lucene 索引，不修改用户原 PDF。
 - OCR 失败不覆盖已有成功解析结果，继续遵守现有 `FailedDocumentPolicy`。
 - `REPARSE` 忽略 `isUnchanged(...)`，用于 OCR 配置开启后重新处理旧的 `OCR_REQUIRED` 文档。
@@ -304,7 +305,7 @@ PDFTextStripper extracts text layer
 
 ```text
 PDF_TEXT:pdfbox:v1
-PDF_OCR:baidu-ocr:v1:mode=STANDARD:lang=CHN_ENG:dpi=200
+PDF_OCR:model-vision:v1:provider=...:model=...:dpi=200
 PDF_OCR:tesseract-cli:v1:lang=chi_sim+eng:dpi=300
 HTML:jsoup:v1
 DOC:poi-hwpf:v1
@@ -313,17 +314,17 @@ DOC:poi-hwpf:v1
 ### 验收
 
 - 未配置 OCR 时，扫描 PDF 仍只提示需要 OCR。
-- 配置可用百度 OCR 后，无文本层 PDF 能重新解析为可搜索 chunk。
+- 配置可用视觉模型 OCR 后，无文本层 PDF 能重新解析为可搜索 chunk。
 - 文本型 PDF 不触发 OCR。
-- OCR 设置保存后能在设置页明文回显密钥，清空密钥会关闭 OCR。
+- OCR 设置保存开关和限制；视觉模型密钥在模型配置页明文可见、可复制、可清空。
 - 测试连接成功/失败都有明确反馈，且响应中不包含密钥。
-- 目录管理和健康诊断能引导用户对 `PDF_OCR_REQUIRED` 执行“配置 OCR”或“重新解析目录”。
+- 目录管理和健康诊断能引导用户对 `PDF_OCR_REQUIRED` 执行“配置视觉模型”或“重新解析目录”。
 
 ## 阶段 5：本地 / 离线 OCR 扩展评估
 
 ### 目标
 
-在公共 OCR Provider 方案稳定后，再评估是否补充本地离线 Provider 或内置 OCR 增强包。
+在视觉模型 OCR 方案稳定后，再评估是否补充本地离线 Provider 或内置 OCR 增强包。
 
 候选方案：
 
@@ -343,7 +344,7 @@ DOC:poi-hwpf:v1
 
 结论规则：
 
-- 如果本地 OCR 让安装包明显膨胀，默认继续使用公共 OCR Provider 或外部 CLI。
+- 如果本地 OCR 让安装包明显膨胀，默认继续使用视觉模型 OCR 或外部 CLI。
 - 如果未来用户强依赖离线 OCR，可考虑单独 OCR 增强包或插件化能力。
 - 不把内置 OCR 和普通文档格式扩展混在同一次发布里。
 
@@ -364,7 +365,7 @@ DOC:poi-hwpf:v1
 - `HtmlDocumentParserTests` 覆盖标题、正文、代码块、脚本过滤。
 - `OfficeDocumentParserTests` 覆盖正常 `.doc` fixture 和损坏文件。
 - `PdfDocumentParserTests` 覆盖文本型 PDF、空文本层 PDF、部分页面为空。
-- OCR 阶段增加 `OcrSettingsServiceTests`、`BaiduOcrEngineTests`、`PdfDocumentParserTests` 和维护队列测试，使用 fake HTTP client，避免 CI 调用真实百度 OCR。
+- OCR 阶段增加 `OcrSettingsServiceTests`、`ModelVisionOcrEngineTests`、`PdfDocumentParserTests` 和维护队列测试，使用 fake `AiChatRuntime`，避免 CI 调用真实视觉模型。
 - `DocumentIngestionServiceTests` 覆盖新增文件类型扫描、失败记录和跳过逻辑。
 
 前端验证：
@@ -386,7 +387,7 @@ npm --prefix cogniNote-agent-front run build
 
 - HTML 和 `.doc` 回滚：移除新增 parser 和 `FileType` 枚举；已导入的 `HTML`/`DOC` 文档记录需要通过兼容清理脚本或维护动作删除，否则旧版本无法映射枚举。
 - OCR 检测回滚：恢复 `PdfDocumentParser` 原错误文案即可，不影响数据。
-- 公共 OCR 回滚：关闭 `ocr.settings.enabled`，保留普通 PDF 文本层解析和 `OCR_REQUIRED` 诊断。
+- 视觉模型 OCR 回滚：关闭 `ocr.settings.enabled`，保留普通 PDF 文本层解析和 `OCR_REQUIRED` 诊断。
 - 内置 OCR 回滚：优先回滚打包资源和 native 加载，不改 SQLite schema。
 
 ## Acceptance Criteria
@@ -394,10 +395,10 @@ npm --prefix cogniNote-agent-front run build
 - HTML 和 `.doc` 能作为普通本地文档导入、切块、索引和 RAG 引用。
 - 现有 Markdown、TXT、DOCX、文本型 PDF 行为不回退。
 - 扫描件 PDF 在未开启 OCR 时给出明确“需要 OCR”提示。
-- 开启 `BAIDU_OCR` 后，扫描件 PDF 能通过重新解析进入知识库并可搜索。
+- 开启 `MODEL_VISION` 且配置可用 `VISION` 模型后，扫描件 PDF 能通过重新解析进入知识库并可搜索。
 - OCR 失败不会破坏已有解析成功的文档。
 - 默认安装包不因为 OCR 明显膨胀。
-- 公共 OCR 上传和按页费用风险已在设置页、README 和 API 文档中明确提示。
+- 视觉模型 OCR 上传、token / 图片费用风险已在设置页、README 和 API 文档中明确提示。
 - README、API 文档和阶段计划对支持格式、限制和安装要求描述一致。
 
 ## References
@@ -407,9 +408,11 @@ npm --prefix cogniNote-agent-front run build
 - [jsoup Extract attributes, text, and HTML](https://jsoup.org/cookbook/extracting-data/attributes-text-html)：HTML 文本抽取方法。
 - [jsoup API](https://jsoup.org/apidocs/org/jsoup/Jsoup)：从文件、路径和字符串解析 HTML。
 - [PDFBox PDFRenderer API](https://javadoc.io/static/org.apache.pdfbox/pdfbox/3.0.5/org/apache/pdfbox/rendering/PDFRenderer.html)：将 PDF 页面渲染成图片，供 OCR 使用。
-- [百度 OCR 价格详情](https://cloud.baidu.com/product-price/ocr.html)：公共 OCR 计费参考，实际费用以百度智能云控制台为准。
-- [百度通用场景文字识别价格](https://ai.baidu.com/ai-doc/OCR/9k3h7xuv6)：通用文字识别标准版和高精度版价格入口。
-- [百度 OCR 接口说明](https://cloud.baidu.com/doc/OCR/s/7kibizyfm)：百度 OCR API 调用说明。
+- [OpenAI Images and Vision](https://developers.openai.com/api/docs/guides/images-vision)：多模态图片输入参考。
+- [Anthropic Vision](https://platform.claude.com/docs/en/build-with-claude/vision)：Claude 视觉能力参考。
+- [Gemini Image Understanding](https://ai.google.dev/gemini-api/docs/image-understanding)：Gemini 图片理解能力参考。
+- [DashScope Qwen Vision](https://www.alibabacloud.com/help/en/model-studio/vision)：Qwen 视觉模型参考。
+- [Spring AI Multimodality](https://docs.spring.io/spring-ai/reference/1.1/api/multimodality.html)：Spring AI 多模态消息参考。
 - [Tess4J API](https://tess4j.sourceforge.net/docs/docs-5.19/net/sourceforge/tess4j/Tesseract1.html)：Java/JNA 绑定 Tesseract 的可选方案。
 - [Tess4J GitHub](https://github.com/nguyenq/tess4j)：Tess4J 依赖 native library 和运行环境说明。
 - [Tesseract traineddata docs](https://tesseract-ocr.github.io/tessdoc/Data-Files.html)：语言包 fast/best/tessdata 差异。

@@ -3,6 +3,7 @@ package com.itqianchen.agentdesign.domain.interfaces.ai;
 
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.util.MimeType;
 import reactor.core.publisher.Flux;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +67,17 @@ public interface AiChatRuntime {
      * @return 模型返回文本；无文本内容时返回空字符串
      */
     String callText(String systemPrompt, String userMessage);
+
+    /**
+     * 同步单次多模态调用，用于 OCR 等内部流程从图片中提取文本。
+     *
+     * @param systemPrompt 系统提示词
+     * @param userMessage 用户提示词
+     * @param imageBytes 图片字节
+     * @param mimeType 图片 MIME 类型
+     * @return 模型返回文本；无文本内容时返回空字符串
+     */
+    String callImage(String systemPrompt, String userMessage, byte[] imageBytes, MimeType mimeType);
 
     /**
      * 使用最小 Prompt 验证配置可用，不保存任何业务消息。

@@ -1,8 +1,6 @@
 package com.itqianchen.agentdesign.controller.model;
 
 
-import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
-import com.itqianchen.agentdesign.domain.exception.model.ModelConfigurationException;
 import com.itqianchen.agentdesign.common.api.ApiResponse;
 import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
 import com.itqianchen.agentdesign.domain.exception.model.ModelConfigurationException;
@@ -69,14 +67,15 @@ public class ModelConfigController {
     }
 
     /**
-     * 返回当前激活的对话模型和向量模型配置。
+     * 返回当前激活的对话模型、向量模型和视觉模型配置。
      * <p>该接口服务于前端顶部状态和运行前置检查。</p>
      */
     @GetMapping("/api/model-configs/active")
     public ApiResponse<ActiveModelConfigsResponse> activeConfigs() {
         return ApiResponse.ok(new ActiveModelConfigsResponse(
                 ModelConfigResponse.from(modelConfigService.activeChatOrDefault()),
-                ModelConfigResponse.from(modelConfigService.activeEmbeddingOrDefault())
+                ModelConfigResponse.from(modelConfigService.activeEmbeddingOrDefault()),
+                ModelConfigResponse.from(modelConfigService.activeVisionOrDefault())
         ));
     }
 
@@ -274,16 +273,16 @@ public class ModelConfigController {
 
     /**
      * 解析并校验模型配置角色。
-     * <p>只允许 {@code CHAT} 和 {@code EMBEDDING}，非法值会提前转为配置异常。</p>
+     * <p>只允许 {@code CHAT}、{@code EMBEDDING} 和 {@code VISION}，非法值会提前转为配置异常。</p>
      */
     private static ModelConfigRole parseRole(String role) {
         if (role == null || role.isBlank()) {
-            throw new ModelConfigurationException("Invalid role: role is required. Must be CHAT or EMBEDDING.");
+            throw new ModelConfigurationException("Invalid role: role is required. Must be CHAT, EMBEDDING or VISION.");
         }
         try {
             return ModelConfigRole.valueOf(role.trim().toUpperCase());
         } catch (IllegalArgumentException ex) {
-            throw new ModelConfigurationException("Invalid role: " + role + ". Must be CHAT or EMBEDDING.");
+            throw new ModelConfigurationException("Invalid role: " + role + ". Must be CHAT, EMBEDDING or VISION.");
         }
     }
 

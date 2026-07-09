@@ -14,7 +14,8 @@ import { useSearchStore } from './search'
 
 const ROLES = {
   CHAT: 'CHAT',
-  EMBEDDING: 'EMBEDDING'
+  EMBEDDING: 'EMBEDDING',
+  VISION: 'VISION'
 }
 
 const FIXED_EMBEDDING_DIMENSIONS = 1024
@@ -31,9 +32,9 @@ const EMBEDDING_RATE_LIMIT_PRESETS = [
 ]
 
 /**
- * 模型设置页的双角色编辑状态。
+ * 模型设置页的多角色编辑状态。
  *
- * Chat 和 Embedding 共用一套表单结构，但 active 配置、模型列表和 API Key 可见性必须按角色隔离。
+ * Chat、Embedding 和 Vision 共用一套表单结构，但 active 配置、模型列表和 API Key 可见性必须按角色隔离。
  */
 export const useModelConfigStore = defineStore('modelConfig', () => {
   const providerOptions = [
@@ -52,15 +53,16 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   ]
 
   const activeRole = ref(ROLES.CHAT)
-  const activeSummary = ref({ chat: null, embedding: null })
+  const activeSummary = ref({ chat: null, embedding: null, vision: null })
   const roleState = ref({
     CHAT: emptyRoleState(ROLES.CHAT),
-    EMBEDDING: emptyRoleState(ROLES.EMBEDDING)
+    EMBEDDING: emptyRoleState(ROLES.EMBEDDING),
+    VISION: emptyRoleState(ROLES.VISION)
   })
-  const modelOptionsByRole = ref({ CHAT: [], EMBEDDING: [] })
-  const modelsFetchedAtByRole = ref({ CHAT: null, EMBEDDING: null })
-  const modelOptionsSignatureByRole = ref({ CHAT: '', EMBEDDING: '' })
-  const visibleApiKeyByRole = ref({ CHAT: false, EMBEDDING: false })
+  const modelOptionsByRole = ref({ CHAT: [], EMBEDDING: [], VISION: [] })
+  const modelsFetchedAtByRole = ref({ CHAT: null, EMBEDDING: null, VISION: null })
+  const modelOptionsSignatureByRole = ref({ CHAT: '', EMBEDDING: '', VISION: '' })
+  const visibleApiKeyByRole = ref({ CHAT: false, EMBEDDING: false, VISION: false })
   const isFetchingModels = ref(false)
   const isTestingModelConfig = ref(false)
   const message = ref('')
@@ -74,11 +76,14 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
 
   const activeChatConfig = computed(() => activeSummary.value.chat)
   const activeEmbeddingConfig = computed(() => activeSummary.value.embedding)
+  const activeVisionConfig = computed(() => activeSummary.value.vision)
   const chatConfigs = computed(() => roleState.value.CHAT.configs)
   const embeddingConfigs = computed(() => roleState.value.EMBEDDING.configs)
+  const visionConfigs = computed(() => roleState.value.VISION.configs)
   const activeConfigs = computed(() => ({
     chat: activeChatConfig.value,
-    embedding: activeEmbeddingConfig.value
+    embedding: activeEmbeddingConfig.value,
+    vision: activeVisionConfig.value
   }))
   const modelConfig = computed(() => activeChatConfig.value)
   const currentState = computed(() => roleState.value[activeRole.value])
@@ -87,13 +92,16 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   const selectedConfig = computed(() => currentState.value.selectedConfig)
   const activeConfigForRole = computed(() => activeRole.value === ROLES.CHAT
     ? activeChatConfig.value
-    : activeEmbeddingConfig.value)
+    : activeRole.value === ROLES.EMBEDDING
+      ? activeEmbeddingConfig.value
+      : activeVisionConfig.value)
   const editingIdByRole = computed(() => ({
     CHAT: roleState.value.CHAT.selectedConfig?.id || null,
-    EMBEDDING: roleState.value.EMBEDDING.selectedConfig?.id || null
+    EMBEDDING: roleState.value.EMBEDDING.selectedConfig?.id || null,
+    VISION: roleState.value.VISION.selectedConfig?.id || null
   }))
   const isEditingExisting = computed(() => Boolean(selectedConfig.value?.id))
-  const roleLabel = computed(() => activeRole.value === ROLES.CHAT ? '对话模型' : '向量模型')
+  const roleLabel = computed(() => roleDisplayName(activeRole.value))
   const isOpenAiCompatible = computed(() => form.value.provider === 'OPENAI_COMPATIBLE')
   const providerLabel = computed(() => {
     return providerOptions.find(option => option.value === form.value.provider)?.label || form.value.provider
@@ -111,6 +119,9 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   const embeddingModelOptions = computed(() => {
     return sortedModelOptionsForRole(modelOptionsByRole.value.EMBEDDING || [], ROLES.EMBEDDING)
   })
+  const visionModelOptions = computed(() => {
+    return sortedModelOptionsForRole(modelOptionsByRole.value.VISION || [], ROLES.VISION)
+  })
   const isLoadingModelConfig = computed(() => currentState.value.loading)
   const isSavingModelConfig = computed(() => currentState.value.saving)
   const isActivating = computed(() => currentState.value.activating)
@@ -122,7 +133,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   }
 
   async function ensureModelConfigLoaded() {
-    if (!activeSummary.value.chat || !activeSummary.value.embedding) {
+    if (!activeSummary.value.chat || !activeSummary.value.embedding || !activeSummary.value.vision) {
       await refreshActiveSummary()
     }
   }
@@ -229,6 +240,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       if (role === ROLES.EMBEDDING) {
         await searchStore.fetchIndexStatus()
         message.value = '向量模型配置已启用'
+      } else if (role === ROLES.VISION) {
+        message.value = '视觉识别模型配置已启用'
       } else {
         message.value = '对话模型配置已启用'
       }
@@ -337,6 +350,9 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       embeddingDimensions: role === ROLES.EMBEDDING ? FIXED_EMBEDDING_DIMENSIONS : null,
       contextWindowTokens: role === ROLES.CHAT
         ? normalizeContextWindowTokens(currentForm.contextWindowTokens)
+        : null,
+      temperature: isGenerationRole(role)
+        ? normalizeTemperature(currentForm.temperature, role)
         : null
     })
     invalidateModelOptions(role)
@@ -346,6 +362,22 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
 
   function toggleApiKeyVisible(role = activeRole.value) {
     visibleApiKeyByRole.value[role] = !visibleApiKeyByRole.value[role]
+  }
+
+  function updateApiKey(value, role = activeRole.value) {
+    const state = roleState.value[role]
+    state.form.apiKey = String(value || '')
+    if (state.form.apiKey.trim()) {
+      state.form.clearApiKey = false
+    }
+  }
+
+  function clearApiKey(role = activeRole.value) {
+    const state = roleState.value[role]
+    state.form.apiKey = ''
+    state.form.clearApiKey = true
+    state.error = ''
+    message.value = '保存后将清空当前 API Key'
   }
 
   async function copyApiKey(formOverride = null, role = activeRole.value) {
@@ -371,7 +403,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     const active = await getActiveModelConfigs()
     activeSummary.value = {
       chat: normalizeConfigForRole(active?.chat, ROLES.CHAT),
-      embedding: normalizeConfigForRole(active?.embedding, ROLES.EMBEDDING)
+      embedding: normalizeConfigForRole(active?.embedding, ROLES.EMBEDDING),
+      vision: normalizeConfigForRole(active?.vision, ROLES.VISION)
     }
   }
 
@@ -402,7 +435,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     // 后端一次返回 active 摘要和当前角色列表，前端必须同步更新，避免标签页切换时显示旧选中项。
     activeSummary.value = {
       chat: normalizeConfigForRole(snapshot.active?.chat, ROLES.CHAT),
-      embedding: normalizeConfigForRole(snapshot.active?.embedding, ROLES.EMBEDDING)
+      embedding: normalizeConfigForRole(snapshot.active?.embedding, ROLES.EMBEDDING),
+      vision: normalizeConfigForRole(snapshot.active?.vision, ROLES.VISION)
     }
     const role = normalizeRoleValue(snapshot.role || activeRole.value)
     activeRole.value = role
@@ -436,6 +470,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       displayName: current.displayName.trim(),
       baseUrl: current.baseUrl.trim(),
       apiKey: current.apiKey,
+      clearApiKey: Boolean(current.clearApiKey),
       modelName: current.modelName.trim(),
       embeddingDimensions: role === ROLES.EMBEDDING ? FIXED_EMBEDDING_DIMENSIONS : undefined,
       embeddingRequestsPerMinute: role === ROLES.EMBEDDING
@@ -447,7 +482,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       embeddingBatchSize: role === ROLES.EMBEDDING
         ? normalizeEmbeddingBatchSize(current.embeddingBatchSize)
         : undefined,
-      temperature: role === ROLES.CHAT ? Number(current.temperature) : undefined,
+      temperature: isGenerationRole(role) ? Number(current.temperature) : undefined,
       defaultTopK: role === ROLES.CHAT ? Number(current.defaultTopK) : undefined,
       contextWindowTokens: role === ROLES.CHAT
         ? normalizeContextWindowTokens(current.contextWindowTokens)
@@ -494,10 +529,10 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   }
 
   function autoSelectModel(role) {
-    if (role !== ROLES.CHAT) {
+    if (!isGenerationRole(role)) {
       return
     }
-    const options = chatModelOptions.value
+    const options = role === ROLES.CHAT ? chatModelOptions.value : visionModelOptions.value
     const state = roleState.value[role]
     if (options.length && !state.form.modelName) {
       replaceEditorForm(role, {
@@ -510,11 +545,19 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   function modelOptionsCountForRole(role) {
     return role === ROLES.CHAT
       ? chatModelOptions.value.length
-      : embeddingModelOptions.value.length
+      : role === ROLES.EMBEDDING
+        ? embeddingModelOptions.value.length
+        : visionModelOptions.value.length
   }
 
   function activeConfigFor(role) {
-    return role === ROLES.CHAT ? activeSummary.value.chat : activeSummary.value.embedding
+    if (role === ROLES.CHAT) {
+      return activeSummary.value.chat
+    }
+    if (role === ROLES.EMBEDDING) {
+      return activeSummary.value.embedding
+    }
+    return activeSummary.value.vision
   }
 
   function replaceEditorForm(role, nextForm) {
@@ -553,8 +596,10 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     roleState,
     chatConfigs,
     embeddingConfigs,
+    visionConfigs,
     activeChatConfig,
     activeEmbeddingConfig,
+    activeVisionConfig,
     activeConfigs,
     modelConfig,
     isLoadingModelConfig,
@@ -586,6 +631,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     roleLabel,
     chatModelOptions,
     embeddingModelOptions,
+    visionModelOptions,
     fetchModelConfig,
     ensureModelConfigLoaded,
     enterModelSettings,
@@ -597,6 +643,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     editConfig,
     markFormTouched,
     toggleApiKeyVisible,
+    updateApiKey,
+    clearApiKey,
     setContextWindowTokens,
     setEmbeddingRateLimitPreset,
     formatContextWindowTokens,
@@ -630,16 +678,21 @@ function defaultForm(role) {
   return {
     role,
     provider: 'DASHSCOPE',
-    displayName: role === ROLES.CHAT ? 'DashScope Chat' : 'DashScope 向量模型',
+    displayName: role === ROLES.CHAT
+      ? 'DashScope Chat'
+      : role === ROLES.EMBEDDING
+        ? 'DashScope 向量模型'
+        : 'DashScope Vision',
     baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
     apiKey: '',
-    modelName: '',
+    clearApiKey: false,
+    modelName: role === ROLES.VISION ? 'qwen3-vl-plus' : '',
     embeddingDimensions: role === ROLES.EMBEDDING ? FIXED_EMBEDDING_DIMENSIONS : null,
     embeddingRateLimitPreset: role === ROLES.EMBEDDING ? DEFAULT_EMBEDDING_RATE_LIMIT_PRESET : null,
     embeddingRequestsPerMinute: role === ROLES.EMBEDDING ? 300 : null,
     embeddingTokensPerMinute: role === ROLES.EMBEDDING ? 300000 : null,
     embeddingBatchSize: role === ROLES.EMBEDDING ? 16 : null,
-    temperature: role === ROLES.CHAT ? 0.7 : null,
+    temperature: role === ROLES.CHAT ? 0.7 : role === ROLES.VISION ? 0.0 : null,
     defaultTopK: role === ROLES.CHAT ? 8 : null,
     contextWindowTokens: role === ROLES.CHAT ? DEFAULT_CONTEXT_WINDOW_TOKENS : null
   }
@@ -655,6 +708,7 @@ function formFromConfig(config) {
     displayName: config.displayName || defaults.displayName,
     baseUrl: config.baseUrl || defaults.baseUrl,
     apiKey: config.apiKey || '',
+    clearApiKey: false,
     modelName: config.modelName || '',
     embeddingDimensions: role === ROLES.EMBEDDING
       ? FIXED_EMBEDDING_DIMENSIONS
@@ -671,8 +725,8 @@ function formFromConfig(config) {
     embeddingBatchSize: role === ROLES.EMBEDDING
       ? normalizeEmbeddingBatchSize(config.embeddingBatchSize ?? defaults.embeddingBatchSize)
       : null,
-    temperature: role === ROLES.CHAT
-      ? (config.temperature ?? defaults.temperature)
+    temperature: isGenerationRole(role)
+      ? normalizeTemperature(config.temperature ?? defaults.temperature, role)
       : null,
     defaultTopK: role === ROLES.CHAT
       ? (config.defaultTopK ?? defaults.defaultTopK)
@@ -684,7 +738,11 @@ function formFromConfig(config) {
 }
 
 function normalizeRoleValue(role) {
-  return String(role || '').trim().toUpperCase() === ROLES.EMBEDDING ? ROLES.EMBEDDING : ROLES.CHAT
+  const normalized = String(role || '').trim().toUpperCase()
+  if (normalized === ROLES.EMBEDDING || normalized === ROLES.VISION) {
+    return normalized
+  }
+  return ROLES.CHAT
 }
 
 function normalizeConfigForRole(config, role = normalizeRoleValue(config?.role)) {
@@ -708,6 +766,9 @@ function normalizeConfigForRole(config, role = normalizeRoleValue(config?.role))
       : null,
     contextWindowTokens: role === ROLES.CHAT
       ? normalizeContextWindowTokens(config.contextWindowTokens)
+      : null,
+    temperature: isGenerationRole(role)
+      ? normalizeTemperature(config.temperature, role)
       : null
   }
 }
@@ -721,6 +782,7 @@ function normalizeFormForRole(nextForm, role = normalizeRoleValue(nextForm?.role
     displayName: nextForm?.displayName || defaults.displayName,
     baseUrl: nextForm?.baseUrl ?? defaults.baseUrl,
     apiKey: nextForm?.apiKey || '',
+    clearApiKey: Boolean(nextForm?.clearApiKey),
     modelName: nextForm?.modelName || '',
     embeddingDimensions: role === ROLES.EMBEDDING ? FIXED_EMBEDDING_DIMENSIONS : null,
     embeddingRateLimitPreset: role === ROLES.EMBEDDING
@@ -735,7 +797,9 @@ function normalizeFormForRole(nextForm, role = normalizeRoleValue(nextForm?.role
     embeddingBatchSize: role === ROLES.EMBEDDING
       ? normalizeEmbeddingBatchSize(nextForm?.embeddingBatchSize ?? defaults.embeddingBatchSize)
       : null,
-    temperature: role === ROLES.CHAT ? (nextForm?.temperature ?? defaults.temperature) : null,
+    temperature: isGenerationRole(role)
+      ? normalizeTemperature(nextForm?.temperature ?? defaults.temperature, role)
+      : null,
     defaultTopK: role === ROLES.CHAT ? (nextForm?.defaultTopK ?? defaults.defaultTopK) : null,
     contextWindowTokens: role === ROLES.CHAT
       ? normalizeContextWindowTokens(nextForm?.contextWindowTokens ?? defaults.contextWindowTokens)
@@ -773,6 +837,15 @@ function normalizeEmbeddingTokensPerMinute(value) {
 
 function normalizeEmbeddingBatchSize(value) {
   return normalizeIntegerInRange(value, 16, 1, 128)
+}
+
+function normalizeTemperature(value, role) {
+  const fallback = role === ROLES.VISION ? 0.0 : 0.7
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return fallback
+  }
+  return Math.min(2, Math.max(0, parsed))
 }
 
 function normalizeIntegerInRange(value, fallback, min, max) {
@@ -842,12 +915,34 @@ function capabilityRank(capability, role) {
     return {
       EMBEDDING: 0,
       UNKNOWN: 1,
-      CHAT: 2
+      CHAT: 2,
+      VISION: 3
+    }[capability] ?? 1
+  }
+  if (role === ROLES.VISION) {
+    return {
+      VISION: 0,
+      UNKNOWN: 1,
+      CHAT: 2,
+      EMBEDDING: 3
     }[capability] ?? 1
   }
   return {
     CHAT: 0,
     UNKNOWN: 1,
-    EMBEDDING: 2
+    VISION: 2,
+    EMBEDDING: 3
   }[capability] ?? 1
+}
+
+function isGenerationRole(role) {
+  return role === ROLES.CHAT || role === ROLES.VISION
+}
+
+function roleDisplayName(role) {
+  return {
+    CHAT: '对话模型',
+    EMBEDDING: '向量模型',
+    VISION: '视觉识别模型'
+  }[role] || '对话模型'
 }

@@ -4,7 +4,7 @@
 
 # 知记空间（CogniNote）
 
-知记空间（CogniNote）是一个本地优先的个人知识库问答应用。它可以导入本机 Markdown、TXT、DOCX、DOC、HTML/HTM 和文本型 PDF；无文本层 PDF 会被诊断为需 OCR，用户可在本机设置中接入百度 OCR 后重新解析。应用使用 SQLite 保存知识片段，使用 Lucene 建立关键词/向量混合检索索引，并通过可配置的大模型提供带引用来源的 RAG 问答；用户也可以显式开启联网搜索，让 Agent 通过 Tool Calling 补充公开网页来源。
+知记空间（CogniNote）是一个本地优先的个人知识库问答应用。它可以导入本机 Markdown、TXT、DOCX、DOC、HTML/HTM 和文本型 PDF；无文本层 PDF 会被诊断为需 OCR，用户可配置独立视觉识别模型后重新解析。应用使用 SQLite 保存知识片段，使用 Lucene 建立关键词/向量混合检索索引，并通过可配置的大模型提供带引用来源的 RAG 问答；用户也可以显式开启联网搜索，让 Agent 通过 Tool Calling 补充公开网页来源。
 
 当前项目面向本地桌面交付：Tauri 负责桌面窗口、后端进程生命周期、桌面会话令牌和自动更新检查，Spring Boot 负责业务 API 和托管 Vue 页面。中文显示名是“知记空间”，英文工程名、安装包名、数据目录和兼容标识继续保留 `CogniNote`。Windows 与 macOS 打包链路分开维护，避免平台资源和脚本互相污染。
 
@@ -32,7 +32,7 @@
 2. 打开应用，在“设置 -> 模型”中分别配置 Chat / Embedding 模型；模型 ID 支持下拉搜索、模糊匹配和自定义输入。
 3. 在“知识库总览”中通过导入弹窗导入本地文档目录。
 4. 可选：在“设置 -> 策略 -> 联网搜索”中保存 Exa API Key、启用联网搜索，并按需调整调用次数、结果数和超时。
-5. 可选：在“设置 -> 策略 -> OCR 识别”中保存百度 OCR API Key / Secret Key。启用后，无文本层 PDF 会按页上传图片到百度 OCR，可能产生按页调用费用。
+5. 可选：在“设置 -> 模型 -> 视觉识别模型”中配置支持图片输入的模型，并在“设置 -> 策略 -> OCR 识别”中启用模型 OCR。启用后，无文本层 PDF 会按页上传图片到所选模型服务商，可能产生 token 或图片费用。
 6. 在资料总览页查看知识库健康状态；需要批量维护时进入“目录管理”列表，按名称、路径或状态搜索目录，并把同步、重新解析、停用、删除、补写索引或重建索引加入维护队列。
 7. 使用搜索面板验证索引命中结果。
 8. 回到“对话”页提问，查看带引用来源的流式回答；需要追问某段助手回复时，选中文本并点击“添加到对话”。需要网页资料时，在聊天设置弹层中打开“联网搜索”。
@@ -62,7 +62,7 @@
 
 ## 核心能力
 
-- 本地文档导入：支持 Markdown、TXT、DOCX、DOC、HTML/HTM、文本型 PDF；无文本层 PDF 会在健康诊断中标记为“需 OCR”，配置百度 OCR 后可重新解析为可搜索文本。
+- 本地文档导入：支持 Markdown、TXT、DOCX、DOC、HTML/HTM、文本型 PDF；无文本层 PDF 会在健康诊断中标记为“需 OCR”，配置视觉模型 OCR 后可重新解析为可搜索文本。
 - 知识库目录管理：总览页保持轻量入口，目录维护在独立列表中完成；支持导入弹窗、模糊搜索、启停/问题筛选、分页查找、文件同步、重新解析目录、启用/停用、删除目录、补写缺失索引、局部重建索引和按目录展开文档。
 - 知识库问答可用性诊断：资料总览页展示“问答可用性”入口，聚合资料同步状态、可检索文档数、Lucene 一致性、Embedding 降级、图谱过期、重复内容和疑似版本冲突；停用目录显示为 `DISABLED`，作为用户主动排除检索范围的状态，不计入问题数量或全库告警。点击“查看问题”会先列出全局问题和问题目录，再进入诊断与修复抽屉执行同步重试、补写索引、重建索引、配置向量模型、查看图谱或复制路径等修复动作。
 - 知识库维护队列：导入目录、同步目录、重新解析目录、启停、删除、补写索引、目录重建和全库重建都会先进入本地 FIFO 队列，通过 SSE 推送 `QUEUED/RUNNING/COMPLETED/FAILED` 等状态；等待任务可取消，运行任务执行到安全完成点。高风险操作先二次确认，导入和重建类任务完成后会弹出需要用户确认的结果提示。
@@ -70,9 +70,9 @@
 - 本地搜索索引：Lucene 提供 BM25 关键词检索、向量检索和混合检索；支持中文正文、代码标识符、路径片段和流程图节点检索，向量检索会使用 active Embedding 模型生成查询向量。Embedding 调用按模型配置中的 RPM、TPM 和 batch size 限速；供应商返回 429、rate limit、TPM/RPM limit 时会自动退避重试，并提示用户这是供应商配额限制，不是文档解析失败。
 - RAG 对话：通过 Spring AI ChatClient + Advisor 注入会话记忆和知识库片段；知识库模式可按 `AUTO/ALWAYS/OFF` 策略补全省略、指代、动作型和领域切换追问的检索 query，并保留空白的 SSE 流式输出答案、展示引用来源；模型截断、异常或流提前断开时会标记“未完成”，避免半截回答伪装成完成。
 - 联网搜索 Tool Calling：全局配置 Exa API Key 后，用户可在单轮聊天设置中显式开启联网。后端只有在“本轮开关 + 全局启用 + API Key 已配置”同时满足时才挂载 `WebSearchTools.searchWeb`；工具结果通过 SSE `tool` 事件增量回传，并以 `WEB` 来源和本地知识库来源一起展示、落库。
-- OCR 识别：全局配置百度 OCR 后，无文本层 PDF 可按页渲染为图片并上传到百度 OCR 识别，识别文本进入 SQLite chunks 和 Lucene 索引，不修改用户原始 PDF；密钥只保存在本机，设置页会明文回显，日志、异常、测试结果和维护运行记录不输出密钥。
+- OCR 识别：全局启用模型 OCR 后，无文本层 PDF 可按页渲染为图片并上传到当前 VISION 模型识别，识别文本进入 SQLite chunks 和 Lucene 索引，不修改用户原始 PDF；模型密钥只保存在本机，模型配置页会明文回显，日志、异常、测试结果和维护运行记录不输出密钥。
 - 知识图谱：基于已导入 chunks 调用 active Chat 模型抽取实体、中文关系谓词、关系描述和证据，写入 SQLite 图谱缓存与派生视图；进入图谱页先展示可搜索、可筛选的已有全库/目录/文件图谱清单，点击“查看”后才按需加载完整视图；已有图谱可重新生成或删除，删除只清理图谱节点、关系、证据、视图和运行记录，不删除原始目录、文件、chunks 或 chunk 抽取缓存；关系 `type` 只做内部粗分类，画布、邻接表、Inspector 和证据抽屉直接展示后端校验后的中文 `displayLabel` 与 `description`。
-- 模型配置：Chat / Embedding 独立配置和启用；支持阿里百炼 DashScope 默认通道、OpenAI-compatible 自定义 Base URL，模型 ID 可下拉搜索、模糊匹配或手动输入；Chat 模型可配置上下文窗口，默认 `128K`；Embedding 模型可配置请求限速，标准默认值为 `300 RPM / 300000 TPM / batch 16`，也可按供应商控制台配额自定义。
+- 模型配置：Chat / Embedding / Vision 独立配置和启用；支持阿里百炼 DashScope 默认通道、OpenAI-compatible 自定义 Base URL，模型 ID 可下拉搜索、模糊匹配或手动输入；Chat 模型可配置上下文窗口，默认 `128K`；Embedding 模型可配置请求限速，标准默认值为 `300 RPM / 300000 TPM / batch 16`，也可按供应商控制台配额自定义；Vision 模型用于无文本层 PDF 的模型 OCR。
 - Prompt 配置：聊天、RAG、追问补全、连接测试和知识图谱抽取 Prompt 统一放在 `src/main/resources/cogninote-prompts.yaml`；`application.yaml` 只导入该专用配置文件并保留运行配置。
 - 对话式桌面界面：左侧持久化会话列表，主区域流式对话，答案按 AI 流式 Markdown 渲染并支持 Mermaid 流程图代码块，引用来源可折叠；用户可选中已完成助手回复片段添加到下一轮对话，发送后引用标签会随用户消息持久化并支持悬停预览；对话设置可切换知识库、检索模式和 Top K，发送区显示当前会话上下文占用和压缩状态。
 - 主题设置：支持深色/夜间和日间主题，本机保存偏好。
@@ -253,7 +253,7 @@ Vue Frontend
       ├─ App Update Channel
       ├─ Knowledge & Search Test
       ├─ Web Search Settings
-      └─ Chat / Embedding Model Config
+      └─ Chat / Embedding / Vision Model Config
 ```
 
 后端按 controller / service / repository / domain / dto 分层；前端按 router / stores / api / views / components 分层。完整设计见 [项目方案](docs/cogninote-agent-design.md)。

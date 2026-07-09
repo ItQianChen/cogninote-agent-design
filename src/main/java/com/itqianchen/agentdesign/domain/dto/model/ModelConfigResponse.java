@@ -1,7 +1,5 @@
 package com.itqianchen.agentdesign.domain.dto.model;
 
-
-import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
 import com.itqianchen.agentdesign.domain.entity.model.ModelConfig;
 import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
 
@@ -32,7 +30,7 @@ public record ModelConfigResponse(
     /**
      * 构造模型设置页的配置响应。
      *
-     * <p>contextWindowTokens 只对 Chat 配置有意义，Embedding 响应保持 null 以免前端误展示。</p>
+     * <p>contextWindowTokens 只对 Chat 配置有意义，非 Chat 响应保持 null 以免前端误展示。</p>
      */
     public static ModelConfigResponse from(ModelConfig config) {
         return new ModelConfigResponse(

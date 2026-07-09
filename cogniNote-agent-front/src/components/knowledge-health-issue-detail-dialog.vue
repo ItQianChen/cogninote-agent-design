@@ -250,7 +250,7 @@ function exampleDocumentItems(example) {
             @click="isOpen = false"
           >
             <ScanText aria-hidden="true" />
-            <span>配置 OCR</span>
+            <span>配置视觉模型</span>
           </RouterLink>
           <RouterLink
             v-else-if="issue.code === 'PDF_OCR_REQUIRED'"

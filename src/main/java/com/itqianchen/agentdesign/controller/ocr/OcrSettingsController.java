@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * OCR 设置控制器。
  *
- * <p>设置页允许明文读取本机密钥；测试接口和其他业务接口不返回密钥。</p>
+ * <p>OCR 设置接口只返回视觉模型摘要；本机模型密钥由模型配置接口读取和保存。</p>
  */
 @RestController
 @RequestMapping("/api/ocr")

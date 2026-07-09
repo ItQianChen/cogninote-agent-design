@@ -42,6 +42,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.util.MimeType;
 import reactor.core.publisher.Flux;
 
 @SpringBootTest
@@ -194,6 +195,16 @@ class ChatControllerTests {
                         @Override
                         public String callText(String systemPrompt, String userMessage) {
                             return "{\"shouldRewrite\":false,\"rewrittenQuery\":\"\",\"reason\":\"test_keep_original\",\"confidence\":0.0}";
+                        }
+
+                        @Override
+                        public String callImage(
+                                String systemPrompt,
+                                String userMessage,
+                                byte[] imageBytes,
+                                MimeType mimeType
+                        ) {
+                            throw new UnsupportedOperationException("Image calls are not used in chat controller tests");
                         }
 
                         @Override

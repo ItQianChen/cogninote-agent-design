@@ -2,10 +2,12 @@ package com.itqianchen.agentdesign.document;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.itqianchen.agentdesign.domain.dto.model.ModelConfigRequest;
 import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
 import com.itqianchen.agentdesign.domain.enums.document.FileType;
 import com.itqianchen.agentdesign.domain.dto.ocr.OcrSettingsRequest;
-import com.itqianchen.agentdesign.domain.enums.ocr.BaiduOcrRecognitionMode;
+import com.itqianchen.agentdesign.domain.entity.model.ModelConfig;
+import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
 import com.itqianchen.agentdesign.domain.enums.ocr.OcrProvider;
 import com.itqianchen.agentdesign.domain.enums.search.SearchMode;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeChunk;
@@ -16,13 +18,13 @@ import com.itqianchen.agentdesign.domain.dto.search.SearchRequest;
 import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
 import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ScannedDocumentFile;
+import com.itqianchen.agentdesign.domain.interfaces.ai.AiChatRuntime;
+import com.itqianchen.agentdesign.domain.interfaces.ai.AiEmbeddingRuntime;
+import com.itqianchen.agentdesign.domain.interfaces.ai.AiRuntimeFactory;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRepository;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
-import com.itqianchen.agentdesign.service.ocr.BaiduAccessToken;
-import com.itqianchen.agentdesign.service.ocr.BaiduOcrClient;
-import com.itqianchen.agentdesign.service.ocr.BaiduOcrRecognitionRequest;
-import com.itqianchen.agentdesign.service.ocr.BaiduOcrRecognitionResponse;
+import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import com.itqianchen.agentdesign.service.ocr.OcrSettingsService;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
 import java.io.IOException;
@@ -32,6 +34,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -41,12 +44,16 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.util.MimeType;
+import reactor.core.publisher.Flux;
 
 @SpringBootTest
 @TestPropertySource(properties = {
@@ -75,7 +82,10 @@ class DocumentIngestionServiceTests {
     private OcrSettingsService ocrSettingsService;
 
     @Autowired
-    private TestBaiduOcrClient testBaiduOcrClient;
+    private ModelConfigService modelConfigService;
+
+    @Autowired
+    private TestAiRuntimeFactory testAiRuntimeFactory;
 
     @Autowired
     private TestDatabaseCleaner databaseCleaner;
@@ -87,12 +97,11 @@ class DocumentIngestionServiceTests {
     void clearDatabase() {
         databaseCleaner.clearDocuments();
         knowledgeStore.rebuildAll();
-        testBaiduOcrClient.reset();
+        testAiRuntimeFactory.reset();
         ocrSettingsService.update(new OcrSettingsRequest(
                 false,
-                OcrProvider.BAIDU_OCR,
-                new OcrSettingsRequest.BaiduSettings("", "",
-                        BaiduOcrRecognitionMode.STANDARD, "CHN_ENG", true),
+                OcrProvider.MODEL_VISION,
+                null,
                 new OcrSettingsRequest.Limits(200, 20, 1000)
         ));
     }
@@ -293,12 +302,13 @@ class DocumentIngestionServiceTests {
         KnowledgeDocument ocrRequired = documentRepository.findAllOrderByUpdatedAtDesc().getFirst();
         assertThat(ocrRequired.status()).isEqualTo(DocumentStatus.OCR_REQUIRED);
 
-        testBaiduOcrClient.words = List.of("ocr integration token");
+        ModelConfig vision = modelConfigService.create(visionRequest("sk-vision"));
+        modelConfigService.activate(vision.id());
+        testAiRuntimeFactory.imageText = "ocr integration token";
         ocrSettingsService.update(new OcrSettingsRequest(
                 true,
-                OcrProvider.BAIDU_OCR,
-                new OcrSettingsRequest.BaiduSettings("api-key", "secret-key",
-                        BaiduOcrRecognitionMode.STANDARD, "CHN_ENG", true),
+                OcrProvider.MODEL_VISION,
+                null,
                 new OcrSettingsRequest.Limits(200, 20, 1000)
         ));
 
@@ -431,32 +441,85 @@ class DocumentIngestionServiceTests {
         return folderId;
     }
 
+    private static ModelConfigRequest visionRequest(String apiKey) {
+        return new ModelConfigRequest(
+                ModelConfigRole.VISION.name(),
+                "DASHSCOPE",
+                "Vision Test",
+                "https://dashscope.aliyuncs.com/api/v1",
+                apiKey,
+                "qwen3-vl-plus",
+                "qwen3-vl-plus",
+                null,
+                null,
+                null,
+                null,
+                null,
+                0.0,
+                null,
+                null,
+                null
+        );
+    }
+
     @TestConfiguration
     static class OcrTestConfig {
 
         @Bean
         @Primary
-        TestBaiduOcrClient testBaiduOcrClient() {
-            return new TestBaiduOcrClient();
+        TestAiRuntimeFactory testAiRuntimeFactory() {
+            return new TestAiRuntimeFactory();
         }
     }
 
-    static class TestBaiduOcrClient implements BaiduOcrClient {
+    static class TestAiRuntimeFactory implements AiRuntimeFactory {
 
-        private List<String> words = List.of("test ocr text");
+        private String imageText = "test ocr text";
 
         private void reset() {
-            words = List.of("test ocr text");
+            imageText = "test ocr text";
         }
 
         @Override
-        public BaiduAccessToken fetchAccessToken(String apiKey, String secretKey, int timeoutSeconds) {
-            return new BaiduAccessToken("test-access-token", 3600);
+        public AiChatRuntime chatRuntime(ModelConfig config) {
+            return new TestAiChatRuntime(this);
         }
 
         @Override
-        public BaiduOcrRecognitionResponse recognizeImage(BaiduOcrRecognitionRequest request) {
-            return new BaiduOcrRecognitionResponse(null, null, words);
+        public AiEmbeddingRuntime embeddingRuntime(ModelConfig config) {
+            throw new UnsupportedOperationException("Embedding runtime is not used by document ingestion tests");
+        }
+    }
+
+    private record TestAiChatRuntime(TestAiRuntimeFactory runtimeFactory) implements AiChatRuntime {
+
+        @Override
+        public Flux<String> stream(Prompt prompt) {
+            throw new UnsupportedOperationException("Stream is not used by document ingestion tests");
+        }
+
+        @Override
+        public Flux<String> stream(
+                String systemPrompt,
+                String userMessage,
+                List<Advisor> advisors,
+                Map<String, Object> advisorParams
+        ) {
+            throw new UnsupportedOperationException("Stream is not used by document ingestion tests");
+        }
+
+        @Override
+        public String callText(String systemPrompt, String userMessage) {
+            throw new UnsupportedOperationException("Text call is not used by document ingestion tests");
+        }
+
+        @Override
+        public String callImage(String systemPrompt, String userMessage, byte[] imageBytes, MimeType mimeType) {
+            return runtimeFactory.imageText;
+        }
+
+        @Override
+        public void testConnection(Prompt prompt) {
         }
     }
 }

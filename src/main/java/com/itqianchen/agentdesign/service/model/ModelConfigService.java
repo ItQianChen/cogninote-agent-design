@@ -1,19 +1,16 @@
 package com.itqianchen.agentdesign.service.model;
 
 
-import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
-import com.itqianchen.agentdesign.domain.exception.model.ModelConfigurationException;
-import com.itqianchen.agentdesign.domain.support.model.ModelConfigDefaults;
-import com.itqianchen.agentdesign.domain.entity.model.ModelConfig;
-import com.itqianchen.agentdesign.domain.support.model.ModelConfigDefaults;
-import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
-import com.itqianchen.agentdesign.domain.exception.model.ModelConfigurationException;
-import com.itqianchen.agentdesign.domain.enums.model.ModelProvider;
 import com.itqianchen.agentdesign.domain.dto.model.ActiveModelConfigsResponse;
 import com.itqianchen.agentdesign.domain.dto.model.ModelConfigRequest;
 import com.itqianchen.agentdesign.domain.dto.model.ModelConfigResponse;
 import com.itqianchen.agentdesign.domain.dto.model.ModelConfigSettingsResponse;
 import com.itqianchen.agentdesign.domain.dto.model.ModelConfigUpsertRequest;
+import com.itqianchen.agentdesign.domain.entity.model.ModelConfig;
+import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
+import com.itqianchen.agentdesign.domain.enums.model.ModelProvider;
+import com.itqianchen.agentdesign.domain.exception.model.ModelConfigurationException;
+import com.itqianchen.agentdesign.domain.support.model.ModelConfigDefaults;
 import com.itqianchen.agentdesign.repository.model.ModelConfigRepository;
 import java.util.List;
 import java.util.Optional;
@@ -22,7 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 管理 Chat 与 Embedding 两类模型配置。
+ * 管理 Chat、Embedding 与 Vision 三类模型配置。
  *
  * <p>每个角色都必须始终有一个 active 配置。API Key 留空表示复用旧密钥，
  * 这样用户修改模型名或 Base URL 时不会被迫重新输入敏感信息。</p>
@@ -64,6 +61,7 @@ public class ModelConfigService {
     public ModelConfigSettingsResponse settingsSnapshot(ModelConfigRole role) {
         ensureRoleHasActiveConfig(ModelConfigRole.CHAT);
         ensureRoleHasActiveConfig(ModelConfigRole.EMBEDDING);
+        ensureRoleHasActiveConfig(ModelConfigRole.VISION);
         return settingsSnapshot(role, Optional.empty());
     }
 
@@ -83,6 +81,15 @@ public class ModelConfigService {
      */
     public ModelConfig activeEmbeddingOrDefault() {
         return activeOrDefault(ModelConfigRole.EMBEDDING);
+    }
+
+    /**
+     * 读取激活的 Vision 配置；缺失时返回默认草稿。
+     *
+     * @return Vision 配置
+     */
+    public ModelConfig activeVisionOrDefault() {
+        return activeOrDefault(ModelConfigRole.VISION);
     }
 
     /**
@@ -125,6 +132,15 @@ public class ModelConfigService {
      */
     public ModelConfig requireActiveEmbeddingConfigured() {
         return requireConfigured(ModelConfigRole.EMBEDDING);
+    }
+
+    /**
+     * 读取已配置 API Key 的 Vision 配置。
+     *
+     * @return 可用于多模态图片识别的 Vision 配置
+     */
+    public ModelConfig requireActiveVisionConfigured() {
+        return requireConfigured(ModelConfigRole.VISION);
     }
 
     /**
@@ -228,8 +244,28 @@ public class ModelConfigService {
      */
     @Transactional
     public ModelConfigSettingsResponse updateSettings(String id, ModelConfigUpsertRequest request) {
-        ModelConfig updated = update(id, request.toModelConfigRequest());
+        ModelConfig updated = updateSettingsConfig(id, request);
         return settingsSnapshot(updated.role(), Optional.of(updated.id()));
+    }
+
+    private ModelConfig updateSettingsConfig(String id, ModelConfigUpsertRequest request) {
+        ModelConfig existing = modelConfigRepository.findById(id)
+                .orElseThrow(() -> new ModelConfigurationException("Model config not found: " + id));
+        ModelConfigRole requestedRole = request.role() == null || request.role().isBlank()
+                ? existing.role()
+                : normalizeRole(request.role());
+        if (requestedRole != existing.role()) {
+            throw new ModelConfigurationException("Model config role cannot be changed");
+        }
+        return modelConfigRepository.save(mergeRequest(
+                request.toModelConfigRequest(),
+                existing,
+                existing.id(),
+                existing.role(),
+                existing.active(),
+                System.currentTimeMillis(),
+                Boolean.TRUE.equals(request.clearApiKey())
+        ));
     }
 
     /**
@@ -373,12 +409,13 @@ public class ModelConfigService {
     /**
      * 构建当前激活配置响应。
      *
-     * @return Chat 与 Embedding 的激活配置响应
+     * @return Chat、Embedding 与 Vision 的激活配置响应
      */
     private ActiveModelConfigsResponse activeConfigsResponse() {
         return new ActiveModelConfigsResponse(
                 ModelConfigResponse.from(activeChatOrDefault()),
-                ModelConfigResponse.from(activeEmbeddingOrDefault())
+                ModelConfigResponse.from(activeEmbeddingOrDefault()),
+                ModelConfigResponse.from(activeVisionOrDefault())
         );
     }
 
@@ -403,10 +440,22 @@ public class ModelConfigService {
             boolean active,
             long now
     ) {
+        return mergeRequest(request, existing, id, role, active, now, false);
+    }
+
+    private static ModelConfig mergeRequest(
+            ModelConfigRequest request,
+            ModelConfig existing,
+            String id,
+            ModelConfigRole role,
+            boolean active,
+            long now,
+            boolean clearApiKey
+    ) {
         ModelProvider provider = normalizeProvider(request.provider());
         String requestedApiKey = normalizeApiKey(request.apiKey());
-        // API Key 允许留空复用旧值。否则用户只改模型 ID 时会被迫重复粘贴密钥。
-        String apiKey = requestedApiKey.isBlank() ? existing.apiKey() : requestedApiKey;
+        // 旧接口仍把空 Key 视为沿用；设置页通过 clearApiKey 显式表达“删除本机密钥”。
+        String apiKey = clearApiKey ? "" : requestedApiKey.isBlank() ? existing.apiKey() : requestedApiKey;
         String modelName = normalizeModelName(role, request, existing.modelName());
         return new ModelConfig(
                 id,
@@ -426,7 +475,7 @@ public class ModelConfigService {
                 role == ModelConfigRole.EMBEDDING
                         ? normalizeEmbeddingBatchSize(request.embeddingBatchSize(), existing)
                         : null,
-                role == ModelConfigRole.CHAT ? normalizeTemperature(request.temperature(), existing) : null,
+                isGenerationRole(role) ? normalizeTemperature(request.temperature(), existing, role) : null,
                 role == ModelConfigRole.CHAT ? normalizeTopK(request.defaultTopK(), request.topK(), existing) : null,
                 role == ModelConfigRole.CHAT ? normalizeContextWindowTokens(request.contextWindowTokens(), existing) : null,
                 active,
@@ -516,25 +565,39 @@ public class ModelConfigService {
      */
     private static ModelConfig defaultConfig(ModelConfigRole role, boolean active) {
         long now = System.currentTimeMillis();
+        String id;
+        String displayName;
+        String modelName;
+        Double temperature;
+        if (role == ModelConfigRole.CHAT) {
+            id = ModelConfigDefaults.ACTIVE_CHAT_CONFIG_ID;
+            displayName = ModelConfigDefaults.CHAT_DISPLAY_NAME;
+            modelName = ModelConfigDefaults.CHAT_MODEL;
+            temperature = ModelConfigDefaults.TEMPERATURE;
+        } else if (role == ModelConfigRole.EMBEDDING) {
+            id = ModelConfigDefaults.ACTIVE_EMBEDDING_CONFIG_ID;
+            displayName = ModelConfigDefaults.EMBEDDING_DISPLAY_NAME;
+            modelName = ModelConfigDefaults.EMBEDDING_MODEL;
+            temperature = null;
+        } else {
+            id = ModelConfigDefaults.ACTIVE_VISION_CONFIG_ID;
+            displayName = ModelConfigDefaults.VISION_DISPLAY_NAME;
+            modelName = ModelConfigDefaults.VISION_MODEL;
+            temperature = ModelConfigDefaults.VISION_TEMPERATURE;
+        }
         return new ModelConfig(
-                role == ModelConfigRole.CHAT
-                        ? ModelConfigDefaults.ACTIVE_CHAT_CONFIG_ID
-                        : ModelConfigDefaults.ACTIVE_EMBEDDING_CONFIG_ID,
+                id,
                 role,
                 ModelConfigDefaults.PROVIDER,
-                role == ModelConfigRole.CHAT
-                        ? ModelConfigDefaults.CHAT_DISPLAY_NAME
-                        : ModelConfigDefaults.EMBEDDING_DISPLAY_NAME,
+                displayName,
                 ModelConfigDefaults.BASE_URL,
                 "",
-                role == ModelConfigRole.CHAT
-                        ? ModelConfigDefaults.CHAT_MODEL
-                        : ModelConfigDefaults.EMBEDDING_MODEL,
+                modelName,
                 role == ModelConfigRole.EMBEDDING ? ModelConfigDefaults.EMBEDDING_DIMENSIONS : null,
                 role == ModelConfigRole.EMBEDDING ? ModelConfigDefaults.EMBEDDING_REQUESTS_PER_MINUTE : null,
                 role == ModelConfigRole.EMBEDDING ? ModelConfigDefaults.EMBEDDING_TOKENS_PER_MINUTE : null,
                 role == ModelConfigRole.EMBEDDING ? ModelConfigDefaults.EMBEDDING_BATCH_SIZE : null,
-                role == ModelConfigRole.CHAT ? ModelConfigDefaults.TEMPERATURE : null,
+                temperature,
                 role == ModelConfigRole.CHAT ? ModelConfigDefaults.TOP_K : null,
                 role == ModelConfigRole.CHAT ? ModelConfigDefaults.CONTEXT_WINDOW_TOKENS : null,
                 active,
@@ -625,7 +688,9 @@ public class ModelConfigService {
         if (displayName == null || displayName.isBlank()) {
             return role == ModelConfigRole.CHAT
                     ? ModelConfigDefaults.CHAT_DISPLAY_NAME
-                    : ModelConfigDefaults.EMBEDDING_DISPLAY_NAME;
+                    : role == ModelConfigRole.EMBEDDING
+                            ? ModelConfigDefaults.EMBEDDING_DISPLAY_NAME
+                            : ModelConfigDefaults.VISION_DISPLAY_NAME;
         }
         return displayName.trim();
     }
@@ -668,7 +733,7 @@ public class ModelConfigService {
      */
     private static String normalizeModelName(ModelConfigRole role, ModelConfigRequest request, String fallback) {
         String value = request.modelName();
-        if ((value == null || value.isBlank()) && role == ModelConfigRole.CHAT) {
+        if ((value == null || value.isBlank()) && isGenerationRole(role)) {
             value = request.chatModel();
         }
         if ((value == null || value.isBlank()) && role == ModelConfigRole.EMBEDDING) {
@@ -690,8 +755,16 @@ public class ModelConfigService {
      * @param existing 现有配置
      * @return 请求值或现有解析值
      */
-    private static Double normalizeTemperature(Double requested, ModelConfig existing) {
-        return requested == null ? existing.resolvedTemperature() : requested;
+    private static Double normalizeTemperature(Double requested, ModelConfig existing, ModelConfigRole role) {
+        if (requested != null) {
+            return requested;
+        }
+        if (existing.temperature() != null) {
+            return existing.temperature();
+        }
+        return role == ModelConfigRole.VISION
+                ? ModelConfigDefaults.VISION_TEMPERATURE
+                : existing.resolvedTemperature();
     }
 
     /**
@@ -785,6 +858,14 @@ public class ModelConfigService {
      * @return 面向用户的角色名称
      */
     private static String roleLabel(ModelConfigRole role) {
-        return role == ModelConfigRole.CHAT ? "Chat" : "Embedding";
+        return switch (role) {
+            case CHAT -> "Chat";
+            case EMBEDDING -> "Embedding";
+            case VISION -> "Vision";
+        };
+    }
+
+    private static boolean isGenerationRole(ModelConfigRole role) {
+        return role == ModelConfigRole.CHAT || role == ModelConfigRole.VISION;
     }
 }

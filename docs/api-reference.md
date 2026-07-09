@@ -544,13 +544,14 @@ Embedding 不可用时，向量检索和混合检索可能降级或返回明确�
 
 ## 模型配置
 
-第八阶段开始，对话模型和 Embedding 模型分开维护。普通 CRUD 兼容接口使用 `/api/model-configs`；设置页使用 `/api/model-configs/settings...` 快照接口，避免前端自己拼装 active、列表和右侧表单。旧 `/api/model-config` 仅作为过渡兼容接口保留。
+第八阶段开始，对话模型和 Embedding 模型分开维护；第 36-4 阶段新增独立 VISION 模型配置供模型 OCR 使用。普通 CRUD 兼容接口使用 `/api/model-configs`；设置页使用 `/api/model-configs/settings...` 快照接口，避免前端自己拼装 active、列表和右侧表单。旧 `/api/model-config` 仅作为过渡兼容接口保留。
 
 ### 查询配置列表
 
 ```text
 GET /api/model-configs?role=CHAT
 GET /api/model-configs?role=EMBEDDING
+GET /api/model-configs?role=VISION
 ```
 
 返回指定类型的配置列表，active 配置排在前面。
@@ -561,7 +562,7 @@ GET /api/model-configs?role=EMBEDDING
 GET /api/model-configs/active
 ```
 
-返回当前 active Chat 和 active Embedding：
+返回当前 active Chat、active Embedding 和 active Vision：
 
 ```json
 {
@@ -593,6 +594,18 @@ GET /api/model-configs/active
     "embeddingTokensPerMinute": 300000,
     "embeddingBatchSize": 16,
     "active": true
+  },
+  "vision": {
+    "id": "active-vision",
+    "role": "VISION",
+    "provider": "DASHSCOPE",
+    "displayName": "DashScope Vision",
+    "baseUrl": "https://dashscope.aliyuncs.com/api/v1",
+    "apiKeyConfigured": false,
+    "apiKey": "",
+    "modelName": "qwen3-vl-plus",
+    "temperature": 0.0,
+    "active": true
   }
 }
 ```
@@ -602,6 +615,7 @@ GET /api/model-configs/active
 ```text
 GET /api/model-configs/settings?role=CHAT
 GET /api/model-configs/settings?role=EMBEDDING
+GET /api/model-configs/settings?role=VISION
 ```
 
 返回设置页一次渲染所需的完整快照：
@@ -705,7 +719,7 @@ Embedding 限速字段说明：
 PUT /api/model-configs/{id}
 ```
 
-请求体同新建配置。保存时 API Key 留空表示复用该配置已保存 key，避免用户每次修改模型参数都重新输入密钥。
+请求体同新建配置。保存时 API Key 留空表示复用该配置已保存 key，避免用户每次修改模型参数都重新输入密钥。设置页更新接口可额外传 `clearApiKey=true` 显式清空该配置的本机密钥；旧兼容接口不支持该字段。
 
 ### 删除配置
 
@@ -1053,9 +1067,9 @@ POST /api/web-search/test
 
 ## OCR 设置
 
-第 36-4 阶段新增 OCR 设置 API。设置保存在 SQLite `app_settings` 的 `ocr.settings` JSON 快照中，第一版 provider 固定为 `BAIDU_OCR`。OCR 默认关闭；启用后，无文本层 PDF 会按页渲染为图片并上传到百度 OCR，可能产生按页调用费用。
+第 36-4 阶段新增 OCR 设置 API。设置保存在 SQLite `app_settings` 的 `ocr.settings` JSON 快照中，第一版引擎固定为 `MODEL_VISION`。OCR 默认关闭；启用后，无文本层 PDF 会按页渲染为图片并上传到当前 VISION 模型服务商，可能产生模型 token 或图片费用。
 
-设置页允许明文读取本机保存的 `apiKey` / `secretKey`，便于用户核对和修改；但日志、异常消息、OCR 测试响应和维护运行记录不得输出密钥。
+OCR 设置只保存开关和运行限制；模型 API Key 归属独立的 VISION 模型配置，并继续按本机模型配置逻辑明文可见、可复制和可清空。日志、异常消息、OCR 测试响应和维护运行记录不得输出密钥。
 
 ### 查询 OCR 设置
 
@@ -1068,16 +1082,15 @@ GET /api/ocr/settings
 ```json
 {
   "enabled": false,
-  "provider": "BAIDU_OCR",
+  "engine": "MODEL_VISION",
   "available": false,
-  "baidu": {
-    "apiKey": "",
-    "secretKey": "",
+  "visionModel": {
+    "id": "active-vision",
+    "provider": "DASHSCOPE",
+    "displayName": "DashScope Vision",
+    "baseUrl": "https://dashscope.aliyuncs.com/api/v1",
     "apiKeyConfigured": false,
-    "secretKeyConfigured": false,
-    "recognitionMode": "STANDARD",
-    "languageType": "CHN_ENG",
-    "detectDirection": true
+    "modelName": "qwen3-vl-plus"
   },
   "limits": {
     "maxPagesPerDocument": 200,
@@ -1091,16 +1104,13 @@ GET /api/ocr/settings
 
 | 字段 | 说明 |
 | --- | --- |
-| `enabled` | OCR 是否实际启用。没有 API Key 或 Secret Key 时，后端会归一化为 `false`。 |
-| `provider` | 当前固定为 `BAIDU_OCR`，保留字段用于后续 provider 扩展。 |
-| `available` | 当前设置是否具备运行 OCR 的必要条件。 |
-| `baidu.apiKey` / `baidu.secretKey` | 本机保存的百度 OCR 密钥明文，只在该设置接口返回。 |
-| `baidu.recognitionMode` | `STANDARD` 或 `ACCURATE`。 |
-| `baidu.languageType` | 百度 OCR 语言类型，默认 `CHN_ENG`。 |
-| `baidu.detectDirection` | 是否开启方向检测。 |
+| `enabled` | OCR 开关状态。即使开关为 `true`，VISION 模型未配置 API Key 时仍不可用。 |
+| `engine` | 当前固定为 `MODEL_VISION`，旧 `BAIDU_OCR` 配置读取时会迁移为该值并关闭。 |
+| `available` | 当前设置是否具备运行 OCR 的必要条件，即 `enabled=true` 且 VISION 模型 API Key 已配置。 |
+| `visionModel` | 当前 active VISION 模型摘要；不返回 API Key 明文。 |
 | `limits.maxPagesPerDocument` | 单个 PDF 最多 OCR 页数，范围 `1` 到 `500`。 |
-| `limits.timeoutPerPageSeconds` | 单页 OCR 请求超时，范围 `3` 到 `120` 秒。 |
-| `limits.monthlyCallBudget` | 本地提示用月调用预算，范围 `1` 到 `1000000`，不等同于百度账单。 |
+| `limits.timeoutPerPageSeconds` | 单页 OCR 请求超时，范围 `3` 到 `120` 秒；超时会中止当前页模型 OCR 并让本次解析失败。 |
+| `limits.monthlyCallBudget` | 本地提示用月调用预算，范围 `1` 到 `1000000`，不等同于模型服务商账单。 |
 
 ### 保存 OCR 设置
 
@@ -1113,14 +1123,7 @@ PUT /api/ocr/settings
 ```json
 {
   "enabled": true,
-  "provider": "BAIDU_OCR",
-  "baidu": {
-    "apiKey": "baidu-api-key",
-    "secretKey": "baidu-secret-key",
-    "recognitionMode": "STANDARD",
-    "languageType": "CHN_ENG",
-    "detectDirection": true
-  },
+  "engine": "MODEL_VISION",
   "limits": {
     "maxPagesPerDocument": 200,
     "timeoutPerPageSeconds": 20,
@@ -1129,7 +1132,7 @@ PUT /api/ocr/settings
 }
 ```
 
-`apiKey` / `secretKey` 为 `null` 或字段省略时沿用旧值；传入空字符串表示清空。响应字段与查询接口一致，并会继续明文回显保存后的本机密钥。
+响应字段与查询接口一致。VISION 模型的 API Key 通过 `/api/model-configs/settings/configs` 保存，不在 OCR 设置接口中传递。
 
 ### 测试 OCR 连接
 
@@ -1137,16 +1140,16 @@ PUT /api/ocr/settings
 POST /api/ocr/test
 ```
 
-该接口只验证百度 OCR 鉴权 token 与服务可用性，不主动识别用户文件。响应不得包含 API Key、Secret Key 或 access token。
+该接口使用后端生成的小测试图片调用当前 VISION 模型，并要求返回固定测试文字，用于验证图片输入确实可用；不会主动识别用户文件，响应不得包含 API Key。
 
 响应 `data`：
 
 ```json
 {
   "success": true,
-  "message": "百度 OCR 鉴权通过。",
-  "provider": "BAIDU_OCR",
-  "mode": "STANDARD"
+  "message": "视觉模型图片输入测试成功。",
+  "engine": "MODEL_VISION",
+  "modelName": "qwen3-vl-plus"
 }
 ```
 

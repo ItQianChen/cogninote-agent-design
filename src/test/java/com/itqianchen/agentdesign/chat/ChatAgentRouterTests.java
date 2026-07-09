@@ -78,6 +78,7 @@ import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.sqlite.SQLiteDataSource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.util.MimeType;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
@@ -838,6 +839,11 @@ class ChatAgentRouterTests {
             this.lastCallTextSystemPrompt = systemPrompt;
             this.lastCallTextUserMessage = userMessage;
             return contextualizerResponse;
+        }
+
+        @Override
+        public String callImage(String systemPrompt, String userMessage, byte[] imageBytes, MimeType mimeType) {
+            throw new UnsupportedOperationException("Image calls are not used in chat routing tests");
         }
 
         @Override

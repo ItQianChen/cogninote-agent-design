@@ -45,7 +45,7 @@ public class ModelConnectionTestService {
      * @return 测试结果
      */
     public ModelConfigTestResponse test(ModelConfig config) {
-        if (config.role() == ModelConfigRole.CHAT) {
+        if (config.role() == ModelConfigRole.CHAT || config.role() == ModelConfigRole.VISION) {
             /*
              * 第十一阶段统一从 AI Runtime 发起模型调用。
              * 连接测试和真实对话共享同一 Provider 运行时，避免 OpenAI-compatible/DashScope 分流再次散落。

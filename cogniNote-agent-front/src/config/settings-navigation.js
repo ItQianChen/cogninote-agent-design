@@ -28,7 +28,8 @@ export const SETTINGS_NAV_GROUPS = [
     label: '模型',
     items: [
       { id: 'model-chat', label: '对话模型' },
-      { id: 'model-embedding', label: '向量模型' }
+      { id: 'model-embedding', label: '向量模型' },
+      { id: 'model-vision', label: '视觉识别模型' }
     ]
   },
   {

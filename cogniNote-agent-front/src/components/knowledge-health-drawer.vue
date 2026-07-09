@@ -199,7 +199,7 @@ function openIssueSection(section) {
         :to="{ name: 'settings', query: { item: 'ocr' } }"
       >
         <ScanText aria-hidden="true" />
-        <span>配置 OCR</span>
+        <span>配置视觉模型</span>
       </RouterLink>
       <el-button
         v-if="hasFolderSyncIssues"

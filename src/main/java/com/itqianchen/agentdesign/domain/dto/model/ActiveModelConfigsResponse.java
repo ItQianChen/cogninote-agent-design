@@ -6,6 +6,7 @@ package com.itqianchen.agentdesign.domain.dto.model;
  */
 public record ActiveModelConfigsResponse(
         ModelConfigResponse chat,
-        ModelConfigResponse embedding
+        ModelConfigResponse embedding,
+        ModelConfigResponse vision
 ) {
 }

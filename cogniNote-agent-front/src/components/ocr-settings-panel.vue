@@ -1,52 +1,36 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import {
-  BookOpen,
+  Bot,
   Cloud,
-  ExternalLink,
   FlaskConical,
-  KeyRound,
-  Languages,
   Save,
   ScanText,
   ShieldAlert,
-  Trash2,
+  SlidersHorizontal,
   WalletCards
 } from 'lucide-vue-next'
 import { useOcrSettingsStore } from '../stores/ocr-settings'
 
 const ocrSettingsStore = useOcrSettingsStore()
-const helpDialogVisible = ref(false)
+const router = useRouter()
+const route = useRoute()
 const strategyHelpDialogVisible = ref(false)
-const baiduDocsLinks = [
-  {
-    label: 'OCR 价格',
-    description: '免费额度、标准版和高精度版价格以官方页面为准。',
-    url: 'https://cloud.baidu.com/product-price/ocr.html'
-  },
-  {
-    label: '通用文字识别',
-    description: '查看标准版和高精度版接口参数。',
-    url: 'https://cloud.baidu.com/doc/OCR/s/7kibizyfm'
-  },
-  {
-    label: '应用鉴权',
-    description: '查看 API Key / Secret Key 获取 access_token 的方式。',
-    url: 'https://cloud.baidu.com/doc/OCR/s/Ck3h7y2ia'
-  }
-]
-const keyStatusLabel = computed(() => {
-  if (ocrSettingsStore.credentialsReady) {
-    return '已填写'
-  }
-  if (ocrSettingsStore.settings.baidu.apiKeyConfigured || ocrSettingsStore.settings.baidu.secretKeyConfigured) {
-    return '不完整'
-  }
-  return '未配置'
+
+const visionModel = computed(() => ocrSettingsStore.settings.visionModel)
+const keyStatusLabel = computed(() => visionModel.value.apiKeyConfigured ? '已配置' : '未配置')
+const providerLabel = computed(() => {
+  return {
+    DASHSCOPE: '阿里百炼 DashScope',
+    OPENAI_COMPATIBLE: 'OpenAI-compatible'
+  }[visionModel.value.provider] || visionModel.value.provider || '-'
 })
-const modeLabel = computed(() => {
-  return ocrSettingsStore.settings.baidu.recognitionMode === 'ACCURATE' ? '高精度版' : '标准版'
+const modelSummary = computed(() => {
+  return visionModel.value.modelName
+    ? `${providerLabel.value} · ${visionModel.value.modelName}`
+    : providerLabel.value
 })
 
 onMounted(() => {
@@ -73,38 +57,21 @@ async function handleTest() {
 
 function handleEnabledChange(value) {
   if (value && !ocrSettingsStore.canEnable) {
-    ElMessage.warning('请先填写百度 OCR API Key 和 Secret Key')
+    ElMessage.warning('请先配置视觉识别模型 API Key')
     ocrSettingsStore.patchSettings({ enabled: false })
     return
   }
   ocrSettingsStore.patchSettings({ enabled: value })
 }
 
-async function handleClearKeys() {
-  try {
-    await ElMessageBox.confirm(
-      '清空后 OCR 会自动关闭，旧的 OCR_REQUIRED 文档需要重新配置密钥后再解析。',
-      '清空百度 OCR 密钥',
-      {
-        confirmButtonText: '清空',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-  } catch (err) {
-    if (err === 'cancel' || err === 'close') {
-      return
-    }
-    throw err
-  }
-  ocrSettingsStore.patchSettings({
-    enabled: false,
-    baidu: {
-      apiKey: '',
-      secretKey: ''
+function openVisionModelSettings() {
+  router.push({
+    name: 'settings',
+    query: {
+      ...route.query,
+      item: 'model-vision'
     }
   })
-  await handleSave()
 }
 </script>
 
@@ -112,7 +79,7 @@ async function handleClearKeys() {
   <section class="settings-panel ocr-settings-panel" aria-labelledby="ocr-settings-title">
     <header class="settings-panel__header">
       <p class="eyebrow">策略</p>
-      <h3 id="ocr-settings-title">OCR 识别</h3>
+      <h3 id="ocr-settings-title">模型 OCR</h3>
     </header>
 
     <article class="settings-card ocr-status-card" aria-label="OCR 状态">
@@ -124,24 +91,24 @@ async function handleClearKeys() {
         </span>
       </div>
       <div class="ocr-status-card__item">
-        <KeyRound aria-hidden="true" />
+        <Bot aria-hidden="true" />
         <span>
-          <small>密钥</small>
-          <strong>{{ keyStatusLabel }}</strong>
+          <small>视觉模型</small>
+          <strong>{{ visionModel.modelName || '-' }}</strong>
         </span>
       </div>
       <div class="ocr-status-card__item">
         <Cloud aria-hidden="true" />
         <span>
           <small>Provider</small>
-          <strong>BAIDU OCR</strong>
+          <strong>{{ providerLabel }}</strong>
         </span>
       </div>
       <div class="ocr-status-card__item">
-        <Languages aria-hidden="true" />
+        <WalletCards aria-hidden="true" />
         <span>
-          <small>模式</small>
-          <strong>{{ modeLabel }}</strong>
+          <small>月预算</small>
+          <strong>{{ ocrSettingsStore.settings.limits.monthlyCallBudget }} 页</strong>
         </span>
       </div>
     </article>
@@ -149,26 +116,26 @@ async function handleClearKeys() {
     <article class="settings-card ocr-form-card" v-loading="ocrSettingsStore.loading">
       <div class="ocr-notice">
         <ShieldAlert aria-hidden="true" />
-        <p>启用公共 OCR 后，无文本层 PDF 会按页渲染为图片并上传到百度 OCR，可能产生按页调用费用。</p>
+        <p>启用后，无文本层 PDF 页面图片会上传到所选多模态模型服务商，可能产生模型 token 或图片费用。</p>
       </div>
 
       <div class="ocr-toggle-row">
         <div>
           <p class="eyebrow">基础配置</p>
-          <h4>启用 PDF OCR</h4>
+          <h4>启用 PDF 模型 OCR</h4>
           <p class="hint-message">仅处理没有可抽取文本层的 PDF；文本型 PDF 仍直接读取文本层。</p>
         </div>
         <div class="ocr-toggle-control">
           <el-switch
             :model-value="ocrSettingsStore.settings.enabled"
             :disabled="!ocrSettingsStore.canEnable"
-            :title="ocrSettingsStore.canEnable ? '' : '先填写百度 OCR API Key 和 Secret Key'"
+            :title="ocrSettingsStore.canEnable ? '' : '先配置视觉识别模型 API Key'"
             active-text="启用"
             inactive-text="关闭"
             @update:model-value="handleEnabledChange"
           />
           <p v-if="!ocrSettingsStore.canEnable" class="warning-message ocr-toggle-warning">
-            API Key 和 Secret Key 都填写后才能启用。
+            视觉识别模型配置 API Key 后才能启用。
           </p>
         </div>
       </div>
@@ -177,40 +144,26 @@ async function handleClearKeys() {
         <section class="ocr-form-section">
           <div class="ocr-section-heading ocr-section-heading--with-action">
             <div>
-              <h4>百度 OCR 连接</h4>
-              <p>密钥保存在本机 app_settings，保存后仍会在本页明文显示，便于核对和修改。</p>
+              <h4>视觉识别模型</h4>
+              <p>OCR 使用独立 VISION 模型配置，不复用当前对话模型。</p>
             </div>
             <div class="ocr-heading-actions">
-              <el-button class="ocr-help-button" @click="helpDialogVisible = true">
-                <BookOpen aria-hidden="true" />
-                配置说明
-              </el-button>
-              <el-button class="ocr-help-button" :disabled="!ocrSettingsStore.credentialsReady" @click="handleClearKeys">
-                <Trash2 aria-hidden="true" />
-                清空密钥
+              <el-button class="ocr-help-button" @click="openVisionModelSettings">
+                <Bot aria-hidden="true" />
+                配置视觉模型
               </el-button>
             </div>
           </div>
 
           <div class="ocr-form__grid ocr-form__grid--connection">
-            <el-form-item label="Provider">
-              <el-input model-value="BAIDU_OCR" disabled />
+            <el-form-item label="当前模型">
+              <el-input :model-value="modelSummary" disabled />
             </el-form-item>
             <el-form-item label="API Key">
-              <el-input
-                :model-value="ocrSettingsStore.settings.baidu.apiKey"
-                autocomplete="off"
-                placeholder="粘贴百度 OCR API Key"
-                @update:model-value="ocrSettingsStore.patchSettings({ baidu: { apiKey: $event } })"
-              />
+              <el-input :model-value="keyStatusLabel" disabled />
             </el-form-item>
-            <el-form-item label="Secret Key">
-              <el-input
-                :model-value="ocrSettingsStore.settings.baidu.secretKey"
-                autocomplete="off"
-                placeholder="粘贴百度 OCR Secret Key"
-                @update:model-value="ocrSettingsStore.patchSettings({ baidu: { secretKey: $event } })"
-              />
+            <el-form-item label="Base URL">
+              <el-input :model-value="visionModel.baseUrl || '-'" disabled />
             </el-form-item>
           </div>
         </section>
@@ -219,50 +172,15 @@ async function handleClearKeys() {
           <div class="ocr-section-heading ocr-section-heading--with-action">
             <div>
               <h4>识别策略</h4>
-              <p>默认标准版适合本地知识库导入；高精度版更贵，建议只在识别质量不足时切换。</p>
+              <p>按页渲染 PDF 图片并逐页识别，页码会进入解析 section，便于 chunk 和来源对齐。</p>
             </div>
             <el-button class="ocr-help-button" @click="strategyHelpDialogVisible = true">
-              <WalletCards aria-hidden="true" />
+              <SlidersHorizontal aria-hidden="true" />
               策略说明
             </el-button>
           </div>
 
           <div class="ocr-form__grid ocr-form__grid--strategy">
-            <el-form-item label="识别模式">
-              <el-segmented
-                :model-value="ocrSettingsStore.settings.baidu.recognitionMode"
-                :options="[
-                  { label: '标准版', value: 'STANDARD' },
-                  { label: '高精度版', value: 'ACCURATE' }
-                ]"
-                @update:model-value="ocrSettingsStore.patchSettings({ baidu: { recognitionMode: $event } })"
-              />
-            </el-form-item>
-            <el-form-item label="语言类型">
-              <el-select
-                :model-value="ocrSettingsStore.settings.baidu.languageType"
-                @update:model-value="ocrSettingsStore.patchSettings({ baidu: { languageType: $event } })"
-              >
-                <el-option label="中英文混合 CHN_ENG" value="CHN_ENG" />
-                <el-option label="英文 ENG" value="ENG" />
-                <el-option label="葡萄牙语 POR" value="POR" />
-                <el-option label="法语 FRE" value="FRE" />
-                <el-option label="德语 GER" value="GER" />
-                <el-option label="意大利语 ITA" value="ITA" />
-                <el-option label="西班牙语 SPA" value="SPA" />
-                <el-option label="俄语 RUS" value="RUS" />
-                <el-option label="日语 JAP" value="JAP" />
-                <el-option label="韩语 KOR" value="KOR" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="检测朝向">
-              <el-switch
-                :model-value="ocrSettingsStore.settings.baidu.detectDirection"
-                active-text="开启"
-                inactive-text="关闭"
-                @update:model-value="ocrSettingsStore.patchSettings({ baidu: { detectDirection: $event } })"
-              />
-            </el-form-item>
             <el-form-item label="单文档页数上限">
               <el-input-number
                 :model-value="ocrSettingsStore.settings.limits.maxPagesPerDocument"
@@ -324,52 +242,9 @@ async function handleClearKeys() {
     </article>
 
     <el-dialog
-      v-model="helpDialogVisible"
-      class="ocr-help-dialog"
-      title="百度 OCR 配置说明"
-      width="min(720px, calc(100vw - 32px))"
-      align-center
-    >
-      <section class="ocr-help">
-        <div class="ocr-help__intro">
-          <Cloud aria-hidden="true" />
-          <div>
-            <h4>Provider 固定为 BAIDU_OCR</h4>
-            <p>在百度智能云创建 OCR 应用，复制 API Key 和 Secret Key 到本页。测试连接只验证鉴权，不上传你的文件。</p>
-          </div>
-        </div>
-
-        <section class="ocr-help__docs" aria-label="百度 OCR 官方文档">
-          <h4>百度官方文档</h4>
-          <div class="ocr-help__links">
-            <a
-              v-for="link in baiduDocsLinks"
-              :key="link.url"
-              :href="link.url"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <span>
-                <strong>{{ link.label }}</strong>
-                <small>{{ link.description }}</small>
-              </span>
-              <ExternalLink aria-hidden="true" />
-            </a>
-          </div>
-        </section>
-      </section>
-
-      <template #footer>
-        <div class="ocr-help-dialog__footer">
-          <el-button type="primary" @click="helpDialogVisible = false">我知道了</el-button>
-        </div>
-      </template>
-    </el-dialog>
-
-    <el-dialog
       v-model="strategyHelpDialogVisible"
       class="ocr-help-dialog"
-      title="OCR 策略说明"
+      title="模型 OCR 策略说明"
       width="min(720px, calc(100vw - 32px))"
       align-center
     >
@@ -378,17 +253,17 @@ async function handleClearKeys() {
           <WalletCards aria-hidden="true" />
           <div>
             <h4>调用预算按 PDF 页数估算</h4>
-            <p>当前实现按页渲染并识别；一页通常对应一次 OCR 调用。月调用预算用于本地提示，不等同于百度账单。</p>
+            <p>月调用预算用于本地提示，不等同于模型服务商账单，也不会强制拦截调用。</p>
           </div>
         </div>
         <div class="ocr-strategy-list">
           <article>
-            <strong>标准版优先</strong>
-            <p>日常资料入库先用标准版，速度和成本更稳。</p>
+            <strong>整篇无文本层才识别</strong>
+            <p>只要 PDF 有可抽取文本页，当前版本不会混合 OCR 空白页。</p>
           </article>
           <article>
-            <strong>高精度版谨慎开启</strong>
-            <p>适合图片质量差或复杂排版，但费用通常更高。</p>
+            <strong>逐页识别</strong>
+            <p>每页渲染为图片后单独发送给视觉模型，识别结果保留原页码。</p>
           </article>
           <article>
             <strong>页数上限</strong>
@@ -601,10 +476,7 @@ async function handleClearKeys() {
   align-items: end;
 }
 
-.ocr-form__grid--connection {
-  grid-template-columns: minmax(160px, 210px) repeat(2, minmax(220px, 1fr));
-}
-
+.ocr-form__grid--connection,
 .ocr-form__grid--strategy {
   grid-template-columns: repeat(3, minmax(160px, 1fr));
 }
@@ -679,49 +551,22 @@ async function handleClearKeys() {
   line-height: 1.65;
 }
 
-.ocr-help__docs {
-  display: grid;
-  gap: 10px;
-}
-
-.ocr-help__links,
 .ocr-strategy-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-.ocr-help__links a,
 .ocr-strategy-list article {
+  display: grid;
   min-width: 0;
+  gap: 4px;
   padding: 12px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
 }
 
-.ocr-help__links a {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px;
-  gap: 10px;
-  align-items: center;
-  color: inherit;
-  text-decoration: none;
-}
-
-.ocr-help__links a:hover,
-.ocr-help__links a:focus-visible {
-  border-color: var(--color-action-border);
-  background: var(--color-action-soft);
-}
-
-.ocr-help__links a > span,
-.ocr-strategy-list article {
-  display: grid;
-  gap: 4px;
-}
-
-.ocr-help__links strong,
 .ocr-strategy-list strong {
   color: var(--color-text-strong);
   font-size: 13px;
@@ -729,18 +574,11 @@ async function handleClearKeys() {
   line-height: 1.4;
 }
 
-.ocr-help__links small,
 .ocr-strategy-list p {
   color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 650;
   line-height: 1.55;
-}
-
-.ocr-help__links svg {
-  width: 16px;
-  height: 16px;
-  color: var(--color-action-strong);
 }
 
 .ocr-help-dialog__footer {
@@ -774,19 +612,16 @@ async function handleClearKeys() {
   }
 
   .ocr-status-card,
+  .ocr-form__grid--connection,
   .ocr-form__grid--strategy {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .ocr-form__grid--connection {
-    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 720px) {
   .ocr-status-card,
+  .ocr-form__grid--connection,
   .ocr-form__grid--strategy,
-  .ocr-help__links,
   .ocr-strategy-list {
     grid-template-columns: 1fr;
   }

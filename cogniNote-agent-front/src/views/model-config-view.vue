@@ -18,9 +18,13 @@ const searchStore = useSearchStore()
 const modelSelectRef = ref(null)
 const modelSelectKeyword = ref('')
 const selectableModelOptions = computed(() => {
-  return modelConfigStore.activeRole === modelConfigStore.ROLES.CHAT
-    ? modelConfigStore.chatModelOptions
-    : modelConfigStore.embeddingModelOptions
+  if (modelConfigStore.activeRole === modelConfigStore.ROLES.CHAT) {
+    return modelConfigStore.chatModelOptions
+  }
+  if (modelConfigStore.activeRole === modelConfigStore.ROLES.EMBEDDING) {
+    return modelConfigStore.embeddingModelOptions
+  }
+  return modelConfigStore.visionModelOptions
 })
 const filteredModelOptions = computed(() => {
   const keyword = modelSelectKeyword.value.trim().toLowerCase()
@@ -48,9 +52,7 @@ watch(
 )
 
 function roleActiveConfig(role) {
-  return role === modelConfigStore.ROLES.CHAT
-    ? modelConfigStore.activeChatConfig
-    : modelConfigStore.activeEmbeddingConfig
+  return modelConfigStore.activeConfigFor(role)
 }
 
 async function loadInitialSettings() {
@@ -81,6 +83,7 @@ function modelCapabilityLabel(capability) {
   return {
     CHAT: '对话',
     EMBEDDING: '向量',
+    VISION: '视觉',
     UNKNOWN: '未识别'
   }[capability] || '未识别'
 }
@@ -211,9 +214,36 @@ function normalizeComparableNumber(value) {
 
 function normalizeInitialRole(role) {
   const normalized = String(role || '').trim().toUpperCase()
-  return [modelConfigStore.ROLES.CHAT, modelConfigStore.ROLES.EMBEDDING].includes(normalized)
+  return [
+    modelConfigStore.ROLES.CHAT,
+    modelConfigStore.ROLES.EMBEDDING,
+    modelConfigStore.ROLES.VISION
+  ].includes(normalized)
     ? normalized
     : ''
+}
+
+function roleSummaryLabel(role) {
+  return {
+    [modelConfigStore.ROLES.CHAT]: '当前对话模型',
+    [modelConfigStore.ROLES.EMBEDDING]: '当前向量模型',
+    [modelConfigStore.ROLES.VISION]: '当前视觉模型'
+  }[role]
+}
+
+function modelIdPlaceholder() {
+  return {
+    [modelConfigStore.ROLES.CHAT]: '例如 qwen-plus 或 gpt-4.1-mini',
+    [modelConfigStore.ROLES.EMBEDDING]: '例如 text-embedding-v4',
+    [modelConfigStore.ROLES.VISION]: '例如 qwen3-vl-plus 或 gpt-4o-mini'
+  }[modelConfigStore.activeRole] || '请输入模型 ID'
+}
+
+function showTemperatureField() {
+  return [
+    modelConfigStore.ROLES.CHAT,
+    modelConfigStore.ROLES.VISION
+  ].includes(modelConfigStore.activeRole)
 }
 </script>
 
@@ -231,10 +261,10 @@ function normalizeInitialRole(role) {
 
     <section class="model-active-summary">
       <article
-        v-for="role in [modelConfigStore.ROLES.CHAT, modelConfigStore.ROLES.EMBEDDING]"
+        v-for="role in [modelConfigStore.ROLES.CHAT, modelConfigStore.ROLES.EMBEDDING, modelConfigStore.ROLES.VISION]"
         :key="role"
       >
-        <p class="eyebrow">{{ role === modelConfigStore.ROLES.CHAT ? '当前对话模型' : '当前向量模型' }}</p>
+        <p class="eyebrow">{{ roleSummaryLabel(role) }}</p>
         <h3>{{ roleActiveConfig(role)?.displayName || '-' }}</h3>
         <p>{{ roleActiveConfig(role)?.modelName || '-' }}</p>
           <small>{{ roleActiveConfig(role)?.baseUrl || '-' }}</small>
@@ -331,10 +361,11 @@ function normalizeInitialRole(role) {
             <span>API Key</span>
             <div class="secret-input">
               <el-input
-                v-model="modelConfigStore.form.apiKey"
+                :model-value="modelConfigStore.form.apiKey"
                 :type="modelConfigStore.visibleApiKeyByRole[modelConfigStore.activeRole] ? 'text' : 'password'"
                 :placeholder="modelConfigStore.apiKeyPlaceholder"
                 autocomplete="off"
+                @update:model-value="modelConfigStore.updateApiKey"
               />
               <el-button @click="modelConfigStore.toggleApiKeyVisible()">
                 {{ modelConfigStore.visibleApiKeyByRole[modelConfigStore.activeRole] ? '隐藏' : '显示' }}
@@ -344,6 +375,12 @@ function normalizeInitialRole(role) {
                 @click="modelConfigStore.copyApiKey()"
               >
                 复制
+              </el-button>
+              <el-button
+                :disabled="!modelConfigStore.form.apiKey && !modelConfigStore.selectedConfig?.apiKeyConfigured"
+                @click="modelConfigStore.clearApiKey()"
+              >
+                清空
               </el-button>
             </div>
           </label>
@@ -363,9 +400,7 @@ function normalizeInitialRole(role) {
               no-data-text="暂无模型，可手动输入模型 ID"
               :filter-method="filterModelOptions"
               popper-class="model-id-select-popper"
-              :placeholder="modelConfigStore.activeRole === modelConfigStore.ROLES.CHAT
-                ? '例如 qwen-plus 或 gpt-4.1-mini'
-                : '例如 text-embedding-v4'"
+              :placeholder="modelIdPlaceholder()"
               @change="handleModelSelectChange"
               @visible-change="handleModelSelectVisibleChange"
             >
@@ -477,7 +512,7 @@ function normalizeInitialRole(role) {
             </div>
           </section>
 
-          <label v-if="modelConfigStore.activeRole === modelConfigStore.ROLES.CHAT" class="field">
+          <label v-if="showTemperatureField()" class="field">
             <span>Temperature</span>
             <el-input-number v-model="modelConfigStore.form.temperature" :min="0" :max="2" :step="0.1" controls-position="right" />
           </label>

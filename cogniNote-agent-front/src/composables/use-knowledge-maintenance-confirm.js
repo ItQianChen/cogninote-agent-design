@@ -99,7 +99,7 @@ export function confirmReparseFolder(folder) {
     summary: `将重新读取并解析“${folderName(folder)}”中的所有支持文件。`,
     impacts: [
       '会忽略未变化文件的跳过逻辑。',
-      '启用公共 OCR 后，无文本层 PDF 可能按页上传到 OCR Provider。',
+      '启用视觉模型 OCR 后，无文本层 PDF 页面图片可能按页上传到所选模型服务商。',
       '任务会加入维护队列。'
     ],
     path: folder?.folderPath || '',

@@ -13,6 +13,7 @@ import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
 import com.itqianchen.agentdesign.domain.exception.model.ModelConfigurationException;
 import com.itqianchen.agentdesign.domain.enums.model.ModelProvider;
 import com.itqianchen.agentdesign.domain.dto.model.ModelConfigRequest;
+import com.itqianchen.agentdesign.domain.dto.model.ModelConfigUpsertRequest;
 import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,6 +45,7 @@ class ModelConfigServiceTests {
     void activeDefaultsAreSplitByRole() {
         ModelConfig chat = modelConfigService.activeChatOrDefault();
         ModelConfig embedding = modelConfigService.activeEmbeddingOrDefault();
+        ModelConfig vision = modelConfigService.activeVisionOrDefault();
 
         assertThat(chat.role()).isEqualTo(ModelConfigRole.CHAT);
         assertThat(chat.provider()).isEqualTo(ModelProvider.DASHSCOPE);
@@ -58,6 +60,12 @@ class ModelConfigServiceTests {
         assertThat(embedding.resolvedEmbeddingDimensions()).isEqualTo(1024);
         assertThat(embedding.contextWindowTokens()).isNull();
         assertThat(embedding.resolvedContextWindowTokens()).isZero();
+
+        assertThat(vision.role()).isEqualTo(ModelConfigRole.VISION);
+        assertThat(vision.modelName()).isEqualTo(ModelConfigDefaults.VISION_MODEL);
+        assertThat(vision.temperature()).isEqualTo(ModelConfigDefaults.VISION_TEMPERATURE);
+        assertThat(vision.contextWindowTokens()).isNull();
+        assertThat(vision.hasApiKey()).isFalse();
     }
 
     @Test
@@ -171,6 +179,43 @@ class ModelConfigServiceTests {
     }
 
     @Test
+    void updateSettingsCanExplicitlyClearApiKey() {
+        ModelConfig saved = modelConfigService.create(visionRequest(
+                "DASHSCOPE",
+                "Vision A",
+                "sk-vision",
+                ModelConfigDefaults.BASE_URL,
+                "qwen3-vl-plus",
+                0.0
+        ));
+
+        modelConfigService.updateSettings(saved.id(), new ModelConfigUpsertRequest(
+                ModelConfigRole.VISION.name(),
+                "DASHSCOPE",
+                "Vision A",
+                ModelConfigDefaults.BASE_URL,
+                "",
+                "qwen3-vl-plus",
+                0.0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true
+        ));
+
+        ModelConfig config = modelConfigService.activeVisionOrDefault();
+
+        assertThat(config.hasApiKey()).isFalse();
+        assertThat(config.apiKey()).isEmpty();
+        assertThat(modelConfigService.settingsSnapshot(ModelConfigRole.VISION)
+                .selectedConfig()
+                .apiKeyConfigured()).isFalse();
+    }
+
+    @Test
     void deleteOnlyActiveConfigCreatesDefaultFallback() {
         ModelConfig chat = modelConfigService.create(chatRequest(
                 "DASHSCOPE",
@@ -188,6 +233,27 @@ class ModelConfigServiceTests {
         assertThat(fallback.active()).isTrue();
         assertThat(fallback.role()).isEqualTo(ModelConfigRole.CHAT);
         assertThat(fallback.modelName()).isEqualTo(ModelConfigDefaults.CHAT_MODEL);
+        assertThat(fallback.hasApiKey()).isFalse();
+    }
+
+    @Test
+    void deleteOnlyActiveVisionConfigCreatesDefaultFallback() {
+        ModelConfig vision = modelConfigService.create(visionRequest(
+                "DASHSCOPE",
+                "Vision A",
+                "sk-vision",
+                ModelConfigDefaults.BASE_URL,
+                "qwen3-vl-plus",
+                0.0
+        ));
+
+        modelConfigService.delete(vision.id());
+
+        ModelConfig fallback = modelConfigService.activeVisionOrDefault();
+        assertThat(fallback.active()).isTrue();
+        assertThat(fallback.role()).isEqualTo(ModelConfigRole.VISION);
+        assertThat(fallback.modelName()).isEqualTo(ModelConfigDefaults.VISION_MODEL);
+        assertThat(fallback.temperature()).isEqualTo(ModelConfigDefaults.VISION_TEMPERATURE);
         assertThat(fallback.hasApiKey()).isFalse();
     }
 
@@ -260,6 +326,13 @@ class ModelConfigServiceTests {
                 .hasMessageContaining("API Key");
     }
 
+    @Test
+    void requireActiveVisionConfiguredFailsWithoutApiKey() {
+        assertThatThrownBy(() -> modelConfigService.requireActiveVisionConfigured())
+                .isInstanceOf(ModelConfigurationException.class)
+                .hasMessageContaining("Vision API Key");
+    }
+
     private static ModelConfigRequest chatRequest(
             String provider,
             String displayName,
@@ -325,6 +398,34 @@ class ModelConfigServiceTests {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null
+        );
+    }
+
+    private static ModelConfigRequest visionRequest(
+            String provider,
+            String displayName,
+            String apiKey,
+            String baseUrl,
+            String modelName,
+            double temperature
+    ) {
+        return new ModelConfigRequest(
+                ModelConfigRole.VISION.name(),
+                provider,
+                displayName,
+                baseUrl,
+                apiKey,
+                modelName,
+                modelName,
+                null,
+                null,
+                null,
+                null,
+                null,
+                temperature,
                 null,
                 null,
                 null

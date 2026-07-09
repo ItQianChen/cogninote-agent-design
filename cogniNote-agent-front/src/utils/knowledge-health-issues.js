@@ -18,7 +18,7 @@ const ISSUE_ACTION_LABELS = {
 
 const ISSUE_EXPLANATIONS = {
   PARSE_FAILED: '这些文件没有成功解析，修复源文件后重新同步目录即可重试。',
-  PDF_OCR_REQUIRED: '这些 PDF 没有可抽取文本层。配置公共 OCR 后可重新解析目录；也可以先用外部工具生成文本层后同步。',
+  PDF_OCR_REQUIRED: '这些 PDF 没有可抽取文本层。配置视觉模型 OCR 后可重新解析目录；也可以先用外部工具生成文本层后同步。',
   INDEX_INCONSISTENT: '索引记录和实际 Lucene 内容不一致，部分资料可能搜不到。',
   EMBEDDING_UNCONFIGURED: '向量或混合检索会降级为关键词检索，语义相近的问题命中会变差。',
   GRAPH_STALE: '图谱是问答辅助视图；资料更新后，旧图谱可能还停留在上一次生成结果。',
@@ -36,7 +36,7 @@ const ISSUE_CATEGORY_DEFINITIONS = [
     tone: 'warning',
     rules: [
       '解析失败文档不会写入 chunk 或 Lucene 索引。',
-      '无文本层 PDF 会标记为需 OCR；启用公共 OCR 后需要重新解析目录才会入库。'
+      '无文本层 PDF 会标记为需 OCR；启用视觉模型 OCR 后需要重新解析目录才会入库。'
     ]
   },
   {

@@ -68,7 +68,8 @@ class ModelConfigControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.chat.role").value("CHAT"))
-                .andExpect(jsonPath("$.data.embedding.role").value("EMBEDDING"));
+                .andExpect(jsonPath("$.data.embedding.role").value("EMBEDDING"))
+                .andExpect(jsonPath("$.data.vision.role").value("VISION"));
     }
 
     @Test
@@ -79,6 +80,7 @@ class ModelConfigControllerTests {
                 .andExpect(jsonPath("$.data.role").value("CHAT"))
                 .andExpect(jsonPath("$.data.active.chat.role").value("CHAT"))
                 .andExpect(jsonPath("$.data.active.embedding.role").value("EMBEDDING"))
+                .andExpect(jsonPath("$.data.active.vision.role").value("VISION"))
                 .andExpect(jsonPath("$.data.selectedConfig.role").value("CHAT"));
     }
 

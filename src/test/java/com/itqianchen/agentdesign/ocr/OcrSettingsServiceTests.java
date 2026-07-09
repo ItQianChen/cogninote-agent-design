@@ -4,15 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itqianchen.agentdesign.domain.dto.ocr.OcrSettingsRequest;
-import com.itqianchen.agentdesign.domain.enums.ocr.BaiduOcrRecognitionMode;
+import com.itqianchen.agentdesign.domain.dto.ocr.OcrTestResponse;
+import com.itqianchen.agentdesign.domain.entity.model.ModelConfig;
+import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
+import com.itqianchen.agentdesign.domain.enums.model.ModelProvider;
 import com.itqianchen.agentdesign.domain.enums.ocr.OcrProvider;
+import com.itqianchen.agentdesign.domain.support.model.ModelConfigDefaults;
 import com.itqianchen.agentdesign.repository.settings.AppSettingRepository;
+import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import com.itqianchen.agentdesign.service.ocr.OcrEngine;
 import com.itqianchen.agentdesign.service.ocr.OcrEngineRegistry;
 import com.itqianchen.agentdesign.service.ocr.OcrPageImage;
 import com.itqianchen.agentdesign.service.ocr.OcrSettingsService;
 import com.itqianchen.agentdesign.service.ocr.OcrSettingsSnapshot;
-import com.itqianchen.agentdesign.domain.dto.ocr.OcrTestResponse;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,115 +26,129 @@ import org.junit.jupiter.api.Test;
 class OcrSettingsServiceTests {
 
     @Test
-    void settingsInitializesDefaultDisabledBaiduOcr() {
-        OcrSettingsService service = service();
+    void settingsInitializesDefaultDisabledModelVision() {
+        Fixture fixture = new Fixture();
 
-        var settings = service.settings();
+        var settings = fixture.service.settings();
 
         assertThat(settings.enabled()).isFalse();
-        assertThat(settings.provider()).isEqualTo(OcrProvider.BAIDU_OCR);
-        assertThat(settings.baidu().apiKey()).isBlank();
-        assertThat(settings.baidu().secretKey()).isBlank();
+        assertThat(settings.engine()).isEqualTo(OcrProvider.MODEL_VISION);
+        assertThat(settings.available()).isFalse();
+        assertThat(settings.visionModel().modelName()).isEqualTo(ModelConfigDefaults.VISION_MODEL);
+        assertThat(settings.visionModel().apiKeyConfigured()).isFalse();
         assertThat(settings.limits().maxPagesPerDocument()).isEqualTo(200);
     }
 
     @Test
-    void updateReturnsPlaintextKeysAndEnablesWhenCredentialsExist() {
-        OcrSettingsService service = service();
+    void updateNormalizesLimitsAndKeepsAvailabilityTiedToVisionModelKey() {
+        Fixture fixture = new Fixture();
 
-        var response = service.update(new OcrSettingsRequest(
+        var response = fixture.service.update(new OcrSettingsRequest(
                 true,
-                OcrProvider.BAIDU_OCR,
-                new OcrSettingsRequest.BaiduSettings(
-                        " api-key ",
-                        " secret-key ",
-                        BaiduOcrRecognitionMode.ACCURATE,
-                        "eng",
-                        false
-                ),
-                new OcrSettingsRequest.Limits(250, 30, 2000)
+                OcrProvider.MODEL_VISION,
+                null,
+                new OcrSettingsRequest.Limits(800, 1, 2_000_000)
         ));
 
         assertThat(response.enabled()).isTrue();
-        assertThat(response.available()).isTrue();
-        assertThat(response.baidu().apiKey()).isEqualTo("api-key");
-        assertThat(response.baidu().secretKey()).isEqualTo("secret-key");
-        assertThat(response.baidu().recognitionMode()).isEqualTo(BaiduOcrRecognitionMode.ACCURATE);
-        assertThat(response.baidu().languageType()).isEqualTo("ENG");
-        assertThat(response.baidu().detectDirection()).isFalse();
+        assertThat(response.engine()).isEqualTo(OcrProvider.MODEL_VISION);
+        assertThat(response.available()).isFalse();
+        assertThat(response.limits().maxPagesPerDocument()).isEqualTo(500);
+        assertThat(response.limits().timeoutPerPageSeconds()).isEqualTo(3);
+        assertThat(response.limits().monthlyCallBudget()).isEqualTo(1_000_000);
+
+        fixture.modelConfigService.setVisionApiKey("sk-vision");
+        assertThat(fixture.service.settings().available()).isTrue();
     }
 
     @Test
-    void clearCredentialsDisablesOcr() {
-        OcrSettingsService service = service();
-        service.update(new OcrSettingsRequest(
+    void oldBaiduSettingsAreMigratedToDisabledModelVision() {
+        Fixture fixture = new Fixture();
+        fixture.appSettings.save("ocr.settings", """
+                {
+                  "enabled": true,
+                  "provider": "BAIDU_OCR",
+                  "apiKey": "baidu-api-key",
+                  "secretKey": "baidu-secret-key",
+                  "maxPagesPerDocument": 120,
+                  "timeoutPerPageSeconds": 30,
+                  "monthlyCallBudget": 2000
+                }
+                """);
+        fixture.modelConfigService.setVisionApiKey("sk-vision");
+
+        var settings = fixture.service.settings();
+
+        assertThat(settings.engine()).isEqualTo(OcrProvider.MODEL_VISION);
+        assertThat(settings.enabled()).isFalse();
+        assertThat(settings.available()).isFalse();
+        assertThat(settings.limits().maxPagesPerDocument()).isEqualTo(120);
+    }
+
+    @Test
+    void oldBaiduUpdateRequestIsAlsoDisabledAfterMigration() {
+        Fixture fixture = new Fixture();
+        fixture.modelConfigService.setVisionApiKey("sk-vision");
+
+        var response = fixture.service.update(new OcrSettingsRequest(
                 true,
                 OcrProvider.BAIDU_OCR,
-                new OcrSettingsRequest.BaiduSettings("api-key", "secret-key",
-                        BaiduOcrRecognitionMode.STANDARD, "CHN_ENG", true),
+                null,
                 new OcrSettingsRequest.Limits(200, 20, 1000)
         ));
 
-        var response = service.update(new OcrSettingsRequest(
-                true,
-                OcrProvider.BAIDU_OCR,
-                new OcrSettingsRequest.BaiduSettings("", "",
-                        BaiduOcrRecognitionMode.STANDARD, "CHN_ENG", true),
-                null
-        ));
-
+        assertThat(response.engine()).isEqualTo(OcrProvider.MODEL_VISION);
         assertThat(response.enabled()).isFalse();
         assertThat(response.available()).isFalse();
-        assertThat(response.baidu().apiKeyConfigured()).isFalse();
-        assertThat(response.baidu().secretKeyConfigured()).isFalse();
     }
 
     @Test
-    void partialUpdatePreservesKeysWhenKeyFieldsAreNull() {
-        OcrSettingsService service = service();
-        service.update(new OcrSettingsRequest(
+    void testUsesVisionEngineAndDoesNotExposeSecrets() {
+        Fixture fixture = new Fixture();
+        fixture.modelConfigService.setVisionApiKey("sk-vision");
+        fixture.service.update(new OcrSettingsRequest(
                 true,
-                OcrProvider.BAIDU_OCR,
-                new OcrSettingsRequest.BaiduSettings("api-key", "secret-key",
-                        BaiduOcrRecognitionMode.STANDARD, "CHN_ENG", true),
-                null
+                OcrProvider.MODEL_VISION,
+                null,
+                new OcrSettingsRequest.Limits(200, 20, 1000)
         ));
 
-        var response = service.update(new OcrSettingsRequest(
-                true,
-                OcrProvider.BAIDU_OCR,
-                new OcrSettingsRequest.BaiduSettings(null, null,
-                        BaiduOcrRecognitionMode.ACCURATE, null, null),
-                null
-        ));
-
-        assertThat(response.baidu().apiKey()).isEqualTo("api-key");
-        assertThat(response.baidu().secretKey()).isEqualTo("secret-key");
-        assertThat(response.baidu().recognitionMode()).isEqualTo(BaiduOcrRecognitionMode.ACCURATE);
-    }
-
-    @Test
-    void testResponseDoesNotReturnSecrets() {
-        OcrSettingsService service = service();
-        service.update(new OcrSettingsRequest(
-                true,
-                OcrProvider.BAIDU_OCR,
-                new OcrSettingsRequest.BaiduSettings("api-key", "secret-key",
-                        BaiduOcrRecognitionMode.STANDARD, "CHN_ENG", true),
-                null
-        ));
-
-        OcrTestResponse response = service.test();
+        OcrTestResponse response = fixture.service.test();
 
         assertThat(response.success()).isTrue();
-        assertThat(response.message()).doesNotContain("api-key", "secret-key");
+        assertThat(response.engine()).isEqualTo(OcrProvider.MODEL_VISION);
+        assertThat(response.modelName()).isEqualTo(ModelConfigDefaults.VISION_MODEL);
+        assertThat(response.message()).doesNotContain("sk-vision");
+        assertThat(fixture.ocrEngine.testCalls).isEqualTo(1);
     }
 
-    private static OcrSettingsService service() {
-        return new OcrSettingsService(
-                new FakeAppSettingRepository(),
+    @Test
+    void testShortCircuitsWhenVisionModelKeyIsMissing() {
+        Fixture fixture = new Fixture();
+        fixture.service.update(new OcrSettingsRequest(
+                true,
+                OcrProvider.MODEL_VISION,
+                null,
+                null
+        ));
+
+        OcrTestResponse response = fixture.service.test();
+
+        assertThat(response.success()).isFalse();
+        assertThat(response.message()).contains("视觉识别模型 API Key");
+        assertThat(fixture.ocrEngine.testCalls).isZero();
+    }
+
+    private static final class Fixture {
+
+        private final FakeAppSettingRepository appSettings = new FakeAppSettingRepository();
+        private final FakeOcrEngine ocrEngine = new FakeOcrEngine();
+        private final FakeModelConfigService modelConfigService = new FakeModelConfigService();
+        private final OcrSettingsService service = new OcrSettingsService(
+                appSettings,
                 new ObjectMapper(),
-                new OcrEngineRegistry(List.of(new FakeOcrEngine()))
+                new OcrEngineRegistry(List.of(ocrEngine)),
+                modelConfigService
         );
     }
 
@@ -153,11 +171,54 @@ class OcrSettingsServiceTests {
         }
     }
 
+    private static final class FakeModelConfigService extends ModelConfigService {
+
+        private String visionApiKey = "";
+
+        private FakeModelConfigService() {
+            super(null);
+        }
+
+        @Override
+        public ModelConfig activeVisionOrDefault() {
+            return visionConfig(visionApiKey);
+        }
+
+        private void setVisionApiKey(String visionApiKey) {
+            this.visionApiKey = visionApiKey;
+        }
+
+        private static ModelConfig visionConfig(String apiKey) {
+            long now = System.currentTimeMillis();
+            return new ModelConfig(
+                    ModelConfigDefaults.ACTIVE_VISION_CONFIG_ID,
+                    ModelConfigRole.VISION,
+                    ModelProvider.DASHSCOPE,
+                    ModelConfigDefaults.VISION_DISPLAY_NAME,
+                    ModelConfigDefaults.BASE_URL,
+                    apiKey,
+                    ModelConfigDefaults.VISION_MODEL,
+                    null,
+                    null,
+                    null,
+                    null,
+                    ModelConfigDefaults.VISION_TEMPERATURE,
+                    null,
+                    null,
+                    true,
+                    now,
+                    now
+            );
+        }
+    }
+
     private static final class FakeOcrEngine implements OcrEngine {
+
+        private int testCalls;
 
         @Override
         public boolean supports(OcrProvider provider) {
-            return provider == OcrProvider.BAIDU_OCR;
+            return provider == OcrProvider.MODEL_VISION;
         }
 
         @Override
@@ -167,7 +228,8 @@ class OcrSettingsServiceTests {
 
         @Override
         public OcrTestResponse test(OcrSettingsSnapshot settings) {
-            return new OcrTestResponse(true, "OCR 测试通过。", settings.provider(), settings.recognitionMode());
+            testCalls++;
+            return new OcrTestResponse(true, "视觉模型测试通过。", settings.provider(), ModelConfigDefaults.VISION_MODEL);
         }
     }
 }

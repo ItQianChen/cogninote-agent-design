@@ -39,6 +39,13 @@ public class ModelCatalogService {
             "completion",
             "text-generation"
     );
+    private static final List<String> VISION_HINTS = List.of(
+            "vision",
+            "visual",
+            "multimodal",
+            "vl",
+            "omni"
+    );
     private static final List<String> CAPABILITY_FIELD_NAMES = List.of(
             "type",
             "sub_type",
@@ -161,12 +168,18 @@ public class ModelCatalogService {
         if (containsAnyCapabilityField(node, CHAT_HINTS)) {
             return ModelCapability.CHAT;
         }
+        if (containsAnyCapabilityField(node, VISION_HINTS)) {
+            return ModelCapability.VISION;
+        }
         if (modelId == null || modelId.isBlank()) {
             return ModelCapability.UNKNOWN;
         }
         String normalized = modelId.toLowerCase(Locale.ROOT);
         if (containsAny(normalized, EMBEDDING_HINTS)) {
             return ModelCapability.EMBEDDING;
+        }
+        if (containsAny(normalized, VISION_HINTS)) {
+            return ModelCapability.VISION;
         }
         return ModelCapability.UNKNOWN;
     }
