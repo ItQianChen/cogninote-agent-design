@@ -43,7 +43,15 @@ class DatabaseSchemaInitializerTests {
                     "model_config",
                     "knowledge_folder_runs_migration"
             );
-            assertThat(columnNames(sqlSession, "documents")).contains("knowledge_folder_id");
+            assertThat(columnNames(sqlSession, "documents")).contains(
+                    "knowledge_folder_id",
+                    "last_failure_stage",
+                    "last_failure_code",
+                    "last_failure_message",
+                    "last_failure_detail",
+                    "last_failure_context_json",
+                    "last_failed_at"
+            );
             assertThat(columnNames(sqlSession, "model_configs")).contains("context_window_tokens");
             assertThat(columnNames(sqlSession, "chat_messages")).contains("agent_type", "references_json");
             assertThat(columnNames(sqlSession, "knowledge_graph_edges")).contains("display_label");
@@ -53,7 +61,10 @@ class DatabaseSchemaInitializerTests {
                     "progress_total",
                     "current_item",
                     "queued_at",
-                    "updated_at"
+                    "updated_at",
+                    "error_stage",
+                    "error_code",
+                    "error_detail"
             );
             assertThat(isNotNullColumn(sqlSession, "knowledge_folder_runs", "started_at")).isFalse();
             assertThat(isNotNullColumn(sqlSession, "knowledge_folder_runs", "completed_at")).isFalse();

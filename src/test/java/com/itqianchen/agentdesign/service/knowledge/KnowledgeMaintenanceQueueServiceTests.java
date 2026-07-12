@@ -1,9 +1,5 @@
 package com.itqianchen.agentdesign.service.knowledge;
 
-
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -12,17 +8,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
+import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
+import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRunResponse;
 import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolderRun;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureCode;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureStage;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
 import com.itqianchen.agentdesign.domain.exception.knowledge.KnowledgeMaintenanceException;
-import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRunResponse;
+import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRunRepository;
+import com.itqianchen.agentdesign.service.document.DocumentFailureCodec;
 import com.itqianchen.agentdesign.service.index.IndexService;
-import java.util.Optional;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class KnowledgeMaintenanceQueueServiceTests {
@@ -43,8 +45,34 @@ class KnowledgeMaintenanceQueueServiceTests {
             publisher,
             progressReporter,
             documentIdentity,
+            new DocumentFailureCodec(new ObjectMapper()),
             Runnable::run
     );
+
+    @Test
+    void ingestCompletionPreservesStructuredFailures() {
+        DocumentFailureResponse failure = DocumentFailureResponse.of(
+                "D:/docs/scanned.pdf",
+                DocumentFailureStage.MODEL_CALL,
+                DocumentFailureCode.MODEL_AUTH_FAILED,
+                "视觉模型鉴权失败。",
+                "DASHSCOPE / HTTP 401",
+                "检查 API Key。",
+                1780000000000L,
+                1,
+                "DASHSCOPE",
+                "qwen3-vl-plus",
+                401,
+                "invalid_api_key"
+        );
+
+        KnowledgeMaintenanceCompletion completion = KnowledgeMaintenanceQueueService.ingestCompletion(
+                new IngestDocumentsResponse(1, 0, 0, 1, List.of(failure))
+        );
+
+        assertThat(completion.status()).isEqualTo(KnowledgeFolderRunStatus.COMPLETED_WITH_WARNINGS);
+        assertThat(completion.failures()).containsExactly(failure);
+    }
 
     @Test
     void enqueueFolderSyncReusesActiveRunForSameScopeAndOperation() {

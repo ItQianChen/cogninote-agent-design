@@ -335,7 +335,7 @@ POST   /api/model-configs/settings/configs/{id}/activate
 
 第 36-4 阶段新增全局 OCR 设置，保存在 `app_settings` 的 `ocr.settings` JSON 快照中。第一版引擎固定为 `MODEL_VISION`，OCR 设置只保存 `enabled` 和页数/超时/调用预算限制；实际密钥归属独立 `VISION` 模型配置。模型配置页按本机配置逻辑明文回显密钥；日志、异常、测试响应和维护运行记录不得输出密钥。
 
-Prompt 文本统一放在 `src/main/resources/cogninote-prompts.yaml`。`application.yaml` 只通过 `spring.config.import=classpath:cogninote-prompts.yaml` 引入它，并保留服务端口、Spring AI 开关、日志、存储、检索、Embedding、聊天记忆等运行配置。聊天 Prompt 绑定到 `app.chat.prompts`，知识图谱抽取 Prompt 绑定到 `app.knowledge-graph.prompts`；业务代码只负责填充运行时变量和校验模型输出，不再内联大段 Prompt 文本。
+Prompt 文本统一放在 `src/main/resources/cogninote-prompts.yaml`。`application.yaml` 只通过 `spring.config.import=classpath:cogninote-prompts.yaml` 引入它，并保留服务端口、Spring AI 开关、日志、存储、检索、Embedding、聊天记忆等运行配置。聊天 Prompt 绑定到 `app.chat.prompts`，视觉模型 OCR Prompt 绑定到 `app.ocr.prompts`，知识图谱抽取 Prompt 绑定到 `app.knowledge-graph.prompts`；业务代码只负责填充运行时变量和校验模型输出，不再内联大段 Prompt 文本。
 
 模型设置页使用 settings 快照接口作为页面事实来源：顶部 Active 卡片、左侧配置列表和右侧编辑表单由同一份 `ModelConfigSettingsResponse` 驱动。前端 `model-config` store 只保留一个当前编辑 `form`，不要在组件内再复制第二份表单状态；否则容易出现“列表和 Active 有数据，但右侧表单没有回显”的状态分叉。设置页切到“模型”时默认加载 `CHAT` 快照，点击 “Embedding 模型” 时再加载 `EMBEDDING` 快照。模型页不显示整块加载遮罩，避免页签切换时闪烁刺眼。
 
@@ -597,7 +597,13 @@ CREATE TABLE documents (
     status TEXT NOT NULL,
     indexed_at INTEGER,
     created_at INTEGER,
-    updated_at INTEGER
+    updated_at INTEGER,
+    last_failure_stage TEXT,
+    last_failure_code TEXT,
+    last_failure_message TEXT,
+    last_failure_detail TEXT,
+    last_failure_context_json TEXT,
+    last_failed_at INTEGER
 );
 
 CREATE TABLE knowledge_folders (
@@ -635,6 +641,9 @@ CREATE TABLE knowledge_folder_runs (
     completed_at INTEGER,
     duration_ms INTEGER,
     error_message TEXT,
+    error_stage TEXT,
+    error_code TEXT,
+    error_detail TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
@@ -789,7 +798,9 @@ CREATE TABLE knowledge_graph_views (
 
 `knowledge_folders` 是第十阶段新增的知识库目录表。`documents.knowledge_folder_id` 只记录明确通过目录导入产生的归属；历史散落文档不自动猜测目录，继续作为未归属文档保留。
 
-`knowledge_folder_runs` 是知识库维护队列和历史记录的事实源。第 31 阶段它只保存完成后的导入、同步、重建索引、启用、停用和删除结果；第 33 阶段升级为本地 FIFO 队列，`status` 覆盖 `QUEUED`、`RUNNING`、`CANCELLING`、`CANCELLED`、`COMPLETED`、`COMPLETED_WITH_WARNINGS`、`FAILED`，`phase/current_item/progress_*` 用于表达当前阶段和当前处理对象。`started_at`、`completed_at` 和 `duration_ms` 对等待中或未结束任务可以为空，调用方必须以 `status` 判断生命周期。健康快照不落表，而是由 `knowledge_folders`、`documents.status`、`documents.indexed_at`、文件大小、修改时间、本地路径存在性和 Lucene reader 统计即时派生；这样能避免用户在应用外移动或修改文件后，持久化健康状态立刻变成过期副本。删除知识库目录时会清理该目录 scope 下的维护记录，`ALL` scope 和其他目录运行记录不受影响。
+`knowledge_folder_runs` 是知识库维护队列和历史记录的事实源。第 31 阶段它只保存完成后的导入、同步、重建索引、启用、停用和删除结果；第 33 阶段升级为本地 FIFO 队列，`status` 覆盖 `QUEUED`、`RUNNING`、`CANCELLING`、`CANCELLED`、`COMPLETED`、`COMPLETED_WITH_WARNINGS`、`FAILED`，`phase/current_item/progress_*` 用于表达当前阶段和当前处理对象。运行记录的 `failed_count` 表示本次维护操作失败的文件数，即使保留旧 `PARSED` 结果也会计数；健康快照的 `failedCount` 则只统计当前不可检索的 `FAILED` 和 `OCR_REQUIRED` 文档。`failures_json` 保存单文件结构化失败列表；`error_stage/error_code/error_detail` 保存目录扫描、索引初始化等任务整体失败。旧版两字段 `failures_json` 读取时归一化为 `UNKNOWN/LEGACY_FAILURE`。`started_at`、`completed_at` 和 `duration_ms` 对等待中或未结束任务可以为空，调用方必须以 `status` 判断生命周期。健康快照不落表，而是由 `knowledge_folders`、`documents.status`、`documents.indexed_at`、最近失败信息、文件大小、修改时间、本地路径存在性和 Lucene reader 统计即时派生；这样能避免用户在应用外移动或修改文件后，持久化健康状态立刻变成过期副本。删除知识库目录时会清理该目录 scope 下的维护记录，`ALL` scope 和其他目录运行记录不受影响。
+
+`documents.last_failure_*` 保存最近一次文档处理诊断，阶段覆盖扫描、读取、解析、OCR、模型配置、模型调用、切块、SQLite 持久化和 Lucene 索引。文档成功完成解析和索引后会清空这些字段。维护同步失败但旧解析结果仍可用时，文档继续保持 `PARSED`，同时保留最近失败信息；前端以黄色警告提示“当前仍使用旧索引”。因此 `failed_count` 只统计当前不可检索的 `FAILED` 和 `OCR_REQUIRED`，不会把保留旧结果的警告计入不可用文档数。
 
 `model_configs.context_window_tokens` 是第 22 阶段新增的 Chat 上下文窗口字段。默认 Chat 配置为 `128000`，Embedding 配置为 `null`；旧库启动时由 schema 初始化自动补列。
 
@@ -865,12 +876,12 @@ CogninoteMemoryAdvisor 注入会话摘要和最近原文消息
   ↓
 对 documents.source_path 做轻量文件系统探针
   ↓
-聚合解析失败、未索引、缺失文件和疑似变化
+聚合结构化处理失败、需 OCR、未索引、缺失文件和疑似变化
   ↓
 返回全库/目录健康快照与建议动作
 ```
 
-`KnowledgeHealthService` 比较文件是否存在、是否为普通文件、文件大小和修改时间，并轻量扫描目录中新出现但尚未入库的本地文件；它不重新计算内容 hash，也不自动把新文件导入 SQLite。单个文档路径不可读、权限异常或外置盘不可用时会转成“本地文件不可访问”问题，不让整个健康诊断请求失败。新增、修改和删除文件的真实收敛由维护队列中的“同步目录”任务显式触发；`PARSED AND indexed_at IS NULL` 的少量缺失索引优先由“补写索引”任务从 SQLite chunks 恢复；索引损坏或 Analyzer/Embedding 变化后的修复由维护队列中的目录重建或全量重建索引触发。停用目录直接返回 `DISABLED` 且问题列表为空，它表达用户主动排除检索范围，不是需要修复的健康错误。维护任务状态和历史写入失败只记录 warning，不反向破坏已经完成的导入、同步或重建主流程。
+`KnowledgeHealthService` 比较文件是否存在、是否为普通文件、文件大小和修改时间，并轻量扫描目录中新出现但尚未入库的本地文件；它不重新计算内容 hash，也不自动把新文件导入 SQLite。单个文档路径不可读、权限异常或外置盘不可用时会转成“本地文件不可访问”问题，不让整个健康诊断请求失败。文档处理问题统一使用 `DOCUMENT_PROCESSING_FAILED`，并优先展示 `documents.last_failure_*` 中的实际阶段、友好摘要和建议；旧 `PARSE_FAILED` 问题码只保留前端兼容。新增、修改和删除文件的真实收敛由维护队列中的“同步目录”任务显式触发；`PARSED AND indexed_at IS NULL` 的少量缺失索引优先由“补写索引”任务从 SQLite chunks 恢复；索引损坏或 Analyzer/Embedding 变化后的修复由维护队列中的目录重建或全量重建索引触发。停用目录直接返回 `DISABLED` 且问题列表为空，它表达用户主动排除检索范围，不是需要修复的健康错误。维护任务状态和历史写入失败只记录 warning，不反向破坏已经完成的导入、同步或重建主流程。
 
 第 33 阶段后，维护动作不再由前端局部 `busy` 标记推断。`KnowledgeMaintenanceQueueService` 负责把导入、同步、重建、启停和删除目录写入 `knowledge_folder_runs`，再串行派发到后台 worker。前端通过 `/api/knowledge-maintenance/runs/{runId}/events` 接收 SSE 状态事件，并在任务终态后统一刷新健康快照、目录列表和索引状态。等待中的任务可以取消；运行中的任务会执行到安全完成点。
 

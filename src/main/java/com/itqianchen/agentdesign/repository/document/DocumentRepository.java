@@ -4,6 +4,7 @@ import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
 import com.itqianchen.agentdesign.domain.enums.document.FileType;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeChunk;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
+import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
 import com.itqianchen.agentdesign.domain.vo.search.IndexStatistics;
 import com.itqianchen.agentdesign.domain.vo.search.IndexedChunk;
 import com.itqianchen.agentdesign.domain.vo.search.IndexedDocument;
@@ -194,6 +195,25 @@ public class DocumentRepository {
      */
     public void upsertDocument(KnowledgeDocument document) {
         documentMapper.upsertDocument(document);
+    }
+
+    /** 保存文档最近一次处理失败，同时保留当前状态、chunk 和索引时间。 */
+    public void updateLastFailure(
+            String documentId,
+            DocumentFailureResponse failure,
+            String contextJson,
+            long updatedAt
+    ) {
+        documentMapper.updateLastFailure(
+                documentId,
+                failure.stage(),
+                failure.code(),
+                failure.message(),
+                failure.detail(),
+                contextJson,
+                failure.occurredAt() == null ? updatedAt : failure.occurredAt(),
+                updatedAt
+        );
     }
 
     /**

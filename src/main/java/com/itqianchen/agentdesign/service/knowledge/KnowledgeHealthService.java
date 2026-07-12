@@ -1,25 +1,7 @@
 package com.itqianchen.agentdesign.service.knowledge;
-
-
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
-import com.itqianchen.agentdesign.domain.vo.knowledge.KnowledgeFolderSummary;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itqianchen.agentdesign.common.api.ResourceNotFoundException;
-import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
-import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
-import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolder;
-import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolderRun;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
-import com.itqianchen.agentdesign.domain.vo.knowledge.KnowledgeFolderSummary;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeHealthIssueCode;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeHealthStatus;
-import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
+import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
 import com.itqianchen.agentdesign.domain.dto.index.IndexStatusResponse;
-import com.itqianchen.agentdesign.domain.dto.document.IngestFailureResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderHealthResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderHealthSummaryResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRunDeleteResponse;
@@ -31,11 +13,23 @@ import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeHealthIssueRespo
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeHealthResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeHealthSummaryResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeProblemDocumentResponse;
+import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
+import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolder;
+import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolderRun;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
+import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeHealthIssueCode;
+import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeHealthStatus;
+import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
+import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
+import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
+import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
+import com.itqianchen.agentdesign.domain.vo.knowledge.KnowledgeFolderSummary;
 import com.itqianchen.agentdesign.mapper.graph.KnowledgeGraphSummaryRow;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.repository.graph.KnowledgeGraphRepository;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRepository;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRunRepository;
+import com.itqianchen.agentdesign.service.document.DocumentFailureCodec;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -104,7 +98,7 @@ public class KnowledgeHealthService {
     private final KnowledgeGraphRepository graphRepository;
     private final KnowledgeStore knowledgeStore;
     private final DocumentIngestionService ingestionService;
-    private final ObjectMapper objectMapper;
+    private final DocumentFailureCodec failureCodec;
 
     /**
      * 注入知识库健康诊断依赖。
@@ -115,7 +109,7 @@ public class KnowledgeHealthService {
      * @param graphRepository 图谱派生数据仓储
      * @param knowledgeStore 检索索引边界
      * @param ingestionService 文档扫描边界
-     * @param objectMapper JSON 失败明细解析器
+     * @param failureCodec 失败诊断编解码器
      */
     public KnowledgeHealthService(
             KnowledgeFolderRepository folderRepository,
@@ -124,7 +118,7 @@ public class KnowledgeHealthService {
             KnowledgeGraphRepository graphRepository,
             KnowledgeStore knowledgeStore,
             DocumentIngestionService ingestionService,
-            ObjectMapper objectMapper
+            DocumentFailureCodec failureCodec
     ) {
         this.folderRepository = folderRepository;
         this.documentRepository = documentRepository;
@@ -132,7 +126,7 @@ public class KnowledgeHealthService {
         this.graphRepository = graphRepository;
         this.knowledgeStore = knowledgeStore;
         this.ingestionService = ingestionService;
-        this.objectMapper = objectMapper;
+        this.failureCodec = failureCodec;
     }
 
     /**
@@ -412,16 +406,8 @@ public class KnowledgeHealthService {
         return runs;
     }
 
-    private List<IngestFailureResponse> parseFailures(KnowledgeFolderRun run) {
-        if (run.failuresJson() == null || run.failuresJson().isBlank()) {
-            return List.of();
-        }
-        try {
-            return objectMapper.readerForListOf(IngestFailureResponse.class).readValue(run.failuresJson());
-        } catch (IOException ex) {
-            log.warn("knowledge_folder_run_failures_json_decode_failed runId={}", run.id(), ex);
-            return List.of();
-        }
+    private List<DocumentFailureResponse> parseFailures(KnowledgeFolderRun run) {
+        return failureCodec.decodeFailures(run.failuresJson());
     }
 
     private static boolean isTerminalRun(KnowledgeFolderRunStatus status) {
@@ -593,7 +579,7 @@ public class KnowledgeHealthService {
         List<KnowledgeHealthIssueResponse> issues = new ArrayList<>();
         KnowledgeFolder folder = summary.folder();
         String folderId = folder.id();
-        int parseFailedCount = documentStatusCount(documents, DocumentStatus.FAILED);
+        int processingFailureCount = processingFailureCount(documents);
         int pdfOcrRequiredCount = documentStatusCount(documents, DocumentStatus.OCR_REQUIRED);
         if (!folder.enabled()) {
             return List.of();
@@ -618,14 +604,14 @@ public class KnowledgeHealthService {
                     1
             ));
         }
-        if (parseFailedCount > 0) {
+        if (processingFailureCount > 0) {
             issues.add(issue(
-                    KnowledgeHealthIssueCode.PARSE_FAILED,
+                    KnowledgeHealthIssueCode.DOCUMENT_PROCESSING_FAILED,
                     "WARNING",
-                    "有 " + parseFailedCount + " 个文档解析失败，搜索和 RAG 可能缺失内容。",
+                    "有 " + processingFailureCount + " 个文档最近处理失败，请查看具体失败阶段。",
                     "SYNC_FOLDER",
                     folderId,
-                    parseFailedCount
+                    processingFailureCount
             ));
         }
         if (pdfOcrRequiredCount > 0) {
@@ -1369,18 +1355,30 @@ public class KnowledgeHealthService {
     private List<KnowledgeProblemDocumentResponse> failedProblemDocuments(List<KnowledgeDocument> documents) {
         return documents.stream()
                 .filter(document -> document.status() == DocumentStatus.FAILED
-                        || document.status() == DocumentStatus.OCR_REQUIRED)
+                        || document.status() == DocumentStatus.OCR_REQUIRED
+                        || document.hasLastFailure())
                 .map(document -> KnowledgeProblemDocumentResponse.from(
                         document,
-                        problemDocumentMessage(document.status())
+                        problemDocumentMessage(document)
                 ))
                 .toList();
     }
 
-    private static String problemDocumentMessage(DocumentStatus status) {
-        return status == DocumentStatus.OCR_REQUIRED
-                ? PDF_OCR_REQUIRED_DOCUMENT_MESSAGE
-                : PARSE_FAILED_DOCUMENT_MESSAGE;
+    private String problemDocumentMessage(KnowledgeDocument document) {
+        if (document.status() == DocumentStatus.OCR_REQUIRED) {
+            return PDF_OCR_REQUIRED_DOCUMENT_MESSAGE;
+        }
+        DocumentFailureResponse failure = failureCodec.fromDocument(document);
+        return failure == null
+                ? PARSE_FAILED_DOCUMENT_MESSAGE
+                : failure.message();
+    }
+
+    private static int processingFailureCount(List<KnowledgeDocument> documents) {
+        return (int) documents.stream()
+                .filter(document -> document.status() != DocumentStatus.OCR_REQUIRED)
+                .filter(document -> document.status() == DocumentStatus.FAILED || document.hasLastFailure())
+                .count();
     }
 
     private static int documentStatusCount(List<KnowledgeDocument> documents, DocumentStatus status) {

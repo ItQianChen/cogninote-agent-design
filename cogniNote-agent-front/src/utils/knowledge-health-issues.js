@@ -18,6 +18,7 @@ const ISSUE_ACTION_LABELS = {
 
 const ISSUE_EXPLANATIONS = {
   PARSE_FAILED: '这些文件没有成功解析，修复源文件后重新同步目录即可重试。',
+  DOCUMENT_PROCESSING_FAILED: '这些文档最近在读取、解析、模型识别、存储或索引阶段失败，请查看具体诊断后重试。',
   PDF_OCR_REQUIRED: '这些 PDF 没有可抽取文本层。配置视觉模型 OCR 后可重新解析目录；也可以先用外部工具生成文本层后同步。',
   INDEX_INCONSISTENT: '索引记录和实际 Lucene 内容不一致，部分资料可能搜不到。',
   EMBEDDING_UNCONFIGURED: '向量或混合检索会降级为关键词检索，语义相近的问题命中会变差。',
@@ -29,13 +30,14 @@ const ISSUE_EXPLANATIONS = {
 const ISSUE_CATEGORY_DEFINITIONS = [
   {
     key: 'file-ingest',
-    title: '资料未入库',
-    subtitle: '解析失败和需 OCR 文档',
-    ruleSummary: '判定依据：SQLite 文档状态为 FAILED 或 OCR_REQUIRED。',
-    codes: ['PARSE_FAILED', 'PDF_OCR_REQUIRED'],
+    title: '资料处理异常',
+    subtitle: '处理失败和需 OCR 文档',
+    ruleSummary: '判定依据：SQLite 文档状态或最近一次结构化失败诊断。',
+    codes: ['DOCUMENT_PROCESSING_FAILED', 'PARSE_FAILED', 'PDF_OCR_REQUIRED'],
     tone: 'warning',
     rules: [
-      '解析失败文档不会写入 chunk 或 Lucene 索引。',
+      '失败诊断会区分扫描、读取、解析、模型、存储和索引阶段。',
+      '保留旧索引的文档仍可检索，但会显示最近处理失败警告。',
       '无文本层 PDF 会标记为需 OCR；启用视觉模型 OCR 后需要重新解析目录才会入库。'
     ]
   },

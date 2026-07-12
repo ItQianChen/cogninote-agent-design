@@ -1,8 +1,7 @@
 package com.itqianchen.agentdesign.service.knowledge;
-
-
+import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
+import java.util.List;
 
 /**
  * 维护任务执行完成后的统计快照。
@@ -19,7 +18,7 @@ public record KnowledgeMaintenanceCompletion(
         long indexedDocumentCount,
         long indexedChunkCount,
         long failedDocumentCount,
-        String failuresJson,
+        List<DocumentFailureResponse> failures,
         long progressTotal
 ) {
     public static KnowledgeMaintenanceCompletion simple() {
@@ -32,7 +31,7 @@ public record KnowledgeMaintenanceCompletion(
                 0,
                 0,
                 0,
-                null,
+                List.of(),
                 1
         );
     }

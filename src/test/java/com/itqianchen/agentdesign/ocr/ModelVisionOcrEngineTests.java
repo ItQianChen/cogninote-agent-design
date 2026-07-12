@@ -11,6 +11,7 @@ import com.itqianchen.agentdesign.domain.exception.model.ModelConfigurationExcep
 import com.itqianchen.agentdesign.domain.interfaces.ai.AiChatRuntime;
 import com.itqianchen.agentdesign.domain.interfaces.ai.AiEmbeddingRuntime;
 import com.itqianchen.agentdesign.domain.interfaces.ai.AiRuntimeFactory;
+import com.itqianchen.agentdesign.domain.properties.ocr.OcrPromptProperties;
 import com.itqianchen.agentdesign.domain.support.model.ModelConfigDefaults;
 import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import com.itqianchen.agentdesign.service.ocr.ModelVisionOcrEngine;
@@ -31,7 +32,7 @@ class ModelVisionOcrEngineTests {
 
     @Test
     void supportsOnlyModelVisionProvider() {
-        ModelVisionOcrEngine engine = new ModelVisionOcrEngine(new FakeModelConfigService(), new FakeRuntimeFactory());
+        ModelVisionOcrEngine engine = engine(new FakeRuntimeFactory());
 
         assertThat(engine.supports(OcrProvider.MODEL_VISION)).isTrue();
         assertThat(engine.supports(OcrProvider.BAIDU_OCR)).isFalse();
@@ -41,7 +42,7 @@ class ModelVisionOcrEngineTests {
     void recognizeSendsPngImageToVisionModelAndTrimsResult() {
         FakeRuntimeFactory runtimeFactory = new FakeRuntimeFactory();
         runtimeFactory.runtime.nextImageResponse = "  OCR text  ";
-        ModelVisionOcrEngine engine = new ModelVisionOcrEngine(new FakeModelConfigService(), runtimeFactory);
+        ModelVisionOcrEngine engine = engine(runtimeFactory);
         byte[] image = new byte[] {1, 2, 3};
 
         String text = engine.recognize(
@@ -61,22 +62,48 @@ class ModelVisionOcrEngineTests {
     void recognizeWrapsProviderFailuresWithSanitizedMessage() {
         FakeRuntimeFactory runtimeFactory = new FakeRuntimeFactory();
         runtimeFactory.runtime.failure = new ModelConfigurationException("bad key sk-secret");
-        ModelVisionOcrEngine engine = new ModelVisionOcrEngine(new FakeModelConfigService(), runtimeFactory);
+        ModelVisionOcrEngine engine = engine(runtimeFactory);
 
         assertThatThrownBy(() -> engine.recognize(
                 new OcrPageImage(Path.of("page.pdf"), 1, new byte[] {1}),
                 enabledSettings()
-        ))
+                ))
                 .isInstanceOf(OcrProviderException.class)
                 .hasMessageNotContaining("sk-secret")
-                .hasMessageContaining("视觉识别模型调用失败");
+                .isInstanceOfSatisfying(OcrProviderException.class, ex -> {
+                    var failure = ex.toFailure("page.pdf", System.currentTimeMillis());
+                    assertThat(failure.stage()).isEqualTo("MODEL_CALL");
+                    assertThat(failure.code()).isEqualTo("MODEL_AUTH_FAILED");
+                    assertThat(failure.detail()).doesNotContain("sk-secret");
+                });
+    }
+
+    @Test
+    void recognizeClassifiesHttpStatusFromNestedProviderCause() {
+        FakeRuntimeFactory runtimeFactory = new FakeRuntimeFactory();
+        runtimeFactory.runtime.failure = new ModelConfigurationException(
+                "vision call failed",
+                new IllegalStateException("HTTP 429 code=rate_limit_exceeded")
+        );
+        ModelVisionOcrEngine engine = engine(runtimeFactory);
+
+        assertThatThrownBy(() -> engine.recognize(
+                new OcrPageImage(Path.of("page.pdf"), 2, new byte[] {1}),
+                enabledSettings()
+        )).isInstanceOfSatisfying(OcrProviderException.class, ex -> {
+            var failure = ex.toFailure("page.pdf", System.currentTimeMillis());
+            assertThat(failure.code()).isEqualTo("MODEL_RATE_LIMITED");
+            assertThat(failure.httpStatus()).isEqualTo(429);
+            assertThat(failure.providerErrorCode()).isEqualTo("rate_limit_exceeded");
+            assertThat(failure.pageNumber()).isEqualTo(2);
+        });
     }
 
     @Test
     void testReturnsFailureWhenVisionModelProducesNoText() {
         FakeRuntimeFactory runtimeFactory = new FakeRuntimeFactory();
         runtimeFactory.runtime.nextImageResponse = " ";
-        ModelVisionOcrEngine engine = new ModelVisionOcrEngine(new FakeModelConfigService(), runtimeFactory);
+        ModelVisionOcrEngine engine = engine(runtimeFactory);
 
         var response = engine.test(enabledSettings());
 
@@ -89,7 +116,7 @@ class ModelVisionOcrEngineTests {
     void testReturnsFailureWhenVisionModelDoesNotReadExpectedText() {
         FakeRuntimeFactory runtimeFactory = new FakeRuntimeFactory();
         runtimeFactory.runtime.nextImageResponse = "I cannot inspect images.";
-        ModelVisionOcrEngine engine = new ModelVisionOcrEngine(new FakeModelConfigService(), runtimeFactory);
+        ModelVisionOcrEngine engine = engine(runtimeFactory);
 
         var response = engine.test(enabledSettings());
 
@@ -101,7 +128,7 @@ class ModelVisionOcrEngineTests {
     void recognizeFailsWhenVisionModelExceedsTimeout() {
         FakeRuntimeFactory runtimeFactory = new FakeRuntimeFactory();
         runtimeFactory.runtime.delayMillis = 1_500;
-        ModelVisionOcrEngine engine = new ModelVisionOcrEngine(new FakeModelConfigService(), runtimeFactory);
+        ModelVisionOcrEngine engine = engine(runtimeFactory);
 
         assertThatThrownBy(() -> engine.recognize(
                 new OcrPageImage(Path.of("page.pdf"), 1, new byte[] {1}),
@@ -113,6 +140,18 @@ class ModelVisionOcrEngineTests {
 
     private static OcrSettingsSnapshot enabledSettings() {
         return new OcrSettingsSnapshot(true, OcrProvider.MODEL_VISION, true, 200, 20, 1000);
+    }
+
+    private static ModelVisionOcrEngine engine(FakeRuntimeFactory runtimeFactory) {
+        return new ModelVisionOcrEngine(
+                new FakeModelConfigService(),
+                runtimeFactory,
+                new OcrPromptProperties(
+                        "OCR system prompt: 不要解释、不要总结、不要翻译。",
+                        "请识别这张 PDF 页面图片中的文字，只返回原文。",
+                        "请识别图片中的测试文字，只返回原文。"
+                )
+        );
     }
 
     private static OcrSettingsSnapshot settingsWithTimeout(int timeoutSeconds) {

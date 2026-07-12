@@ -31,7 +31,13 @@
             status TEXT NOT NULL,
             indexed_at INTEGER,
             created_at INTEGER,
-            updated_at INTEGER
+            updated_at INTEGER,
+            last_failure_stage TEXT,
+            last_failure_code TEXT,
+            last_failure_message TEXT,
+            last_failure_detail TEXT,
+            last_failure_context_json TEXT,
+            last_failed_at INTEGER
         )
     </update>
 
@@ -160,6 +166,9 @@
             completed_at INTEGER,
             duration_ms INTEGER,
             error_message TEXT,
+            error_stage TEXT,
+            error_code TEXT,
+            error_detail TEXT,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
         )
@@ -306,6 +315,42 @@
 
     <update id="addModelConfigEmbeddingBatchSizeColumn">
         ALTER TABLE model_configs ADD COLUMN embedding_batch_size INTEGER
+    </update>
+
+    <update id="addDocumentLastFailureStageColumn">
+        ALTER TABLE documents ADD COLUMN last_failure_stage TEXT
+    </update>
+
+    <update id="addDocumentLastFailureCodeColumn">
+        ALTER TABLE documents ADD COLUMN last_failure_code TEXT
+    </update>
+
+    <update id="addDocumentLastFailureMessageColumn">
+        ALTER TABLE documents ADD COLUMN last_failure_message TEXT
+    </update>
+
+    <update id="addDocumentLastFailureDetailColumn">
+        ALTER TABLE documents ADD COLUMN last_failure_detail TEXT
+    </update>
+
+    <update id="addDocumentLastFailureContextJsonColumn">
+        ALTER TABLE documents ADD COLUMN last_failure_context_json TEXT
+    </update>
+
+    <update id="addDocumentLastFailedAtColumn">
+        ALTER TABLE documents ADD COLUMN last_failed_at INTEGER
+    </update>
+
+    <update id="addKnowledgeFolderRunErrorStageColumn">
+        ALTER TABLE knowledge_folder_runs ADD COLUMN error_stage TEXT
+    </update>
+
+    <update id="addKnowledgeFolderRunErrorCodeColumn">
+        ALTER TABLE knowledge_folder_runs ADD COLUMN error_code TEXT
+    </update>
+
+    <update id="addKnowledgeFolderRunErrorDetailColumn">
+        ALTER TABLE knowledge_folder_runs ADD COLUMN error_detail TEXT
     </update>
 
     <update id="createKnowledgeGraphEvidenceNodeIndex">

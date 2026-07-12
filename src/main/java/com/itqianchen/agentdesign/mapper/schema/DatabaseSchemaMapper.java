@@ -19,6 +19,18 @@ public interface DatabaseSchemaMapper {
      */
     void createDocumentsTable();
 
+    void addDocumentLastFailureStageColumn();
+
+    void addDocumentLastFailureCodeColumn();
+
+    void addDocumentLastFailureMessageColumn();
+
+    void addDocumentLastFailureDetailColumn();
+
+    void addDocumentLastFailureContextJsonColumn();
+
+    void addDocumentLastFailedAtColumn();
+
     /**
      * 创建文档 chunk 表。
      */
@@ -69,6 +81,12 @@ public interface DatabaseSchemaMapper {
      * 创建知识库目录维护运行记录表。
      */
     void createKnowledgeFolderRunsTable();
+
+    void addKnowledgeFolderRunErrorStageColumn();
+
+    void addKnowledgeFolderRunErrorCodeColumn();
+
+    void addKnowledgeFolderRunErrorDetailColumn();
 
     /**
      * 创建图谱 chunk 抽取缓存表。

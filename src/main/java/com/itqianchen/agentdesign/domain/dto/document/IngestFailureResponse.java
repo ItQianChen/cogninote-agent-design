@@ -1,13 +1,31 @@
 package com.itqianchen.agentdesign.domain.dto.document;
 
 /**
- * Ingest Failure 响应 定义返回给前端的 文档管理 响应结构。
- * <p>该结构属于接口契约，调整字段时需要兼容已有调用方。</p>
+ * 旧版导入失败响应。
+ *
+ * @deprecated 新接口使用 {@link DocumentFailureResponse}；该类型仅保留源码兼容。
  */
+@Deprecated
 public record IngestFailureResponse(
         String sourcePath,
         String message
 ) {
+    public DocumentFailureResponse toDocumentFailure() {
+        return new DocumentFailureResponse(
+                sourcePath,
+                null,
+                null,
+                message,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        ).normalized();
+    }
 }
 
 

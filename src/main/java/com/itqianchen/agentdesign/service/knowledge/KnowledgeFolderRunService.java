@@ -1,20 +1,15 @@
 package com.itqianchen.agentdesign.service.knowledge;
 
 
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
+import com.itqianchen.agentdesign.domain.dto.index.RebuildIndexResponse;
+import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRebuildResponse;
 import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolderRun;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
-import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
-import com.itqianchen.agentdesign.domain.dto.document.IngestFailureResponse;
-import com.itqianchen.agentdesign.domain.dto.index.RebuildIndexResponse;
-import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRebuildResponse;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRunRepository;
+import com.itqianchen.agentdesign.service.document.DocumentFailureCodec;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -34,17 +29,20 @@ public class KnowledgeFolderRunService {
     private static final ThreadLocal<Boolean> RECORDING_SUPPRESSED = ThreadLocal.withInitial(() -> false);
 
     private final KnowledgeFolderRunRepository runRepository;
-    private final ObjectMapper objectMapper;
+    private final DocumentFailureCodec failureCodec;
 
     /**
      * 注入运行记录依赖。
      *
      * @param runRepository 运行记录仓储
-     * @param objectMapper JSON 编码器
+     * @param failureCodec 失败诊断编解码器
      */
-    public KnowledgeFolderRunService(KnowledgeFolderRunRepository runRepository, ObjectMapper objectMapper) {
+    public KnowledgeFolderRunService(
+            KnowledgeFolderRunRepository runRepository,
+            DocumentFailureCodec failureCodec
+    ) {
         this.runRepository = runRepository;
-        this.objectMapper = objectMapper;
+        this.failureCodec = failureCodec;
     }
 
     /**
@@ -119,7 +117,7 @@ public class KnowledgeFolderRunService {
                 KnowledgeFolderRunScopeType.KNOWLEDGE_FOLDER,
                 folderId,
                 KnowledgeFolderRunOperation.REBUILD_INDEX,
-                statusFor(response.failedCount(), response.failedDocumentCount()),
+                statusFor(response.failedCount(), response.failedDocumentCount(), response.failures()),
                 response.scannedCount(),
                 response.parsedCount(),
                 response.skippedCount(),
@@ -127,7 +125,7 @@ public class KnowledgeFolderRunService {
                 response.indexedDocumentCount(),
                 response.indexedChunkCount(),
                 response.failedDocumentCount(),
-                failuresJson(response.failures()),
+                failureCodec.encodeFailures(response.failures()),
                 "COMPLETED",
                 response.indexedDocumentCount(),
                 response.indexedDocumentCount(),
@@ -158,7 +156,7 @@ public class KnowledgeFolderRunService {
                 KnowledgeFolderRunScopeType.ALL,
                 null,
                 KnowledgeFolderRunOperation.REBUILD_INDEX,
-                statusFor(0, response.failedDocumentCount()),
+                statusFor(0, response.failedDocumentCount(), response.failures()),
                 0,
                 0,
                 0,
@@ -166,7 +164,7 @@ public class KnowledgeFolderRunService {
                 response.indexedDocumentCount(),
                 response.indexedChunkCount(),
                 response.failedDocumentCount(),
-                null,
+                failureCodec.encodeFailures(response.failures()),
                 "COMPLETED",
                 response.indexedDocumentCount(),
                 response.indexedDocumentCount(),
@@ -291,7 +289,7 @@ public class KnowledgeFolderRunService {
                 KnowledgeFolderRunScopeType.KNOWLEDGE_FOLDER,
                 folderId,
                 operation,
-                statusFor(response.failedCount(), 0),
+                statusFor(response.failedCount(), 0, response.failures()),
                 response.scannedCount(),
                 response.parsedCount(),
                 response.skippedCount(),
@@ -299,7 +297,7 @@ public class KnowledgeFolderRunService {
                 0,
                 0,
                 0,
-                failuresJson(response.failures()),
+                failureCodec.encodeFailures(response.failures()),
                 "COMPLETED",
                 response.scannedCount(),
                 response.scannedCount(),
@@ -334,20 +332,16 @@ public class KnowledgeFolderRunService {
         }
     }
 
-    private String failuresJson(List<IngestFailureResponse> failures) {
-        if (failures == null || failures.isEmpty()) {
-            return null;
-        }
-        try {
-            return objectMapper.writeValueAsString(failures);
-        } catch (JsonProcessingException ex) {
-            log.warn("knowledge_folder_run_failures_json_encode_failed failureCount={}", failures.size(), ex);
-            return null;
-        }
+    private static KnowledgeFolderRunStatus statusFor(long failedCount, long failedDocumentCount) {
+        return statusFor(failedCount, failedDocumentCount, List.of());
     }
 
-    private static KnowledgeFolderRunStatus statusFor(long failedCount, long failedDocumentCount) {
-        if (failedCount > 0 || failedDocumentCount > 0) {
+    private static KnowledgeFolderRunStatus statusFor(
+            long failedCount,
+            long failedDocumentCount,
+            List<?> failures
+    ) {
+        if (failedCount > 0 || failedDocumentCount > 0 || failures != null && !failures.isEmpty()) {
             return KnowledgeFolderRunStatus.COMPLETED_WITH_WARNINGS;
         }
         return KnowledgeFolderRunStatus.COMPLETED;

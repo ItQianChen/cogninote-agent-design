@@ -59,6 +59,7 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
     public void initialize() {
         databaseSchemaMapper.createKnowledgeFoldersTable();
         databaseSchemaMapper.createDocumentsTable();
+        migrateDocumentFailureColumns();
         databaseSchemaMapper.createChunksTable();
         databaseSchemaMapper.createModelConfigsTable();
         migrateModelConfigEmbeddingRateLimitColumns();
@@ -66,6 +67,7 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
         databaseSchemaMapper.createChatMessagesTable();
         databaseSchemaMapper.createAppSettingsTable();
         databaseSchemaMapper.createKnowledgeFolderRunsTable();
+        migrateKnowledgeFolderRunFailureColumns();
         databaseSchemaMapper.createKnowledgeGraphRunsTable();
         databaseSchemaMapper.createKnowledgeGraphChunkExtractionsTable();
         databaseSchemaMapper.createKnowledgeGraphNodesTable();
@@ -231,6 +233,23 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
                 databaseSchemaMapper::addModelConfigEmbeddingTokensPerMinuteColumn);
         addOptionalColumn("model_configs.embedding_batch_size",
                 databaseSchemaMapper::addModelConfigEmbeddingBatchSizeColumn);
+    }
+
+    /** 为旧库补齐文档最近失败诊断字段。 */
+    private void migrateDocumentFailureColumns() {
+        addOptionalColumn("documents.last_failure_stage", databaseSchemaMapper::addDocumentLastFailureStageColumn);
+        addOptionalColumn("documents.last_failure_code", databaseSchemaMapper::addDocumentLastFailureCodeColumn);
+        addOptionalColumn("documents.last_failure_message", databaseSchemaMapper::addDocumentLastFailureMessageColumn);
+        addOptionalColumn("documents.last_failure_detail", databaseSchemaMapper::addDocumentLastFailureDetailColumn);
+        addOptionalColumn("documents.last_failure_context_json", databaseSchemaMapper::addDocumentLastFailureContextJsonColumn);
+        addOptionalColumn("documents.last_failed_at", databaseSchemaMapper::addDocumentLastFailedAtColumn);
+    }
+
+    /** 为旧库补齐维护任务整体失败诊断字段。 */
+    private void migrateKnowledgeFolderRunFailureColumns() {
+        addOptionalColumn("knowledge_folder_runs.error_stage", databaseSchemaMapper::addKnowledgeFolderRunErrorStageColumn);
+        addOptionalColumn("knowledge_folder_runs.error_code", databaseSchemaMapper::addKnowledgeFolderRunErrorCodeColumn);
+        addOptionalColumn("knowledge_folder_runs.error_detail", databaseSchemaMapper::addKnowledgeFolderRunErrorDetailColumn);
     }
 
     private void addOptionalColumn(String column, Runnable migration) {

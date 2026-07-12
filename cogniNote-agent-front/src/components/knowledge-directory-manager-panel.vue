@@ -16,6 +16,7 @@ import {
 } from 'lucide-vue-next'
 import KnowledgeFolderImportDialog from './knowledge-folder-import-dialog.vue'
 import KnowledgeHealthDrawer from './knowledge-health-drawer.vue'
+import DocumentFailureDetailDialog from './document-failure-detail-dialog.vue'
 import {
   confirmDeleteKnowledgeFolder,
   confirmDisableFolder,
@@ -27,11 +28,15 @@ import { useKnowledgeFoldersStore } from '../stores/knowledge-folders'
 import { useKnowledgeHealthStore } from '../stores/knowledge-health'
 import { useKnowledgeMaintenanceStore } from '../stores/knowledge-maintenance'
 import { formatFileSize, formatTime } from '../utils/formatters'
+import { failureStageLabel } from '../utils/document-failures'
 
 const knowledgeStore = useKnowledgeFoldersStore()
 const knowledgeHealthStore = useKnowledgeHealthStore()
 const maintenanceStore = useKnowledgeMaintenanceStore()
 const isImportDialogOpen = ref(false)
+const isFailureDetailOpen = ref(false)
+const selectedFailure = ref(null)
+const selectedFailureDocumentName = ref('')
 const folderSearchKeyword = ref('')
 const folderStatusFilter = ref('all')
 const folderIssueFilter = ref('all')
@@ -164,6 +169,12 @@ function healthStatusClass(status) {
 
 function documentStatusLabel(status) {
   return DOCUMENT_STATUS_LABELS[status] || status || '未知'
+}
+
+function openDocumentFailure(document) {
+  selectedFailure.value = document?.lastFailure || null
+  selectedFailureDocumentName.value = document?.fileName || ''
+  isFailureDetailOpen.value = Boolean(selectedFailure.value)
 }
 
 function folderIssueCount(folder) {
@@ -535,6 +546,9 @@ async function refreshDirectories() {
                   <span :class="['status-chip', `status-chip--${document.status.toLowerCase()}`]">
                     {{ documentStatusLabel(document.status) }}
                   </span>
+                  <span v-if="document.status === 'PARSED' && document.lastFailure" class="status-chip status-chip--warning">
+                    最近处理失败
+                  </span>
                 </div>
                 <p class="path-text">{{ document.sourcePath }}</p>
                 <div class="document-meta">
@@ -544,6 +558,17 @@ async function refreshDirectories() {
                   <span>索引 {{ formatTime(document.indexedAt) }}</span>
                   <span>{{ formatTime(document.updatedAt) }}</span>
                 </div>
+                <button
+                  v-if="document.lastFailure"
+                  class="document-failure-summary"
+                  type="button"
+                  @click="openDocumentFailure(document)"
+                >
+                  <AlertTriangle aria-hidden="true" />
+                  <strong>{{ failureStageLabel(document.lastFailure) }}</strong>
+                  <span>{{ document.lastFailure.message }}</span>
+                  <em>查看详情</em>
+                </button>
               </div>
             </article>
           </div>
@@ -567,6 +592,9 @@ async function refreshDirectories() {
                   <span :class="['status-chip', `status-chip--${document.status.toLowerCase()}`]">
                     {{ documentStatusLabel(document.status) }}
                   </span>
+                  <span v-if="document.status === 'PARSED' && document.lastFailure" class="status-chip status-chip--warning">
+                    最近处理失败
+                  </span>
                 </div>
                 <p class="path-text">{{ document.sourcePath }}</p>
                 <div class="document-meta">
@@ -575,6 +603,17 @@ async function refreshDirectories() {
                   <span>{{ document.chunkCount }} chunks</span>
                   <span>索引 {{ formatTime(document.indexedAt) }}</span>
                 </div>
+                <button
+                  v-if="document.lastFailure"
+                  class="document-failure-summary"
+                  type="button"
+                  @click="openDocumentFailure(document)"
+                >
+                  <AlertTriangle aria-hidden="true" />
+                  <strong>{{ failureStageLabel(document.lastFailure) }}</strong>
+                  <span>{{ document.lastFailure.message }}</span>
+                  <em>查看详情</em>
+                </button>
               </div>
             </article>
           </div>
@@ -594,6 +633,11 @@ async function refreshDirectories() {
     </section>
 
     <KnowledgeFolderImportDialog v-model="isImportDialogOpen" />
+    <DocumentFailureDetailDialog
+      v-model="isFailureDetailOpen"
+      :failure="selectedFailure"
+      :document-name="selectedFailureDocumentName"
+    />
     <KnowledgeHealthDrawer />
   </section>
 </template>

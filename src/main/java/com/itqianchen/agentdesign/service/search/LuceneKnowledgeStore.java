@@ -13,13 +13,18 @@ import com.itqianchen.agentdesign.domain.vo.search.StoredChunk;
 import com.itqianchen.agentdesign.domain.vo.storage.AppStorage;
 import com.itqianchen.agentdesign.domain.dto.index.IndexStatusResponse;
 import com.itqianchen.agentdesign.domain.dto.index.RebuildIndexResponse;
+import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureStage;
 import com.itqianchen.agentdesign.domain.dto.search.SearchHitResponse;
 import com.itqianchen.agentdesign.domain.dto.search.SearchRequest;
 import com.itqianchen.agentdesign.domain.dto.search.SearchResponse;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
+import com.itqianchen.agentdesign.service.document.DocumentFailureClassifier;
+import com.itqianchen.agentdesign.service.document.DocumentFailureCodec;
 import com.itqianchen.agentdesign.service.system.AppStorageInitializer;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -76,6 +81,7 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
     private final SearchProperties searchProperties;
     private final AppStorage appStorage;
     private final SearchIndexTextBuilder indexTextBuilder;
+    private final DocumentFailureCodec failureCodec;
     private final Analyzer analyzer = new PerFieldAnalyzerWrapper(
             new SmartChineseAnalyzer(),
             Map.of(SearchFieldNames.CODE_CONTENT, new StandardAnalyzer())
@@ -89,19 +95,22 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
      * @param searchProperties 检索参数配置
      * @param storageInitializer 应用存储目录初始化器
      * @param indexTextBuilder 索引文本构建器
+     * @param failureCodec 失败诊断编解码器
      */
     public LuceneKnowledgeStore(
             DocumentRepository documentRepository,
             EmbeddingGateway embeddingGateway,
             SearchProperties searchProperties,
             AppStorageInitializer storageInitializer,
-            SearchIndexTextBuilder indexTextBuilder
+            SearchIndexTextBuilder indexTextBuilder,
+            DocumentFailureCodec failureCodec
     ) {
         this.documentRepository = documentRepository;
         this.embeddingGateway = embeddingGateway;
         this.searchProperties = searchProperties;
         this.appStorage = storageInitializer.appStorage();
         this.indexTextBuilder = indexTextBuilder;
+        this.failureCodec = failureCodec;
     }
 
     /**
@@ -155,6 +164,7 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
         long indexedChunkCount = 0;
         long failedDocumentCount = 0;
         List<String> indexedDocumentIds = new ArrayList<>();
+        List<DocumentFailureResponse> failures = new ArrayList<>();
 
         try {
             ensureIndexDirectory();
@@ -169,6 +179,7 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
                     } catch (RuntimeException ex) {
                         failedDocumentCount++;
                         documentRepository.clearIndexed(document.id());
+                        failures.add(recordIndexFailure(document, ex));
                         logDocumentRebuildFailure(document, ex);
                     }
                 }
@@ -183,7 +194,13 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
         }
 
         long durationMs = System.currentTimeMillis() - startedAt;
-        return new RebuildIndexResponse(indexedDocumentCount, indexedChunkCount, failedDocumentCount, durationMs);
+        return new RebuildIndexResponse(
+                indexedDocumentCount,
+                indexedChunkCount,
+                failedDocumentCount,
+                durationMs,
+                List.copyOf(failures)
+        );
     }
 
     /**
@@ -248,6 +265,7 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
         long indexedChunkCount = 0;
         long failedDocumentCount = 0;
         List<String> indexedDocumentIds = new ArrayList<>();
+        List<DocumentFailureResponse> failures = new ArrayList<>();
 
         try {
             ensureIndexDirectory();
@@ -263,6 +281,7 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
                     } catch (RuntimeException ex) {
                         failedDocumentCount++;
                         documentRepository.clearIndexed(document.id());
+                        failures.add(recordIndexFailure(document, ex));
                         logDocumentRebuildFailure(document, ex);
                     }
                 }
@@ -277,7 +296,36 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
         }
 
         long durationMs = System.currentTimeMillis() - startedAt;
-        return new RebuildIndexResponse(indexedDocumentCount, indexedChunkCount, failedDocumentCount, durationMs);
+        return new RebuildIndexResponse(
+                indexedDocumentCount,
+                indexedChunkCount,
+                failedDocumentCount,
+                durationMs,
+                List.copyOf(failures)
+        );
+    }
+
+    private DocumentFailureResponse recordIndexFailure(IndexedDocument document, RuntimeException exception) {
+        Path path;
+        try {
+            path = Path.of(document.sourcePath());
+        } catch (RuntimeException ignored) {
+            path = null;
+        }
+        long now = System.currentTimeMillis();
+        DocumentFailureResponse failure = DocumentFailureClassifier.classify(
+                path,
+                DocumentFailureStage.INDEX,
+                exception,
+                now
+        );
+        documentRepository.updateLastFailure(
+                document.id(),
+                failure,
+                failureCodec.encodeContext(failure),
+                now
+        );
+        return failure;
     }
 
     /**

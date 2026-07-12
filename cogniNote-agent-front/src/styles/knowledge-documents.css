@@ -49,6 +49,61 @@
   background: #fff2bf;
 }
 
+.status-chip--warning {
+  color: #7a4a08;
+  background: #fff2bf;
+}
+
+.document-failure-summary {
+  display: grid;
+  grid-template-columns: 16px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-warning-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  background: var(--color-warning-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.document-failure-summary svg {
+  width: 16px;
+  height: 16px;
+  color: var(--color-warning);
+}
+
+.document-failure-summary span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-failure-summary em {
+  color: var(--color-primary);
+  font-style: normal;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .document-failure-summary {
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+  }
+
+  .document-failure-summary strong {
+    grid-column: 2;
+  }
+
+  .document-failure-summary span {
+    grid-column: 2 / -1;
+    white-space: normal;
+  }
+}
+
 .status-chip--health-healthy {
   color: #0f513f;
   background: #d7f4e8;

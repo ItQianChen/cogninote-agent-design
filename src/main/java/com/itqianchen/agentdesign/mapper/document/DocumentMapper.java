@@ -127,6 +127,17 @@ public interface DocumentMapper {
      */
     void upsertDocument(KnowledgeDocument document);
 
+    void updateLastFailure(
+            @Param("documentId") String documentId,
+            @Param("stage") String stage,
+            @Param("code") String code,
+            @Param("message") String message,
+            @Param("detail") String detail,
+            @Param("contextJson") String contextJson,
+            @Param("failedAt") long failedAt,
+            @Param("updatedAt") long updatedAt
+    );
+
     /**
      * 更新文档所属知识库目录。
      *

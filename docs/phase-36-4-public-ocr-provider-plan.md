@@ -29,7 +29,7 @@
   - 如果所有页面都无可用文本：
     - OCR 未启用或 `VISION` 模型未配置 API Key：继续抛 `PdfOcrRequiredException`。
     - OCR 启用且可用：按页渲染 PNG，调用 `ModelVisionOcrEngine`，生成 `ParsedSection(text, null, pageNumber)`。
-  - 识别 prompt 固定为只返回图片中的原文文字，尽量保留段落、换行、列表和表格结构，不解释、不总结、不翻译。
+  - 识别 Prompt 统一配置在 `cogninote-prompts.yaml` 的 `app.ocr.prompts`，规则为只返回图片中的原文文字，尽量保留段落、换行、列表和表格结构，不解释、不总结、不翻译。
   - OCR 输出为空时抛普通 `DocumentParseException("PDF OCR produced no usable text: ...")`。
 - 强制重新解析：
   - 不新增 `parser_signature` schema。

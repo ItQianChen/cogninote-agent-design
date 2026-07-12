@@ -1,9 +1,4 @@
 package com.itqianchen.agentdesign.domain.dto.knowledge;
-
-
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
 import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolderRun;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
@@ -34,6 +29,9 @@ public record KnowledgeFolderRunResponse(
         Long completedAt,
         Long durationMs,
         String errorMessage,
+        String errorStage,
+        String errorCode,
+        String errorDetail,
         long createdAt,
         long updatedAt,
         Integer queuePosition
@@ -67,6 +65,9 @@ public record KnowledgeFolderRunResponse(
                 run.completedAt(),
                 run.durationMs(),
                 run.errorMessage(),
+                run.errorStage(),
+                run.errorCode(),
+                run.errorDetail(),
                 run.createdAt(),
                 run.updatedAt(),
                 null
@@ -96,6 +97,9 @@ public record KnowledgeFolderRunResponse(
                 completedAt,
                 durationMs,
                 errorMessage,
+                errorStage,
+                errorCode,
+                errorDetail,
                 createdAt,
                 updatedAt,
                 queuePosition

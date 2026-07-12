@@ -86,6 +86,8 @@ GET /api/documents
 
 返回已导入文档列表，按更新时间倒序排列。文档 `status` 当前支持 `PARSED`、`SKIPPED`、`FAILED`、`OCR_REQUIRED`；`OCR_REQUIRED` 表示 PDF 没有可抽取文本层。用户配置并启用 OCR 后，可以同步或重新解析目录让这类 PDF 进入知识库。
 
+每个 `DocumentSummaryResponse` 都可能携带 `lastFailure`。`FAILED` / `OCR_REQUIRED` 表示文档当前不可检索；`PARSED + lastFailure` 表示旧 chunks 和索引仍可使用，但最近一次同步、重新解析或索引操作失败。处理成功后，后端会自动清空 `lastFailure`。
+
 ### 导入目录
 
 ```text
@@ -101,9 +103,9 @@ POST /api/documents/ingest
 }
 ```
 
-导入成功后会写入 SQLite，并同步更新 Lucene 索引。导入失败的文件会返回失败摘要，不删除用户原始文件。
+导入成功后会写入 SQLite，并同步更新 Lucene 索引。导入失败的文件会返回结构化失败诊断，不删除用户原始文件。
 
-响应中的 `failedCount` 表示当前不能进入知识库检索的文档数，包含普通解析失败和 `OCR_REQUIRED` 文档。
+导入、同步和重新解析响应中的 `failedCount` 表示本次处理失败的文件数。即使某个文件保留了旧的 `PARSED` 结果，本次处理失败仍会计数并进入 `failures[]`；健康接口的 `summary.failedCount` 才表示当前不能进入知识库检索的 `FAILED` 和 `OCR_REQUIRED` 文档数。
 
 旧前端或临时脚本仍可使用该接口；当前知识库页面优先使用 `/api/knowledge-folders` 目录管理接口。
 
@@ -164,6 +166,27 @@ POST /api/knowledge-folders/{id}/sync
 }
 ```
 
+`failures[]` 使用统一的 `DocumentFailureResponse` 契约：
+
+```json
+{
+  "sourcePath": "D:/notes/scanned.pdf",
+  "stage": "MODEL_CALL",
+  "code": "MODEL_AUTH_FAILED",
+  "message": "视觉模型鉴权失败。",
+  "detail": "DASHSCOPE / qwen3-vl-plus / HTTP 401 / invalid_api_key / 第 1 页",
+  "suggestion": "检查视觉模型 API Key、Base URL 和账号权限。",
+  "occurredAt": 1780000000000,
+  "pageNumber": 1,
+  "provider": "DASHSCOPE",
+  "modelName": "qwen3-vl-plus",
+  "httpStatus": 401,
+  "providerErrorCode": "invalid_api_key"
+}
+```
+
+`stage` 支持 `SCAN`、`READ`、`PARSE`、`OCR`、`MODEL_CONFIG`、`MODEL_CALL`、`CHUNK`、`PERSIST`、`INDEX`、`UNKNOWN`。`message` 是用户可读摘要，`detail` 是经过脱敏和长度限制的技术详情；接口不会返回 API Key、Authorization Header、图片 Base64、完整请求体、Java 堆栈或未经处理的 Provider 响应。旧运行记录中的两字段失败对象会按 `UNKNOWN / LEGACY_FAILURE` 返回。
+
 ### 重建单个目录索引
 
 ```text
@@ -183,7 +206,17 @@ POST /api/knowledge-folders/{id}/rebuild
   "failures": [
     {
       "sourcePath": "D:/notes/broken.pdf",
-      "message": "Parsed document contains no usable text"
+      "stage": "PARSE",
+      "code": "NO_USABLE_TEXT",
+      "message": "文档没有可用于知识库的正文。",
+      "detail": "Parsed document contains no usable text",
+      "suggestion": "检查文档内容和格式后重新解析。",
+      "occurredAt": 1780000000000,
+      "pageNumber": null,
+      "provider": null,
+      "modelName": null,
+      "httpStatus": null,
+      "providerErrorCode": null
     }
   ],
   "indexedDocumentCount": 2,
@@ -280,7 +313,8 @@ GET /api/knowledge-health
 | --- | --- | --- | --- |
 | `FOLDER_NOT_FOUND` | `ERROR` | 目录路径当前不可访问 | 删除目录记录或重新导入正确目录 |
 | `NO_DOCUMENTS` | `WARNING` | 启用目录没有文档记录 | 同步目录或检查递归扫描 |
-| `PARSE_FAILED` | `WARNING` | 存在解析失败文档 | 修复源文件后同步目录 |
+| `DOCUMENT_PROCESSING_FAILED` | `WARNING` | 文档最近在读取、解析、OCR、模型调用、持久化或索引阶段失败 | 按实际失败建议修复后同步或重新解析目录 |
+| `PARSE_FAILED` | `WARNING` | 旧版本的通用解析失败问题码，前端继续兼容 | 修复源文件后同步目录 |
 | `PDF_OCR_REQUIRED` | `WARNING` | PDF 没有可抽取文本层，需 OCR 后才能进入知识库 | 配置 OCR 后重新解析目录 |
 | `UNINDEXED_DOCUMENTS` | `ERROR` | 已解析文档尚未进入 Lucene，常见原因是 Embedding 供应商限流后仍未写入索引 | 补写索引 |
 | `STALE_LOCAL_FILES` | `WARNING` | 本地文件大小或修改时间已变化 | 同步目录 |
@@ -334,6 +368,8 @@ GET /api/knowledge-health/runs?scopeType=KNOWLEDGE_FOLDER&scopeId=folder-xxx&lim
 `scopeType` 可省略；支持 `ALL`、`KNOWLEDGE_FOLDER`、`UNASSIGNED`。返回导入、同步、重新解析、补写索引、重建索引、启停和删除的最近记录。
 
 运行记录 `operation` 支持 `IMPORT`、`SYNC`、`REPARSE`、`REPAIR_INDEX`、`REBUILD_INDEX`、`ENABLE`、`DISABLE`、`DELETE`；`status` 支持 `QUEUED`、`RUNNING`、`CANCELLING`、`CANCELLED`、`COMPLETED`、`COMPLETED_WITH_WARNINGS`、`FAILED`。`phase`、`currentItem`、`queuedAt`、`startedAt`、`completedAt`、`durationMs` 和 `queuePosition` 用于前端展示当前队列和历史详情。
+
+任务整体失败时，列表和详情响应通过 `errorMessage`、`errorStage`、`errorCode`、`errorDetail` 返回运行级诊断，例如目录不存在或整库索引初始化失败。单文件失败不会写入这些运行级字段，而是保存在详情响应的 `failures[]` 中。
 
 分页查询维护记录：
 
@@ -419,7 +455,7 @@ GET /api/knowledge-maintenance/runs/queue
 GET /api/knowledge-maintenance/runs/{runId}
 ```
 
-返回字段与健康运行记录一致。前端在 SSE 终态事件丢失时会用该接口兜底恢复完成提示。
+返回维护运行详情，包括结构化单文件失败列表 `failures[]`。运行级 `errorStage/errorCode/errorDetail` 与单文件 `failures[]` 分开，避免把目录扫描失败误显示成某个文件解析失败。前端在 SSE 终态事件丢失时会用该接口兜底恢复完成提示。
 
 ### 订阅任务事件
 

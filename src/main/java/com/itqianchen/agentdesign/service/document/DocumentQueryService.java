@@ -17,14 +17,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class DocumentQueryService {
 
     private final DocumentRepository documentRepository;
+    private final DocumentFailureCodec failureCodec;
 
     /**
      * 注入文档仓储。
      *
      * @param documentRepository 文档仓储
+     * @param failureCodec 失败诊断编解码器
      */
-    public DocumentQueryService(DocumentRepository documentRepository) {
+    public DocumentQueryService(DocumentRepository documentRepository, DocumentFailureCodec failureCodec) {
         this.documentRepository = documentRepository;
+        this.failureCodec = failureCodec;
     }
 
     /**
@@ -38,7 +41,7 @@ public class DocumentQueryService {
     public List<DocumentSummaryResponse> listDocuments() {
         return documentRepository.findAllOrderByUpdatedAtDesc()
                 .stream()
-                .map(DocumentSummaryResponse::from)
+                .map(document -> DocumentSummaryResponse.from(document, failureCodec.fromDocument(document)))
                 .toList();
     }
 

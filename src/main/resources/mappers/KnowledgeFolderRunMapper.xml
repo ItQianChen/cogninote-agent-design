@@ -28,6 +28,9 @@
             <arg column="completed_at" javaType="java.lang.Long"/>
             <arg column="duration_ms" javaType="java.lang.Long"/>
             <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="error_stage" javaType="java.lang.String"/>
+            <arg column="error_code" javaType="java.lang.String"/>
+            <arg column="error_detail" javaType="java.lang.String"/>
             <arg column="created_at" javaType="_long"/>
             <arg column="updated_at" javaType="_long"/>
         </constructor>
@@ -56,6 +59,9 @@
         run.completed_at AS completed_at,
         run.duration_ms AS duration_ms,
         run.error_message AS error_message,
+        run.error_stage AS error_stage,
+        run.error_code AS error_code,
+        run.error_detail AS error_detail,
         run.created_at AS created_at,
         run.updated_at AS updated_at
     </sql>
@@ -99,14 +105,16 @@
             scanned_count, parsed_count, skipped_count, failed_count,
             indexed_document_count, indexed_chunk_count, failed_document_count,
             failures_json, phase, progress_current, progress_total, current_item,
-            queued_at, started_at, completed_at, duration_ms, error_message, created_at, updated_at
+            queued_at, started_at, completed_at, duration_ms, error_message,
+            error_stage, error_code, error_detail, created_at, updated_at
         )
         VALUES (
             #{id}, #{scopeType}, #{scopeId}, #{operation}, #{status},
             #{scannedCount}, #{parsedCount}, #{skippedCount}, #{failedCount},
             #{indexedDocumentCount}, #{indexedChunkCount}, #{failedDocumentCount},
             #{failuresJson}, #{phase}, #{progressCurrent}, #{progressTotal}, #{currentItem},
-            #{queuedAt}, #{startedAt}, #{completedAt}, #{durationMs}, #{errorMessage}, #{createdAt}, #{updatedAt}
+            #{queuedAt}, #{startedAt}, #{completedAt}, #{durationMs}, #{errorMessage},
+            #{errorStage}, #{errorCode}, #{errorDetail}, #{createdAt}, #{updatedAt}
         )
     </insert>
 
@@ -267,6 +275,9 @@
                 ELSE MAX(0, #{completedAt} - started_at)
             END,
             error_message = NULL,
+            error_stage = NULL,
+            error_code = NULL,
+            error_detail = NULL,
             updated_at = #{completedAt}
         WHERE id = #{id}
     </update>
@@ -281,6 +292,9 @@
                 ELSE MAX(0, #{completedAt} - started_at)
             END,
             error_message = #{message},
+            error_stage = #{errorStage},
+            error_code = #{errorCode},
+            error_detail = #{errorDetail},
             updated_at = #{completedAt}
         WHERE id = #{id}
     </update>

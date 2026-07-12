@@ -1,9 +1,4 @@
 package com.itqianchen.agentdesign.repository.knowledge;
-
-
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
 import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolderRun;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
@@ -208,7 +203,18 @@ public class KnowledgeFolderRunRepository {
     }
 
     public int markFailed(String id, String message) {
-        return mapper.markFailed(id, message, System.currentTimeMillis());
+        return markFailed(id, message, null, null, null);
+    }
+
+    public int markFailed(String id, String message, String errorStage, String errorCode, String errorDetail) {
+        return mapper.markFailed(
+                id,
+                message,
+                errorStage,
+                errorCode,
+                errorDetail,
+                System.currentTimeMillis()
+        );
     }
 
     public int cleanupInterruptedRuns() {

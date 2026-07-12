@@ -1,9 +1,10 @@
 package com.itqianchen.agentdesign.domain.dto.knowledge;
 
-import com.itqianchen.agentdesign.domain.dto.document.IngestFailureResponse;
+import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
 import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
 import com.itqianchen.agentdesign.domain.dto.index.RebuildIndexResponse;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Knowledge Folder Rebuild 响应 定义返回给前端的 知识库 响应结构。
@@ -14,7 +15,7 @@ public record KnowledgeFolderRebuildResponse(
         int parsedCount,
         int skippedCount,
         int failedCount,
-        List<IngestFailureResponse> failures,
+        List<DocumentFailureResponse> failures,
         long indexedDocumentCount,
         long indexedChunkCount,
         long failedDocumentCount,
@@ -34,7 +35,7 @@ public record KnowledgeFolderRebuildResponse(
                 ingestResponse.parsedCount(),
                 ingestResponse.skippedCount(),
                 ingestResponse.failedCount(),
-                ingestResponse.failures(),
+                Stream.concat(ingestResponse.failures().stream(), rebuildResponse.failures().stream()).toList(),
                 rebuildResponse.indexedDocumentCount(),
                 rebuildResponse.indexedChunkCount(),
                 rebuildResponse.failedDocumentCount(),

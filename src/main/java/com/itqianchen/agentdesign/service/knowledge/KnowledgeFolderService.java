@@ -1,24 +1,22 @@
 package com.itqianchen.agentdesign.service.knowledge;
-
-
-import com.itqianchen.agentdesign.domain.vo.knowledge.KnowledgeFolderSummary;
 import com.itqianchen.agentdesign.common.api.ResourceNotFoundException;
-import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
-import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
-import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
-import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolder;
-import com.itqianchen.agentdesign.domain.vo.knowledge.KnowledgeFolderSummary;
-import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
 import com.itqianchen.agentdesign.domain.dto.document.DocumentSummaryResponse;
 import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
 import com.itqianchen.agentdesign.domain.dto.index.RebuildIndexResponse;
-import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRebuildResponse;
+import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFoldersResponse;
+import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
+import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolder;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
+import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
+import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
+import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
+import com.itqianchen.agentdesign.domain.vo.knowledge.KnowledgeFolderSummary;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.repository.graph.KnowledgeGraphRepository;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRepository;
+import com.itqianchen.agentdesign.service.document.DocumentFailureCodec;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,6 +47,7 @@ public class KnowledgeFolderService {
     private final DocumentIdentity documentIdentity;
     private final KnowledgeGraphRepository knowledgeGraphRepository;
     private final KnowledgeFolderRunService runService;
+    private final DocumentFailureCodec failureCodec;
 
     /**
      * 注入知识库目录编排依赖。
@@ -60,6 +59,7 @@ public class KnowledgeFolderService {
      * @param documentIdentity 文档 ID 生成器
      * @param knowledgeGraphRepository 图谱仓储
      * @param runService 知识库维护运行记录服务
+     * @param failureCodec 失败诊断编解码器
      */
     public KnowledgeFolderService(
             KnowledgeFolderRepository knowledgeFolderRepository,
@@ -68,7 +68,8 @@ public class KnowledgeFolderService {
             KnowledgeStore knowledgeStore,
             DocumentIdentity documentIdentity,
             KnowledgeGraphRepository knowledgeGraphRepository,
-            KnowledgeFolderRunService runService
+            KnowledgeFolderRunService runService,
+            DocumentFailureCodec failureCodec
     ) {
         this.knowledgeFolderRepository = knowledgeFolderRepository;
         this.documentRepository = documentRepository;
@@ -77,6 +78,7 @@ public class KnowledgeFolderService {
         this.documentIdentity = documentIdentity;
         this.knowledgeGraphRepository = knowledgeGraphRepository;
         this.runService = runService;
+        this.failureCodec = failureCodec;
     }
 
     /**
@@ -92,12 +94,15 @@ public class KnowledgeFolderService {
                 .map(summary -> KnowledgeFolderResponse.from(
                         summary,
                         documentRepository.findByKnowledgeFolderIdOrderByUpdatedAtDesc(summary.folder().id()).stream()
-                                .map(DocumentSummaryResponse::from)
+                                .map(document -> DocumentSummaryResponse.from(
+                                        document,
+                                        failureCodec.fromDocument(document)
+                                ))
                                 .toList()
                 ))
                 .toList();
         List<DocumentSummaryResponse> unassignedDocuments = documentRepository.findUnassignedOrderByUpdatedAtDesc().stream()
-                .map(DocumentSummaryResponse::from)
+                .map(document -> DocumentSummaryResponse.from(document, failureCodec.fromDocument(document)))
                 .toList();
         return new KnowledgeFoldersResponse(folders, unassignedDocuments);
     }

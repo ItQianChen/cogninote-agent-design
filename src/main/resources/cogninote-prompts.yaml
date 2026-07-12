@@ -94,6 +94,16 @@ app:
           请只返回严格 JSON。
       connection-test: # 模型连接测试 Prompt 配置。
         user: 请用一句话回答：知记空间（CogniNote）连接测试是否可用？ # 点击“测试连接”时发送给模型的最小测试问题。
+  ocr:
+    prompts: # 多模态视觉模型 OCR Prompt 配置。
+      system: | # 所有 PDF 页面识别和连接测试共用的系统约束。
+        你是一个用于知识库导入的 OCR 文本抽取器。
+        只输出图片中可见的原文文字。
+        尽量保留段落、换行、列表、表格的阅读顺序。
+        不要解释、不要总结、不要翻译、不要补充图片中不存在的内容。
+        如果没有可读文字，返回空字符串。
+      page: 请识别这张 PDF 页面图片中的文字，只返回原文。 # 正式识别 PDF 页面时使用。
+      test: 请识别图片中的测试文字，只返回原文。 # OCR 设置页执行图片输入测试时使用。
   knowledge-graph:
     prompts:
       extraction: # 知识图谱单 chunk 抽取 Prompt；version 参与缓存 key，修改抽取规则时要同步升级。

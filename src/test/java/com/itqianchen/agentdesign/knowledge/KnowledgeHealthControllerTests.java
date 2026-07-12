@@ -181,7 +181,7 @@ class KnowledgeHealthControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("WARNING"))
                 .andExpect(jsonPath("$.data.issues[*].code", hasItem("PDF_OCR_REQUIRED")))
-                .andExpect(jsonPath("$.data.issues[*].code", hasItem("PARSE_FAILED")))
+                .andExpect(jsonPath("$.data.issues[*].code", hasItem("DOCUMENT_PROCESSING_FAILED")))
                 .andExpect(jsonPath("$.data.failedDocuments.length()").value(2));
 
         mockMvc.perform(get("/api/knowledge-health"))
@@ -189,7 +189,7 @@ class KnowledgeHealthControllerTests {
                 .andExpect(jsonPath("$.data.summary.failedCount").value(2))
                 .andExpect(jsonPath("$.data.folders[0].failedCount").value(2))
                 .andExpect(jsonPath("$.data.issues[*].code", hasItem("PDF_OCR_REQUIRED")))
-                .andExpect(jsonPath("$.data.issues[*].code", hasItem("PARSE_FAILED")));
+                .andExpect(jsonPath("$.data.issues[*].code", hasItem("DOCUMENT_PROCESSING_FAILED")));
     }
 
     @Test

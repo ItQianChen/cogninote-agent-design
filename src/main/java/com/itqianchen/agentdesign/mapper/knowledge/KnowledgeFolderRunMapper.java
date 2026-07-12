@@ -148,6 +148,9 @@ public interface KnowledgeFolderRunMapper {
     int markFailed(
             @Param("id") String id,
             @Param("message") String message,
+            @Param("errorStage") String errorStage,
+            @Param("errorCode") String errorCode,
+            @Param("errorDetail") String errorDetail,
             @Param("completedAt") long completedAt
     );
 

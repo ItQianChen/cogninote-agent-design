@@ -11,7 +11,7 @@ public record IngestDocumentsResponse(
         int parsedCount,
         int skippedCount,
         int failedCount,
-        List<IngestFailureResponse> failures
+        List<DocumentFailureResponse> failures
 ) {
 }
 

@@ -1,13 +1,14 @@
 package com.itqianchen.agentdesign.service.document;
 
 import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
-import com.itqianchen.agentdesign.domain.dto.document.IngestFailureResponse;
+import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeChunk;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureCode;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureStage;
 import com.itqianchen.agentdesign.domain.enums.document.DocumentStatus;
 import com.itqianchen.agentdesign.domain.enums.document.FileType;
 import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
-import com.itqianchen.agentdesign.domain.exception.ingestion.PdfOcrRequiredException;
 import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
 import com.itqianchen.agentdesign.domain.support.ingestion.DocumentParserRegistry;
 import com.itqianchen.agentdesign.domain.support.ingestion.TextChunker;
@@ -49,6 +50,7 @@ public class DocumentIngestionService {
     private final TextChunker textChunker;
     private final DocumentIdentity documentIdentity;
     private final KnowledgeStore knowledgeStore;
+    private final DocumentFailureCodec failureCodec;
 
     /**
      * 注入文档导入流程依赖。
@@ -59,6 +61,7 @@ public class DocumentIngestionService {
      * @param textChunker 文本切块器
      * @param documentIdentity 稳定 ID 和哈希生成器
      * @param knowledgeStore 检索索引边界
+     * @param failureCodec 失败诊断编解码器
      */
     public DocumentIngestionService(
             DocumentRepository documentRepository,
@@ -66,7 +69,8 @@ public class DocumentIngestionService {
             DocumentParserRegistry parserRegistry,
             TextChunker textChunker,
             DocumentIdentity documentIdentity,
-            KnowledgeStore knowledgeStore
+            KnowledgeStore knowledgeStore,
+            DocumentFailureCodec failureCodec
     ) {
         this.documentRepository = documentRepository;
         this.ingestionPersistence = ingestionPersistence;
@@ -74,6 +78,7 @@ public class DocumentIngestionService {
         this.textChunker = textChunker;
         this.documentIdentity = documentIdentity;
         this.knowledgeStore = knowledgeStore;
+        this.failureCodec = failureCodec;
     }
 
     /**
@@ -322,6 +327,7 @@ public class DocumentIngestionService {
 
         FileType fileType = optionalFileType.get();
         long now = System.currentTimeMillis();
+        DocumentFailureStage stage = DocumentFailureStage.READ;
         try {
             FileMetadata metadata = readMetadata(normalizedFile);
             String documentId = documentIdentity.idForPath(normalizedFile.toString());
@@ -331,13 +337,16 @@ public class DocumentIngestionService {
                 assignKnowledgeFolderIfNeeded(existing.get(), knowledgeFolderId, now);
                 if (existing.get().indexedAt() == null) {
                     // SQLite 已有解析结果但索引缺失时，跳过重新解析，只补 Lucene 索引。
+                    stage = DocumentFailureStage.INDEX;
                     indexExistingDocument(documentId);
                 }
                 accumulator.skippedCount++;
                 return;
             }
 
+            stage = DocumentFailureStage.PARSE;
             ParsedDocument parsedDocument = parserRegistry.parserFor(fileType).parse(normalizedFile);
+            stage = DocumentFailureStage.CHUNK;
             List<DocumentChunk> documentChunks = textChunker.chunk(parsedDocument);
             if (documentChunks.isEmpty()) {
                 throw new DocumentParseException("Parsed document contains no usable text: " + normalizedFile);
@@ -359,11 +368,22 @@ public class DocumentIngestionService {
                     documentChunks.size()
             );
             List<KnowledgeChunk> chunks = toKnowledgeChunks(documentId, documentChunks, now);
+            stage = DocumentFailureStage.PERSIST;
             ingestionPersistence.replaceParsedDocument(document, chunks);
+            stage = DocumentFailureStage.INDEX;
             indexParsedDocument(toIndexedDocument(document, chunks));
             accumulator.parsedCount++;
         } catch (RuntimeException ex) {
-            recordFailure(normalizedFile, fileType, knowledgeFolderId, now, ex, accumulator, failedDocumentPolicy);
+            recordFailure(
+                    normalizedFile,
+                    fileType,
+                    knowledgeFolderId,
+                    now,
+                    stage,
+                    ex,
+                    accumulator,
+                    failedDocumentPolicy
+            );
         }
     }
 
@@ -451,6 +471,7 @@ public class DocumentIngestionService {
      * @param fileType 文件类型
      * @param knowledgeFolderId 可选知识库目录 ID
      * @param now 当前时间戳
+     * @param stage 失败发生阶段
      * @param ex 导入异常
      * @param accumulator 本轮导入统计
      * @param failedDocumentPolicy 失败策略
@@ -460,14 +481,22 @@ public class DocumentIngestionService {
             FileType fileType,
             String knowledgeFolderId,
             long now,
+            DocumentFailureStage stage,
             RuntimeException ex,
             IngestAccumulator accumulator,
             FailedDocumentPolicy failedDocumentPolicy
     ) {
         String documentId = documentIdentity.idForPath(normalizedFile.toString());
-
-        DocumentStatus failureStatus = statusForFailure(ex);
-        if (shouldReplaceFailureRecord(failedDocumentPolicy, failureStatus)) {
+        DocumentFailureResponse failure = DocumentFailureClassifier.classify(normalizedFile, stage, ex, now);
+        DocumentStatus failureStatus = statusForFailure(failure);
+        Optional<KnowledgeDocument> existing = safeFindDocument(documentId);
+        boolean preserveExisting = shouldPreserveExistingRecord(
+                failedDocumentPolicy,
+                stage,
+                failureStatus,
+                existing
+        );
+        if (!preserveExisting) {
             long fileSize = safeFileSize(normalizedFile);
             long lastModified = safeLastModified(normalizedFile);
             String contentHash = safeContentHash(normalizedFile);
@@ -485,7 +514,13 @@ public class DocumentIngestionService {
                     null,
                     existingCreatedAtOrNow(documentId, now),
                     now,
-                    0
+                    0,
+                    failure.stage(),
+                    failure.code(),
+                    failure.message(),
+                    failure.detail(),
+                    failureCodec.encodeContext(failure),
+                    failure.occurredAt()
             );
 
             try {
@@ -501,14 +536,18 @@ public class DocumentIngestionService {
             }
             deleteDocumentIndex(documentId);
         } else {
-            log.warn("document_rebuild_parse_failed_preserve_existing documentId={} fileName={}",
+            persistLastFailure(existing.orElseThrow(), failure, now);
+            log.warn("document_processing_failed_preserve_existing documentId={} fileName={} stage={} code={} detail={}",
                     documentId,
                     normalizedFile.getFileName(),
-                    ex
+                    failure.stage(),
+                    failure.code(),
+                    failure.detail()
             );
         }
+        // failedCount 描述本次处理失败次数；是否保留旧结果只影响文档可用状态，不隐藏操作失败。
         accumulator.failedCount++;
-        accumulator.failures.add(new IngestFailureResponse(normalizedFile.toString(), ex.getMessage()));
+        accumulator.failures.add(failure);
     }
 
     /**
@@ -516,11 +555,13 @@ public class DocumentIngestionService {
      *
      * <p>OCR_REQUIRED 是用户可处理的 PDF 文本层缺失诊断；其他异常继续归入通用 FAILED。</p>
      *
-     * @param ex 导入异常
+     * @param failure 结构化失败诊断
      * @return 文档失败状态
      */
-    private static DocumentStatus statusForFailure(RuntimeException ex) {
-        return ex instanceof PdfOcrRequiredException ? DocumentStatus.OCR_REQUIRED : DocumentStatus.FAILED;
+    private static DocumentStatus statusForFailure(DocumentFailureResponse failure) {
+        return DocumentFailureCode.OCR_REQUIRED.name().equals(failure.code())
+                ? DocumentStatus.OCR_REQUIRED
+                : DocumentStatus.FAILED;
     }
 
     /**
@@ -533,12 +574,46 @@ public class DocumentIngestionService {
      * @param failureStatus 已归类的失败状态
      * @return 是否写入失败记录并清理旧 chunk / 索引
      */
-    private static boolean shouldReplaceFailureRecord(
+    private static boolean shouldPreserveExistingRecord(
             FailedDocumentPolicy failedDocumentPolicy,
-            DocumentStatus failureStatus
+            DocumentFailureStage stage,
+            DocumentStatus failureStatus,
+            Optional<KnowledgeDocument> existing
     ) {
-        return failedDocumentPolicy == FailedDocumentPolicy.REPLACE_WITH_FAILED_RECORD
-                || failureStatus == DocumentStatus.OCR_REQUIRED;
+        if (existing.isEmpty() || existing.get().status() != DocumentStatus.PARSED) {
+            return false;
+        }
+        if (stage == DocumentFailureStage.INDEX) {
+            return true;
+        }
+        return failedDocumentPolicy == FailedDocumentPolicy.PRESERVE_EXISTING_RECORD
+                && failureStatus != DocumentStatus.OCR_REQUIRED;
+    }
+
+    private Optional<KnowledgeDocument> safeFindDocument(String documentId) {
+        try {
+            return documentRepository.findById(documentId);
+        } catch (RuntimeException ex) {
+            log.warn("document_failure_existing_lookup_failed documentId={}", documentId, ex);
+            return Optional.empty();
+        }
+    }
+
+    private void persistLastFailure(KnowledgeDocument existing, DocumentFailureResponse failure, long now) {
+        try {
+            documentRepository.updateLastFailure(
+                    existing.id(),
+                    failure,
+                    failureCodec.encodeContext(failure),
+                    now
+            );
+        } catch (RuntimeException ex) {
+            log.warn("document_last_failure_persist_failed documentId={} fileName={}",
+                    existing.id(),
+                    existing.fileName(),
+                    ex
+            );
+        }
     }
 
     /**
@@ -584,6 +659,7 @@ public class DocumentIngestionService {
             // 索引失败时保留已解析 chunks，并通过 indexed_at=NULL 暴露为“待重建”状态。
             documentRepository.clearIndexed(document.id());
             log.warn("document_index_failed documentId={} fileName={}", document.id(), document.fileName(), ex);
+            throw ex;
         }
     }
 
@@ -685,7 +761,7 @@ public class DocumentIngestionService {
 
     private static class IngestAccumulator {
         private final int scannedCount;
-        private final List<IngestFailureResponse> failures = new ArrayList<>();
+        private final List<DocumentFailureResponse> failures = new ArrayList<>();
         private int parsedCount;
         private int skippedCount;
         private int failedCount;

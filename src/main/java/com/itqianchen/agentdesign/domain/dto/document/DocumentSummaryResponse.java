@@ -3,7 +3,7 @@ package com.itqianchen.agentdesign.domain.dto.document;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
 
 /**
- * Document Summary 响应 定义返回给前端的 文档管理 响应结构。
+ * 文档管理列表的摘要响应。
  * <p>该结构属于接口契约，调整字段时需要兼容已有调用方。</p>
  */
 public record DocumentSummaryResponse(
@@ -19,7 +19,8 @@ public record DocumentSummaryResponse(
         Long indexedAt,
         long createdAt,
         long updatedAt,
-        int chunkCount
+        int chunkCount,
+        DocumentFailureResponse lastFailure
 ) {
     /**
      * 构造前端文档表格使用的摘要。
@@ -27,6 +28,20 @@ public record DocumentSummaryResponse(
      * <p>状态和文件类型暴露为枚举名字符串，和前端筛选项保持同一套取值。</p>
      */
     public static DocumentSummaryResponse from(KnowledgeDocument document) {
+        return from(document, null);
+    }
+
+    /**
+     * 构造包含最近失败诊断的文档摘要。
+     *
+     * @param document 文档记录
+     * @param lastFailure 最近一次处理失败；没有失败时为空
+     * @return 文档摘要
+     */
+    public static DocumentSummaryResponse from(
+            KnowledgeDocument document,
+            DocumentFailureResponse lastFailure
+    ) {
         return new DocumentSummaryResponse(
                 document.id(),
                 document.knowledgeFolderId(),
@@ -40,9 +55,8 @@ public record DocumentSummaryResponse(
                 document.indexedAt(),
                 document.createdAt(),
                 document.updatedAt(),
-                document.chunkCount()
+                document.chunkCount(),
+                lastFailure
         );
     }
 }
-
-

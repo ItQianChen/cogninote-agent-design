@@ -224,7 +224,11 @@ class DocumentIngestionServiceTests {
         assertThat(response.failedCount()).isEqualTo(1);
         assertThat(response.failures())
                 .singleElement()
-                .satisfies(failure -> assertThat(failure.message()).contains("OCR is required"));
+                .satisfies(failure -> {
+                    assertThat(failure.stage()).isEqualTo("OCR");
+                    assertThat(failure.code()).isEqualTo("OCR_REQUIRED");
+                    assertThat(failure.message()).contains("需要启用 OCR");
+                });
         assertThat(documentRepository.findAllOrderByUpdatedAtDesc())
                 .singleElement()
                 .satisfies(document -> {

@@ -2,6 +2,8 @@ package com.itqianchen.agentdesign.service.knowledge;
 
 import com.itqianchen.agentdesign.common.api.ResourceNotFoundException;
 import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
+import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureStage;
 import com.itqianchen.agentdesign.domain.dto.index.RebuildIndexResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRebuildResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRunResponse;
@@ -14,6 +16,8 @@ import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseExcept
 import com.itqianchen.agentdesign.domain.exception.knowledge.KnowledgeMaintenanceException;
 import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRunRepository;
+import com.itqianchen.agentdesign.service.document.DocumentFailureClassifier;
+import com.itqianchen.agentdesign.service.document.DocumentFailureCodec;
 import com.itqianchen.agentdesign.service.index.IndexService;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,6 +52,7 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
     private final KnowledgeMaintenanceRunPublisher publisher;
     private final KnowledgeMaintenanceProgressReporter progressReporter;
     private final DocumentIdentity documentIdentity;
+    private final DocumentFailureCodec failureCodec;
     private final TaskExecutor taskExecutor;
     private final Map<String, MaintenanceTaskRequest> taskRequests = new ConcurrentHashMap<>();
     private boolean workerRunning;
@@ -60,6 +65,7 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
             KnowledgeMaintenanceRunPublisher publisher,
             KnowledgeMaintenanceProgressReporter progressReporter,
             DocumentIdentity documentIdentity,
+            DocumentFailureCodec failureCodec,
             TaskExecutor taskExecutor
     ) {
         this.runRepository = runRepository;
@@ -69,6 +75,7 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
         this.publisher = publisher;
         this.progressReporter = progressReporter;
         this.documentIdentity = documentIdentity;
+        this.failureCodec = failureCodec;
         this.taskExecutor = taskExecutor;
     }
 
@@ -304,8 +311,9 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
     }
 
     private void failBeforeExecution(String runId, MaintenanceTaskRequest request, RuntimeException ex) {
-        String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
-        runRepository.markFailed(runId, message);
+        DocumentFailureResponse failure = classifyRunFailure(request, ex);
+        String message = failure.message();
+        runRepository.markFailed(runId, message, failure.stage(), failure.code(), failure.detail());
         runRepository.findById(runId).map(KnowledgeFolderRunResponse::from)
                 .ifPresent(response -> publisher.publishFailed(runId, response));
         log.warn("knowledge_maintenance_run_dispatch_failed runId={} operation={} scopeType={} scopeId={} reason={}",
@@ -332,8 +340,9 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
             runRepository.findById(runId).map(KnowledgeFolderRunResponse::from)
                     .ifPresent(response -> publisher.publishCancelled(runId, response));
         } catch (RuntimeException ex) {
-            String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
-            runRepository.markFailed(runId, message);
+            DocumentFailureResponse failure = classifyRunFailure(request, ex);
+            String message = failure.message();
+            runRepository.markFailed(runId, message, failure.stage(), failure.code(), failure.detail());
             runRepository.findById(runId).map(KnowledgeFolderRunResponse::from)
                     .ifPresent(response -> publisher.publishFailed(runId, response));
             log.warn("knowledge_maintenance_run_failed runId={} operation={} scopeType={} scopeId={} reason={}",
@@ -343,7 +352,6 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
                     request.scopeId(),
                     message
             );
-            log.debug("knowledge_maintenance_run_failed_stacktrace runId={}", runId, ex);
         } finally {
             taskRequests.remove(runId);
             publisher.clearCancellation(runId);
@@ -407,7 +415,7 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
                 response.indexedDocumentCount(),
                 response.indexedChunkCount(),
                 response.failedDocumentCount(),
-                null,
+                response.failures(),
                 Math.max(1, response.scannedCount())
         );
     }
@@ -431,7 +439,7 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
 
     private static KnowledgeMaintenanceCompletion indexCompletion(RebuildIndexResponse response) {
         return new KnowledgeMaintenanceCompletion(
-                statusFor(0, response.failedDocumentCount()),
+                statusFor(0, response.failedDocumentCount(), response.failures()),
                 0,
                 0,
                 0,
@@ -439,7 +447,7 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
                 response.indexedDocumentCount(),
                 response.indexedChunkCount(),
                 response.failedDocumentCount(),
-                null,
+                response.failures(),
                 Math.max(1, response.indexedDocumentCount())
         );
     }
@@ -464,7 +472,7 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
                 completion.indexedDocumentCount(),
                 completion.indexedChunkCount(),
                 completion.failedDocumentCount(),
-                completion.failuresJson(),
+                failureCodec.encodeFailures(completion.failures()),
                 completion.progressTotal(),
                 completion.progressTotal()
         );
@@ -500,9 +508,9 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
         );
     }
 
-    private static KnowledgeMaintenanceCompletion ingestCompletion(IngestDocumentsResponse response) {
+    static KnowledgeMaintenanceCompletion ingestCompletion(IngestDocumentsResponse response) {
         return new KnowledgeMaintenanceCompletion(
-                statusFor(response.failedCount(), 0),
+                statusFor(response.failedCount(), 0, response.failures()),
                 response.scannedCount(),
                 response.parsedCount(),
                 response.skippedCount(),
@@ -510,16 +518,39 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
                 0,
                 0,
                 0,
-                null,
+                response.failures(),
                 Math.max(1, response.scannedCount())
         );
     }
 
-    private static KnowledgeFolderRunStatus statusFor(long failedCount, long failedDocumentCount) {
-        if (failedCount > 0 || failedDocumentCount > 0) {
+    private static KnowledgeFolderRunStatus statusFor(
+            long failedCount,
+            long failedDocumentCount,
+            List<DocumentFailureResponse> failures
+    ) {
+        if (failedCount > 0 || failedDocumentCount > 0 || failures != null && !failures.isEmpty()) {
             return KnowledgeFolderRunStatus.COMPLETED_WITH_WARNINGS;
         }
         return KnowledgeFolderRunStatus.COMPLETED;
+    }
+
+    private static KnowledgeFolderRunStatus statusFor(long failedCount, long failedDocumentCount) {
+        return statusFor(failedCount, failedDocumentCount, List.of());
+    }
+
+    private static DocumentFailureResponse classifyRunFailure(
+            MaintenanceTaskRequest request,
+            RuntimeException exception
+    ) {
+        DocumentFailureStage stage = switch (request.operation()) {
+            case REBUILD_INDEX, REPAIR_INDEX -> DocumentFailureStage.INDEX;
+            case IMPORT, SYNC, REPARSE -> DocumentFailureStage.SCAN;
+            default -> DocumentFailureStage.UNKNOWN;
+        };
+        Path path = request.folderPath() == null || request.folderPath().isBlank()
+                ? null
+                : Path.of(request.folderPath()).toAbsolutePath().normalize();
+        return DocumentFailureClassifier.classify(path, stage, exception, System.currentTimeMillis());
     }
 
     private static String phaseFor(KnowledgeFolderRunOperation operation) {

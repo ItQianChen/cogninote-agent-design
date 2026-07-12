@@ -1,15 +1,10 @@
 package com.itqianchen.agentdesign.domain.dto.knowledge;
-
-
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
-import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
+import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
 import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolder;
 import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolderRun;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
-import com.itqianchen.agentdesign.domain.dto.document.IngestFailureResponse;
 import java.util.List;
 
 /**
@@ -32,7 +27,7 @@ public record KnowledgeFolderRunDetailResponse(
         long indexedDocumentCount,
         long indexedChunkCount,
         long failedDocumentCount,
-        List<IngestFailureResponse> failures,
+        List<DocumentFailureResponse> failures,
         String phase,
         long progressCurrent,
         long progressTotal,
@@ -42,13 +37,16 @@ public record KnowledgeFolderRunDetailResponse(
         Long completedAt,
         Long durationMs,
         String errorMessage,
+        String errorStage,
+        String errorCode,
+        String errorDetail,
         long createdAt,
         long updatedAt
 ) {
     public static KnowledgeFolderRunDetailResponse from(
             KnowledgeFolderRun run,
             KnowledgeFolder folder,
-            List<IngestFailureResponse> failures
+            List<DocumentFailureResponse> failures
     ) {
         return new KnowledgeFolderRunDetailResponse(
                 run.id(),
@@ -75,6 +73,9 @@ public record KnowledgeFolderRunDetailResponse(
                 run.completedAt(),
                 run.durationMs(),
                 run.errorMessage(),
+                run.errorStage(),
+                run.errorCode(),
+                run.errorDetail(),
                 run.createdAt(),
                 run.updatedAt()
         );

@@ -29,6 +29,11 @@ import { useKnowledgeMaintenanceStore } from '../stores/knowledge-maintenance'
 import { useSearchStore } from '../stores/search'
 import { formatTime } from '../utils/formatters'
 import { buildIssueCategories } from '../utils/knowledge-health-issues'
+import {
+  failureStageLabel,
+  failureTechnicalRows,
+  groupFailuresByStage
+} from '../utils/document-failures'
 
 const knowledgeStore = useKnowledgeFoldersStore()
 const healthStore = useKnowledgeHealthStore()
@@ -41,6 +46,7 @@ const selectedIssueSection = ref(null)
 const runPage = ref(1)
 const runPageSize = ref(10)
 const selectedRunIds = ref([])
+const runFailureGroups = computed(() => groupFailuresByStage(healthStore.selectedRunDetail?.failures || []))
 const runFilters = ref({
   keyword: '',
   scopeType: '',
@@ -996,15 +1002,37 @@ defineExpose({
             <dd>{{ runFailureCount(healthStore.selectedRunDetail) }}</dd>
           </div>
         </dl>
-        <p v-if="healthStore.selectedRunDetail.errorMessage" class="knowledge-run-detail__message">
-          {{ healthStore.selectedRunDetail.errorMessage }}
-        </p>
-        <section v-if="healthStore.selectedRunDetail.failures?.length" class="knowledge-run-detail__failures">
+        <section v-if="healthStore.selectedRunDetail.errorMessage" class="knowledge-run-detail__run-error">
+          <strong>{{ failureStageLabel({ stage: healthStore.selectedRunDetail.errorStage }) }}</strong>
+          <p>{{ healthStore.selectedRunDetail.errorMessage }}</p>
+          <details v-if="healthStore.selectedRunDetail.errorCode || healthStore.selectedRunDetail.errorDetail">
+            <summary>查看技术详情</summary>
+            <span v-if="healthStore.selectedRunDetail.errorCode">错误码：{{ healthStore.selectedRunDetail.errorCode }}</span>
+            <span v-if="healthStore.selectedRunDetail.errorDetail">{{ healthStore.selectedRunDetail.errorDetail }}</span>
+          </details>
+        </section>
+        <section v-if="runFailureGroups.length" class="knowledge-run-detail__failures">
           <h5>失败明细</h5>
-          <article v-for="failure in healthStore.selectedRunDetail.failures" :key="`${failure.sourcePath}-${failure.message}`">
-            <strong>{{ failure.sourcePath }}</strong>
-            <span>{{ failure.message }}</span>
-          </article>
+          <section v-for="group in runFailureGroups" :key="group.stage" class="knowledge-run-failure-group">
+            <header>
+              <strong>{{ group.label }}</strong>
+              <span>{{ group.items.length }} 项</span>
+            </header>
+            <article v-for="failure in group.items" :key="`${failure.sourcePath}-${failure.code}-${failure.message}`">
+              <strong>{{ failure.sourcePath }}</strong>
+              <p>{{ failure.message }}</p>
+              <span v-if="failure.suggestion">{{ failure.suggestion }}</span>
+              <details v-if="failureTechnicalRows(failure).length">
+                <summary>查看技术详情</summary>
+                <dl>
+                  <div v-for="row in failureTechnicalRows(failure)" :key="row[0]">
+                    <dt>{{ row[0] }}</dt>
+                    <dd>{{ row[1] }}</dd>
+                  </div>
+                </dl>
+              </details>
+            </article>
+          </section>
         </section>
       </section>
     </el-dialog>

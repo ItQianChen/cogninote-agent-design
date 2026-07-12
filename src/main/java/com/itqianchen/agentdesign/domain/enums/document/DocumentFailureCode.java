@@ -1,0 +1,34 @@
+package com.itqianchen.agentdesign.domain.enums.document;
+
+/**
+ * 文档处理失败的稳定错误码。
+ *
+ * <p>错误码会进入 SQLite 和 API，前端必须基于该值选择文案和建议，不能解析异常消息。</p>
+ */
+public enum DocumentFailureCode {
+    FOLDER_NOT_FOUND,
+    FOLDER_SCAN_FAILED,
+    FILE_METADATA_FAILED,
+    FILE_READ_FAILED,
+    DOCUMENT_CORRUPTED,
+    DOCUMENT_ENCRYPTED,
+    NO_USABLE_TEXT,
+    OCR_REQUIRED,
+    OCR_PAGE_LIMIT,
+    OCR_RENDER_FAILED,
+    OCR_EMPTY_RESULT,
+    MODEL_NOT_CONFIGURED,
+    MODEL_AUTH_FAILED,
+    MODEL_RATE_LIMITED,
+    MODEL_QUOTA_EXCEEDED,
+    MODEL_TIMEOUT,
+    MODEL_NETWORK_FAILED,
+    MODEL_UNSUPPORTED_MEDIA,
+    MODEL_PROVIDER_FAILED,
+    MODEL_EMPTY_RESPONSE,
+    CHUNK_EMPTY,
+    DATABASE_WRITE_FAILED,
+    INDEX_WRITE_FAILED,
+    LEGACY_FAILURE,
+    UNKNOWN_FAILURE
+}

@@ -22,8 +22,55 @@ public record KnowledgeDocument(
         Long indexedAt,
         long createdAt,
         long updatedAt,
-        int chunkCount
+        int chunkCount,
+        String lastFailureStage,
+        String lastFailureCode,
+        String lastFailureMessage,
+        String lastFailureDetail,
+        String lastFailureContextJson,
+        Long lastFailedAt
 ) {
+    /**
+     * 兼容不携带失败诊断的既有构造调用。
+     */
+    public KnowledgeDocument(
+            String id,
+            String knowledgeFolderId,
+            String sourcePath,
+            String fileName,
+            FileType fileType,
+            long fileSize,
+            long lastModified,
+            String contentHash,
+            DocumentStatus status,
+            Long indexedAt,
+            long createdAt,
+            long updatedAt,
+            int chunkCount
+    ) {
+        this(
+                id,
+                knowledgeFolderId,
+                sourcePath,
+                fileName,
+                fileType,
+                fileSize,
+                lastModified,
+                contentHash,
+                status,
+                indexedAt,
+                createdAt,
+                updatedAt,
+                chunkCount,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
     public KnowledgeDocument(
             String id,
             String sourcePath,
@@ -51,8 +98,24 @@ public record KnowledgeDocument(
                 indexedAt,
                 createdAt,
                 updatedAt,
-                chunkCount
+                chunkCount,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
         );
+    }
+
+    /**
+     * 判断最近一次处理是否留下失败诊断。
+     *
+     * @return 存在稳定错误码或用户消息时为 true
+     */
+    public boolean hasLastFailure() {
+        return (lastFailureCode != null && !lastFailureCode.isBlank())
+                || (lastFailureMessage != null && !lastFailureMessage.isBlank());
     }
 }
 

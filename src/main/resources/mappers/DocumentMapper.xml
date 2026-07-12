@@ -19,6 +19,12 @@
             <arg column="created_at" javaType="_long"/>
             <arg column="updated_at" javaType="_long"/>
             <arg column="chunk_count" javaType="_int"/>
+            <arg column="last_failure_stage" javaType="java.lang.String"/>
+            <arg column="last_failure_code" javaType="java.lang.String"/>
+            <arg column="last_failure_message" javaType="java.lang.String"/>
+            <arg column="last_failure_detail" javaType="java.lang.String"/>
+            <arg column="last_failure_context_json" javaType="java.lang.String"/>
+            <arg column="last_failed_at" javaType="java.lang.Long"/>
         </constructor>
     </resultMap>
 
@@ -86,7 +92,13 @@
         d.indexed_at,
         COALESCE(d.created_at, 0) AS created_at,
         COALESCE(d.updated_at, 0) AS updated_at,
-        COUNT(c.id) AS chunk_count
+        COUNT(c.id) AS chunk_count,
+        d.last_failure_stage,
+        d.last_failure_code,
+        d.last_failure_message,
+        d.last_failure_detail,
+        d.last_failure_context_json,
+        d.last_failed_at
     </sql>
 
     <sql id="IndexedDocumentColumns">
@@ -219,11 +231,15 @@
     <insert id="upsertDocument">
         INSERT INTO documents (
             id, knowledge_folder_id, source_path, file_name, file_type, file_size, last_modified,
-            content_hash, status, indexed_at, created_at, updated_at
+            content_hash, status, indexed_at, created_at, updated_at,
+            last_failure_stage, last_failure_code, last_failure_message,
+            last_failure_detail, last_failure_context_json, last_failed_at
         )
         VALUES (
             #{id}, #{knowledgeFolderId}, #{sourcePath}, #{fileName}, #{fileType}, #{fileSize}, #{lastModified},
-            #{contentHash}, #{status}, #{indexedAt}, #{createdAt}, #{updatedAt}
+            #{contentHash}, #{status}, #{indexedAt}, #{createdAt}, #{updatedAt},
+            #{lastFailureStage}, #{lastFailureCode}, #{lastFailureMessage},
+            #{lastFailureDetail}, #{lastFailureContextJson}, #{lastFailedAt}
         )
         ON CONFLICT(id) DO UPDATE SET
             knowledge_folder_id = COALESCE(excluded.knowledge_folder_id, documents.knowledge_folder_id),
@@ -235,8 +251,26 @@
             content_hash = excluded.content_hash,
             status = excluded.status,
             indexed_at = excluded.indexed_at,
+            last_failure_stage = excluded.last_failure_stage,
+            last_failure_code = excluded.last_failure_code,
+            last_failure_message = excluded.last_failure_message,
+            last_failure_detail = excluded.last_failure_detail,
+            last_failure_context_json = excluded.last_failure_context_json,
+            last_failed_at = excluded.last_failed_at,
             updated_at = excluded.updated_at
     </insert>
+
+    <update id="updateLastFailure">
+        UPDATE documents
+        SET last_failure_stage = #{stage},
+            last_failure_code = #{code},
+            last_failure_message = #{message},
+            last_failure_detail = #{detail},
+            last_failure_context_json = #{contextJson},
+            last_failed_at = #{failedAt},
+            updated_at = #{updatedAt}
+        WHERE id = #{documentId}
+    </update>
 
     <update id="updateKnowledgeFolderId">
         UPDATE documents
@@ -252,7 +286,15 @@
     </select>
 
     <update id="markIndexed">
-        UPDATE documents SET indexed_at = #{indexedAt} WHERE id = #{documentId}
+        UPDATE documents
+        SET indexed_at = #{indexedAt},
+            last_failure_stage = NULL,
+            last_failure_code = NULL,
+            last_failure_message = NULL,
+            last_failure_detail = NULL,
+            last_failure_context_json = NULL,
+            last_failed_at = NULL
+        WHERE id = #{documentId}
     </update>
 
     <update id="clearIndexed">
