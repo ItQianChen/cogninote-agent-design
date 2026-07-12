@@ -136,7 +136,7 @@ public class OcrSettingsService implements OcrSettingsProvider {
     private OcrSettingsSnapshot normalize(StoredSettings settings) {
         OcrProvider provider = normalizeStoredProvider(settings.provider());
         int maxPages = Math.clamp(defaultIfUnset(settings.maxPagesPerDocument(), 200), 1, 500);
-        int timeoutSeconds = Math.clamp(defaultIfUnset(settings.timeoutPerPageSeconds(), 20), 3, 120);
+        int timeoutSeconds = Math.clamp(defaultIfUnset(settings.timeoutPerPageSeconds(), 20), 3, 600);
         int monthlyBudget = Math.clamp(defaultIfUnset(settings.monthlyCallBudget(), 1000), 1, 1_000_000);
         boolean migratedFromBaidu = settings.provider() == OcrProvider.BAIDU_OCR;
         boolean enabled = settings.enabled() && provider == OcrProvider.MODEL_VISION && !migratedFromBaidu;

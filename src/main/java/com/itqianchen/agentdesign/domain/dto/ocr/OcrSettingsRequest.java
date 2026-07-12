@@ -19,7 +19,7 @@ public record OcrSettingsRequest(
 
     public record Limits(
             @Min(1) @Max(500) Integer maxPagesPerDocument,
-            @Min(3) @Max(120) Integer timeoutPerPageSeconds,
+            @Min(3) @Max(600) Integer timeoutPerPageSeconds,
             @Min(1) @Max(1000000) Integer monthlyCallBudget
     ) {
     }

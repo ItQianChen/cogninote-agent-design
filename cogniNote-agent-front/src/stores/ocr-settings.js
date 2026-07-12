@@ -162,7 +162,7 @@ function normalizeSettings(value) {
     },
     limits: {
       maxPagesPerDocument: clampInteger(limits.maxPagesPerDocument, 1, 500, DEFAULT_SETTINGS.limits.maxPagesPerDocument),
-      timeoutPerPageSeconds: clampInteger(limits.timeoutPerPageSeconds, 3, 120, DEFAULT_SETTINGS.limits.timeoutPerPageSeconds),
+      timeoutPerPageSeconds: clampInteger(limits.timeoutPerPageSeconds, 3, 600, DEFAULT_SETTINGS.limits.timeoutPerPageSeconds),
       monthlyCallBudget: clampInteger(limits.monthlyCallBudget, 1, 1000000, DEFAULT_SETTINGS.limits.monthlyCallBudget)
     },
     enabled: Boolean(value?.enabled),

@@ -193,7 +193,7 @@ function openVisionModelSettings() {
               <el-input-number
                 :model-value="ocrSettingsStore.settings.limits.timeoutPerPageSeconds"
                 :min="3"
-                :max="120"
+                :max="600"
                 @update:model-value="ocrSettingsStore.patchSettings({ limits: { timeoutPerPageSeconds: $event } })"
               />
             </el-form-item>

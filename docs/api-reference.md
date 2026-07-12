@@ -1145,7 +1145,7 @@ GET /api/ocr/settings
 | `available` | 当前设置是否具备运行 OCR 的必要条件，即 `enabled=true` 且 VISION 模型 API Key 已配置。 |
 | `visionModel` | 当前 active VISION 模型摘要；不返回 API Key 明文。 |
 | `limits.maxPagesPerDocument` | 单个 PDF 最多 OCR 页数，范围 `1` 到 `500`。 |
-| `limits.timeoutPerPageSeconds` | 单页 OCR 请求超时，范围 `3` 到 `120` 秒；超时会中止当前页模型 OCR 并让本次解析失败。 |
+| `limits.timeoutPerPageSeconds` | 单页 OCR 请求超时，范围 `3` 到 `600` 秒，默认 `20` 秒；`600` 秒是允许上限而非默认值。超时会中止当前页模型 OCR 并让本次解析失败。 |
 | `limits.monthlyCallBudget` | 本地提示用月调用预算，范围 `1` 到 `1000000`，不等同于模型服务商账单。 |
 
 ### 保存 OCR 设置

@@ -333,7 +333,7 @@ POST   /api/model-configs/settings/configs/{id}/activate
 
 第 35 阶段新增全局联网搜索设置，保存在 `app_settings` 的 `web-search.settings` JSON 快照中。MVP provider 固定为 `EXA`，配置项包括 `enabled`、`apiKey`、`maxResults`、`maxCallsPerTurn`、`timeoutMs` 和 `searchMode`。保存响应只返回 `apiKeyConfigured`，不会回显明文 Key；如果没有已保存或本次提交的新 Key，`enabled=true` 会被归一化为 `false`。
 
-第 36-4 阶段新增全局 OCR 设置，保存在 `app_settings` 的 `ocr.settings` JSON 快照中。第一版引擎固定为 `MODEL_VISION`，OCR 设置只保存 `enabled` 和页数/超时/调用预算限制；实际密钥归属独立 `VISION` 模型配置。模型配置页按本机配置逻辑明文回显密钥；日志、异常、测试响应和维护运行记录不得输出密钥。
+第 36-4 阶段新增全局 OCR 设置，保存在 `app_settings` 的 `ocr.settings` JSON 快照中。第一版引擎固定为 `MODEL_VISION`，OCR 设置只保存 `enabled` 和页数/超时/调用预算限制；单页 OCR 超时允许配置 `3` 到 `600` 秒，默认 `20` 秒，`600` 秒仅为允许上限。实际密钥归属独立 `VISION` 模型配置。模型配置页按本机配置逻辑明文回显密钥；日志、异常、测试响应和维护运行记录不得输出密钥。
 
 Prompt 文本统一放在 `src/main/resources/cogninote-prompts.yaml`。`application.yaml` 只通过 `spring.config.import=classpath:cogninote-prompts.yaml` 引入它，并保留服务端口、Spring AI 开关、日志、存储、检索、Embedding、聊天记忆等运行配置。聊天 Prompt 绑定到 `app.chat.prompts`，视觉模型 OCR Prompt 绑定到 `app.ocr.prompts`，知识图谱抽取 Prompt 绑定到 `app.knowledge-graph.prompts`；业务代码只负责填充运行时变量和校验模型输出，不再内联大段 Prompt 文本。
 

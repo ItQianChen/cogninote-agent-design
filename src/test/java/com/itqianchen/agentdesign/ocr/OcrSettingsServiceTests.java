@@ -62,6 +62,28 @@ class OcrSettingsServiceTests {
     }
 
     @Test
+    void updateAcceptsTenMinuteTimeoutAndClampsHigherValues() {
+        Fixture fixture = new Fixture();
+
+        var maximum = fixture.service.update(new OcrSettingsRequest(
+                false,
+                OcrProvider.MODEL_VISION,
+                null,
+                new OcrSettingsRequest.Limits(200, 600, 1000)
+        ));
+        var aboveMaximum = fixture.service.update(new OcrSettingsRequest(
+                false,
+                OcrProvider.MODEL_VISION,
+                null,
+                new OcrSettingsRequest.Limits(200, 601, 1000)
+        ));
+
+        assertThat(maximum.limits().timeoutPerPageSeconds()).isEqualTo(600);
+        assertThat(aboveMaximum.limits().timeoutPerPageSeconds()).isEqualTo(600);
+        assertThat(fixture.service.settings().limits().timeoutPerPageSeconds()).isEqualTo(600);
+    }
+
+    @Test
     void oldBaiduSettingsAreMigratedToDisabledModelVision() {
         Fixture fixture = new Fixture();
         fixture.appSettings.save("ocr.settings", """

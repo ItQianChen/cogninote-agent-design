@@ -22,6 +22,7 @@
   - `PUT /api/ocr/settings`
   - `POST /api/ocr/test`
   - 响应返回 `enabled`、`engine=MODEL_VISION`、当前视觉模型摘要、页数限制、超时和月调用预算提示。
+  - 单页 OCR 超时范围为 `3` 到 `600` 秒，默认 `20` 秒；`600` 秒仅为允许上限。
   - 测试接口使用后端生成的小测试图片调用视觉模型，只验证图片输入和文本输出能力，不读取用户文件，不返回密钥。
 - 后端识别流程：
   - `PdfDocumentParser` 仍然先抽 PDF 文本层。
