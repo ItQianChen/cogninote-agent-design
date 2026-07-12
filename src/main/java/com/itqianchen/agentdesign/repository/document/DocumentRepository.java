@@ -30,14 +30,19 @@ public class DocumentRepository {
     private static final int MAX_STORED_CHUNK_LOOKUP_SIZE = 500;
 
     private final DocumentMapper documentMapper;
+    private final DocumentOcrCheckpointRepository checkpointRepository;
 
     /**
      * 注入文档 Mapper。
      *
      * @param documentMapper SQLite 文档和 chunk 访问接口
      */
-    public DocumentRepository(DocumentMapper documentMapper) {
+    public DocumentRepository(
+            DocumentMapper documentMapper,
+            DocumentOcrCheckpointRepository checkpointRepository
+    ) {
         this.documentMapper = documentMapper;
+        this.checkpointRepository = checkpointRepository;
     }
 
     /**
@@ -304,6 +309,9 @@ public class DocumentRepository {
      */
     public boolean deleteById(String id) {
         // SQLite 外键开关在不同运行环境可能不一致，显式先删 chunks 防止孤儿片段。
+        if (checkpointRepository != null) {
+            checkpointRepository.deleteByDocumentId(id);
+        }
         documentMapper.deleteChunksByDocumentId(id);
         return documentMapper.deleteDocumentById(id) > 0;
     }
@@ -318,6 +326,11 @@ public class DocumentRepository {
      */
     public int deleteByKnowledgeFolderId(String knowledgeFolderId) {
         // 删除目录时只清应用内文档和 chunk 元数据，不触碰用户文件系统。
+        if (checkpointRepository != null) {
+            for (String documentId : documentMapper.findDocumentIdsByKnowledgeFolderId(knowledgeFolderId)) {
+                checkpointRepository.deleteByDocumentId(documentId);
+            }
+        }
         documentMapper.deleteChunksByKnowledgeFolderId(knowledgeFolderId);
         return documentMapper.deleteDocumentsByKnowledgeFolderId(knowledgeFolderId);
     }

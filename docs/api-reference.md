@@ -152,7 +152,7 @@ POST /api/knowledge-folders/import
 POST /api/knowledge-folders/{id}/sync
 ```
 
-扫描已导入目录中的支持文件，只解析新增或修改的文件，并为缺失索引的旧文档补写 Lucene；未变化文件会跳过，不做整目录索引重建。若 PDF 没有可抽取文本层且 OCR 未启用，会记录为 `OCR_REQUIRED` 并计入 `failedCount`；若 OCR 已启用且配置可用，则会按页识别并写入 chunks / Lucene。若本地目录中某个旧文件已被删除，同步会删除应用内对应文档/chunks/索引记录，但不触碰用户文件系统。同步目录必须处于启用状态。
+扫描已导入目录中的支持文件，只解析新增或修改的文件，并为缺失索引的旧文档补写 Lucene；未变化文件会跳过，不做整目录索引重建。若 PDF 没有可抽取文本层且 OCR 未启用，会记录为 `OCR_REQUIRED` 并计入 `failedCount`；若 OCR 已启用且配置可用，则按页识别。每页成功后立即保存本地检查点，后续页面失败时普通同步会从首个未完成页面继续；整份 PDF 完成前不会生成正式 chunks 或 Lucene 索引。若本地目录中某个旧文件已被删除，同步会删除应用内对应文档、检查点、chunks 和索引记录，但不触碰用户文件系统。同步目录必须处于启用状态。
 
 响应体 `data` 为本次扫描统计：
 
@@ -181,11 +181,16 @@ POST /api/knowledge-folders/{id}/sync
   "provider": "DASHSCOPE",
   "modelName": "qwen3-vl-plus",
   "httpStatus": 401,
-  "providerErrorCode": "invalid_api_key"
+  "providerErrorCode": "invalid_api_key",
+  "completedPages": 7,
+  "totalPages": 10,
+  "resumePage": 8
 }
 ```
 
-`stage` 支持 `SCAN`、`READ`、`PARSE`、`OCR`、`MODEL_CONFIG`、`MODEL_CALL`、`CHUNK`、`PERSIST`、`INDEX`、`UNKNOWN`。`message` 是用户可读摘要，`detail` 是经过脱敏和长度限制的技术详情；接口不会返回 API Key、Authorization Header、图片 Base64、完整请求体、Java 堆栈或未经处理的 Provider 响应。旧运行记录中的两字段失败对象会按 `UNKNOWN / LEGACY_FAILURE` 返回。
+`stage` 支持 `SCAN`、`READ`、`PARSE`、`OCR`、`MODEL_CONFIG`、`MODEL_CALL`、`CHUNK`、`PERSIST`、`INDEX`、`UNKNOWN`。`message` 是用户可读摘要，`detail` 是经过脱敏和长度限制的技术详情；接口不会返回 API Key、Authorization Header、图片 Base64、完整请求体、Java 堆栈或未经处理的 Provider 响应。`completedPages/totalPages/resumePage` 只在存在可恢复的 PDF OCR 检查点时返回，用于提示“已保存 7/10 页，下次从第 8 页继续”。旧运行记录中的两字段失败对象会按 `UNKNOWN / LEGACY_FAILURE` 返回，新字段为 `null`。
+
+目录健康详情中的 `failedDocuments[]` 额外返回兼容字段 `lastFailure`。该字段复用上述结构化失败对象，使健康抽屉也能展示 OCR 已完成页数和下次续传页；普通文件缺失、文件变化等问题的 `lastFailure` 为 `null`。
 
 ### 重建单个目录索引
 
@@ -216,7 +221,10 @@ POST /api/knowledge-folders/{id}/rebuild
       "provider": null,
       "modelName": null,
       "httpStatus": null,
-      "providerErrorCode": null
+      "providerErrorCode": null,
+      "completedPages": null,
+      "totalPages": null,
+      "resumePage": null
     }
   ],
   "indexedDocumentCount": 2,
@@ -429,7 +437,7 @@ POST /api/knowledge-maintenance/runs/folders/{id}/delete
 
 `repair-index` 只处理 `status=PARSED AND indexed_at IS NULL` 的文档，SQLite chunks 是事实来源；它不扫描文件系统、不重新解析 PDF，也不重建已经索引成功的文档。该接口主要用于 Embedding 供应商限流后补写少量缺失 Lucene 条目。全库补写使用 `POST /api/knowledge-maintenance/runs/repair-index`，目录补写使用 `POST /api/knowledge-maintenance/runs/folders/{id}/repair-index`。
 
-`reparse` 会重新读取并解析目录内当前支持文件，忽略未变化文件跳过逻辑，主要用于开启 OCR 后处理旧的 `OCR_REQUIRED` PDF。它不修改用户原始文件；OCR 结果只写入 SQLite chunks 和 Lucene 索引。
+`reparse` 会重新读取并解析目录内当前支持文件，忽略未变化文件跳过逻辑，主要用于开启 OCR 后处理旧的 `OCR_REQUIRED` PDF。该操作会先清除未完成 PDF 的 OCR 页面检查点并从第一页重新识别；需要保留进度并从失败页继续时应使用普通 `sync`。它不修改用户原始文件；OCR 检查点、最终 chunks 和索引都只写入本地应用数据。
 
 ### 查询队列
 

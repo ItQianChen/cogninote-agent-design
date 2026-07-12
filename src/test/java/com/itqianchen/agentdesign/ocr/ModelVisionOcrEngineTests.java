@@ -138,13 +138,34 @@ class ModelVisionOcrEngineTests {
                 .hasMessageContaining("超时");
     }
 
+    @Test
+    void checkpointSignatureIgnoresTimeoutLimit() {
+        ModelVisionOcrEngine engine = engine(new FakeRuntimeFactory());
+
+        assertThat(engine.checkpointSignature(enabledSettings()))
+                .isEqualTo(engine.checkpointSignature(settingsWithTimeout(600)));
+    }
+
+    @Test
+    void checkpointSignatureChangesWithVisionModel() {
+        ModelVisionOcrEngine first = engine(new FakeRuntimeFactory(), "vision-model-a");
+        ModelVisionOcrEngine second = engine(new FakeRuntimeFactory(), "vision-model-b");
+
+        assertThat(first.checkpointSignature(enabledSettings()))
+                .isNotEqualTo(second.checkpointSignature(enabledSettings()));
+    }
+
     private static OcrSettingsSnapshot enabledSettings() {
         return new OcrSettingsSnapshot(true, OcrProvider.MODEL_VISION, true, 200, 20, 1000);
     }
 
     private static ModelVisionOcrEngine engine(FakeRuntimeFactory runtimeFactory) {
+        return engine(runtimeFactory, ModelConfigDefaults.VISION_MODEL);
+    }
+
+    private static ModelVisionOcrEngine engine(FakeRuntimeFactory runtimeFactory, String modelName) {
         return new ModelVisionOcrEngine(
-                new FakeModelConfigService(),
+                new FakeModelConfigService(modelName),
                 runtimeFactory,
                 new OcrPromptProperties(
                         "OCR system prompt: 不要解释、不要总结、不要翻译。",
@@ -160,8 +181,11 @@ class ModelVisionOcrEngineTests {
 
     private static final class FakeModelConfigService extends ModelConfigService {
 
-        private FakeModelConfigService() {
+        private final String modelName;
+
+        private FakeModelConfigService(String modelName) {
             super(null);
+            this.modelName = modelName;
         }
 
         @Override
@@ -169,7 +193,7 @@ class ModelVisionOcrEngineTests {
             return visionConfig();
         }
 
-        private static ModelConfig visionConfig() {
+        private ModelConfig visionConfig() {
             long now = System.currentTimeMillis();
             return new ModelConfig(
                     ModelConfigDefaults.ACTIVE_VISION_CONFIG_ID,
@@ -178,7 +202,7 @@ class ModelVisionOcrEngineTests {
                     ModelConfigDefaults.VISION_DISPLAY_NAME,
                     ModelConfigDefaults.BASE_URL,
                     "sk-vision",
-                    ModelConfigDefaults.VISION_MODEL,
+                    modelName,
                     null,
                     null,
                     null,

@@ -19,6 +19,12 @@ public interface DatabaseSchemaMapper {
      */
     void createDocumentsTable();
 
+    /** 创建 PDF OCR 文档级检查点表。 */
+    void createDocumentOcrCheckpointsTable();
+
+    /** 创建 PDF OCR 页面检查点表。 */
+    void createDocumentOcrCheckpointPagesTable();
+
     void addDocumentLastFailureStageColumn();
 
     void addDocumentLastFailureCodeColumn();

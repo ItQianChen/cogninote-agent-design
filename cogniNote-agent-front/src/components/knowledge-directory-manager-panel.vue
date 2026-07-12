@@ -28,7 +28,7 @@ import { useKnowledgeFoldersStore } from '../stores/knowledge-folders'
 import { useKnowledgeHealthStore } from '../stores/knowledge-health'
 import { useKnowledgeMaintenanceStore } from '../stores/knowledge-maintenance'
 import { formatFileSize, formatTime } from '../utils/formatters'
-import { failureStageLabel } from '../utils/document-failures'
+import { failureProgressLabel, failureStageLabel } from '../utils/document-failures'
 
 const knowledgeStore = useKnowledgeFoldersStore()
 const knowledgeHealthStore = useKnowledgeHealthStore()
@@ -566,7 +566,12 @@ async function refreshDirectories() {
                 >
                   <AlertTriangle aria-hidden="true" />
                   <strong>{{ failureStageLabel(document.lastFailure) }}</strong>
-                  <span>{{ document.lastFailure.message }}</span>
+                  <span>
+                    {{ document.lastFailure.message }}
+                    <small v-if="failureProgressLabel(document.lastFailure)">
+                      {{ failureProgressLabel(document.lastFailure) }}
+                    </small>
+                  </span>
                   <em>查看详情</em>
                 </button>
               </div>
@@ -611,7 +616,12 @@ async function refreshDirectories() {
                 >
                   <AlertTriangle aria-hidden="true" />
                   <strong>{{ failureStageLabel(document.lastFailure) }}</strong>
-                  <span>{{ document.lastFailure.message }}</span>
+                  <span>
+                    {{ document.lastFailure.message }}
+                    <small v-if="failureProgressLabel(document.lastFailure)">
+                      {{ failureProgressLabel(document.lastFailure) }}
+                    </small>
+                  </span>
                   <em>查看详情</em>
                 </button>
               </div>

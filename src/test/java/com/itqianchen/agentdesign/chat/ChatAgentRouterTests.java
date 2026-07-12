@@ -859,7 +859,7 @@ class ChatAgentRouterTests {
     private static final class FakeDocumentRepository extends DocumentRepository {
 
         private FakeDocumentRepository() {
-            super(null);
+            super(null, null);
         }
 
         @Override

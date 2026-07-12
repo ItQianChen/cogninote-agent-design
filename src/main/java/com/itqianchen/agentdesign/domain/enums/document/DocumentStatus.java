@@ -14,7 +14,7 @@ public enum DocumentStatus {
     /** 解析失败，通常需要修复源文件后重新同步。 */
     FAILED,
 
-    /** PDF 没有可抽取文本层，当前版本需要外部 OCR 后重新同步。 */
+    /** PDF 没有可抽取文本层，尚未通过已配置的 OCR 能力完成解析。 */
     OCR_REQUIRED
 }
 

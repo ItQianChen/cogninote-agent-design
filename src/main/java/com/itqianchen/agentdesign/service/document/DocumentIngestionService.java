@@ -13,6 +13,7 @@ import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
 import com.itqianchen.agentdesign.domain.support.ingestion.DocumentParserRegistry;
 import com.itqianchen.agentdesign.domain.support.ingestion.TextChunker;
 import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentChunk;
+import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentParseRequest;
 import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ScannedDocumentFile;
@@ -51,6 +52,7 @@ public class DocumentIngestionService {
     private final DocumentIdentity documentIdentity;
     private final KnowledgeStore knowledgeStore;
     private final DocumentFailureCodec failureCodec;
+    private final DocumentOcrCheckpointService ocrCheckpointService;
 
     /**
      * 注入文档导入流程依赖。
@@ -62,6 +64,7 @@ public class DocumentIngestionService {
      * @param documentIdentity 稳定 ID 和哈希生成器
      * @param knowledgeStore 检索索引边界
      * @param failureCodec 失败诊断编解码器
+     * @param ocrCheckpointService PDF OCR 页级检查点服务
      */
     public DocumentIngestionService(
             DocumentRepository documentRepository,
@@ -70,7 +73,8 @@ public class DocumentIngestionService {
             TextChunker textChunker,
             DocumentIdentity documentIdentity,
             KnowledgeStore knowledgeStore,
-            DocumentFailureCodec failureCodec
+            DocumentFailureCodec failureCodec,
+            DocumentOcrCheckpointService ocrCheckpointService
     ) {
         this.documentRepository = documentRepository;
         this.ingestionPersistence = ingestionPersistence;
@@ -79,6 +83,7 @@ public class DocumentIngestionService {
         this.documentIdentity = documentIdentity;
         this.knowledgeStore = knowledgeStore;
         this.failureCodec = failureCodec;
+        this.ocrCheckpointService = ocrCheckpointService;
     }
 
     /**
@@ -333,7 +338,12 @@ public class DocumentIngestionService {
             String documentId = documentIdentity.idForPath(normalizedFile.toString());
             Optional<KnowledgeDocument> existing = documentRepository.findById(documentId);
 
-            if (!forceReparse && existing.isPresent() && isUnchanged(existing.get(), metadata)) {
+            stage = DocumentFailureStage.PERSIST;
+            boolean pendingOcrWork = fileType == FileType.PDF
+                    && existing.isPresent()
+                    && hasPendingOcrWork(existing.get(), metadata);
+            stage = DocumentFailureStage.READ;
+            if (!forceReparse && existing.isPresent() && isUnchanged(existing.get(), metadata) && !pendingOcrWork) {
                 assignKnowledgeFolderIfNeeded(existing.get(), knowledgeFolderId, now);
                 if (existing.get().indexedAt() == null) {
                     // SQLite 已有解析结果但索引缺失时，跳过重新解析，只补 Lucene 索引。
@@ -344,8 +354,25 @@ public class DocumentIngestionService {
                 return;
             }
 
+            if (forceReparse && fileType == FileType.PDF) {
+                stage = DocumentFailureStage.PERSIST;
+                ocrCheckpointService.clear(documentId);
+            }
+
             stage = DocumentFailureStage.PARSE;
-            ParsedDocument parsedDocument = parserRegistry.parserFor(fileType).parse(normalizedFile);
+            KnowledgeDocument checkpointPlaceholder = checkpointPlaceholder(
+                    documentId,
+                    knowledgeFolderId,
+                    normalizedFile,
+                    fileType,
+                    metadata,
+                    existing,
+                    now
+            );
+            ParsedDocument parsedDocument = parserRegistry.parserFor(fileType).parse(new DocumentParseRequest(
+                    normalizedFile,
+                    new PersistentDocumentParseCheckpoint(ocrCheckpointService, checkpointPlaceholder)
+            ));
             stage = DocumentFailureStage.CHUNK;
             List<DocumentChunk> documentChunks = textChunker.chunk(parsedDocument);
             if (documentChunks.isEmpty()) {
@@ -438,6 +465,42 @@ public class DocumentIngestionService {
                 && existing.lastModified() == metadata.lastModified()
                 && existing.contentHash().equals(metadata.contentHash())
                 && existing.status() == DocumentStatus.PARSED;
+    }
+
+    private boolean hasPendingOcrWork(KnowledgeDocument existing, FileMetadata metadata) {
+        if (ocrCheckpointService.exists(existing.id(), metadata.contentHash())) {
+            return true;
+        }
+        String failureStage = existing.lastFailureStage();
+        return DocumentFailureStage.OCR.name().equals(failureStage)
+                || DocumentFailureStage.MODEL_CONFIG.name().equals(failureStage)
+                || DocumentFailureStage.MODEL_CALL.name().equals(failureStage);
+    }
+
+    private KnowledgeDocument checkpointPlaceholder(
+            String documentId,
+            String knowledgeFolderId,
+            Path path,
+            FileType fileType,
+            FileMetadata metadata,
+            Optional<KnowledgeDocument> existing,
+            long now
+    ) {
+        return new KnowledgeDocument(
+                documentId,
+                knowledgeFolderId,
+                path.toString(),
+                path.getFileName().toString(),
+                fileType,
+                metadata.fileSize(),
+                metadata.lastModified(),
+                metadata.contentHash(),
+                DocumentStatus.OCR_REQUIRED,
+                null,
+                existing.map(KnowledgeDocument::createdAt).orElse(now),
+                now,
+                0
+        );
     }
 
     /**

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.itqianchen.agentdesign.mapper.document.DocumentOcrCheckpointMapper">
+
+    <resultMap id="CheckpointMap" type="com.itqianchen.agentdesign.domain.entity.document.DocumentOcrCheckpoint">
+        <constructor>
+            <arg column="document_id" javaType="java.lang.String"/>
+            <arg column="source_content_hash" javaType="java.lang.String"/>
+            <arg column="ocr_signature" javaType="java.lang.String"/>
+            <arg column="total_pages" javaType="_int"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="updated_at" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="CheckpointPageMap" type="com.itqianchen.agentdesign.domain.entity.document.DocumentOcrCheckpointPage">
+        <constructor>
+            <arg column="document_id" javaType="java.lang.String"/>
+            <arg column="page_number" javaType="_int"/>
+            <arg column="page_text" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="updated_at" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findByDocumentId" resultMap="CheckpointMap">
+        SELECT document_id, source_content_hash, ocr_signature, total_pages, created_at, updated_at
+        FROM document_ocr_checkpoints
+        WHERE document_id = #{documentId}
+    </select>
+
+    <select id="findPagesByDocumentId" resultMap="CheckpointPageMap">
+        SELECT document_id, page_number, page_text, created_at, updated_at
+        FROM document_ocr_checkpoint_pages
+        WHERE document_id = #{documentId}
+        ORDER BY page_number ASC
+    </select>
+
+    <insert id="upsertCheckpoint">
+        INSERT INTO document_ocr_checkpoints (
+            document_id, source_content_hash, ocr_signature, total_pages, created_at, updated_at
+        ) VALUES (
+            #{documentId}, #{sourceContentHash}, #{ocrSignature}, #{totalPages}, #{createdAt}, #{updatedAt}
+        )
+        ON CONFLICT(document_id) DO UPDATE SET
+            source_content_hash = excluded.source_content_hash,
+            ocr_signature = excluded.ocr_signature,
+            total_pages = excluded.total_pages,
+            updated_at = excluded.updated_at
+    </insert>
+
+    <insert id="upsertPage">
+        INSERT INTO document_ocr_checkpoint_pages (
+            document_id, page_number, page_text, created_at, updated_at
+        ) VALUES (
+            #{documentId}, #{pageNumber}, #{pageText}, #{createdAt}, #{updatedAt}
+        )
+        ON CONFLICT(document_id, page_number) DO UPDATE SET
+            page_text = excluded.page_text,
+            updated_at = excluded.updated_at
+    </insert>
+
+    <delete id="deleteByDocumentId">
+        DELETE FROM document_ocr_checkpoints WHERE document_id = #{documentId}
+    </delete>
+
+    <delete id="deletePagesByDocumentId">
+        DELETE FROM document_ocr_checkpoint_pages WHERE document_id = #{documentId}
+    </delete>
+
+    <select id="countByDocumentIdAndSourceContentHash" resultType="_int">
+        SELECT COUNT(*)
+        FROM document_ocr_checkpoints
+        WHERE document_id = #{documentId}
+          AND source_content_hash = #{sourceContentHash}
+    </select>
+</mapper>

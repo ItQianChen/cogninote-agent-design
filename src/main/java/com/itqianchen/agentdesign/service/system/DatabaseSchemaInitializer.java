@@ -60,6 +60,8 @@ public class DatabaseSchemaInitializer implements ApplicationListener<Applicatio
         databaseSchemaMapper.createKnowledgeFoldersTable();
         databaseSchemaMapper.createDocumentsTable();
         migrateDocumentFailureColumns();
+        databaseSchemaMapper.createDocumentOcrCheckpointsTable();
+        databaseSchemaMapper.createDocumentOcrCheckpointPagesTable();
         databaseSchemaMapper.createChunksTable();
         databaseSchemaMapper.createModelConfigsTable();
         migrateModelConfigEmbeddingRateLimitColumns();

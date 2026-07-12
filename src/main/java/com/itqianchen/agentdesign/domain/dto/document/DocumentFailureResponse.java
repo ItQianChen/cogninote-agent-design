@@ -21,8 +21,29 @@ public record DocumentFailureResponse(
         String provider,
         String modelName,
         Integer httpStatus,
-        String providerErrorCode
+        String providerErrorCode,
+        Integer completedPages,
+        Integer totalPages,
+        Integer resumePage
 ) {
+    public DocumentFailureResponse(
+            String sourcePath,
+            String stage,
+            String code,
+            String message,
+            String detail,
+            String suggestion,
+            Long occurredAt,
+            Integer pageNumber,
+            String provider,
+            String modelName,
+            Integer httpStatus,
+            String providerErrorCode
+    ) {
+        this(sourcePath, stage, code, message, detail, suggestion, occurredAt, pageNumber,
+                provider, modelName, httpStatus, providerErrorCode, null, null, null);
+    }
+
     public static DocumentFailureResponse of(
             String sourcePath,
             DocumentFailureStage stage,
@@ -49,7 +70,30 @@ public record DocumentFailureResponse(
                 provider,
                 modelName,
                 httpStatus,
-                providerErrorCode
+                providerErrorCode,
+                null,
+                null,
+                null
+        );
+    }
+
+    public DocumentFailureResponse withOcrProgress(int completedPages, int totalPages, Integer resumePage) {
+        return new DocumentFailureResponse(
+                sourcePath,
+                stage,
+                code,
+                message,
+                detail,
+                suggestion,
+                occurredAt,
+                pageNumber,
+                provider,
+                modelName,
+                httpStatus,
+                providerErrorCode,
+                completedPages,
+                totalPages,
+                resumePage
         );
     }
 
@@ -78,7 +122,10 @@ public record DocumentFailureResponse(
                 provider,
                 modelName,
                 httpStatus,
-                providerErrorCode
+                providerErrorCode,
+                completedPages,
+                totalPages,
+                resumePage
         );
     }
 }

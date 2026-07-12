@@ -1,6 +1,7 @@
 package com.itqianchen.agentdesign.domain.dto.knowledge;
 
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
+import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ScannedDocumentFile;
 
 /**
@@ -11,7 +12,8 @@ public record KnowledgeProblemDocumentResponse(
         String sourcePath,
         String fileName,
         String message,
-        long updatedAt
+        long updatedAt,
+        DocumentFailureResponse lastFailure
 ) {
     /**
      * 从文档记录构造问题文档响应。
@@ -26,7 +28,23 @@ public record KnowledgeProblemDocumentResponse(
                 document.sourcePath(),
                 document.fileName(),
                 message,
-                document.updatedAt()
+                document.updatedAt(),
+                null
+        );
+    }
+
+    public static KnowledgeProblemDocumentResponse from(
+            KnowledgeDocument document,
+            String message,
+            DocumentFailureResponse lastFailure
+    ) {
+        return new KnowledgeProblemDocumentResponse(
+                document.id(),
+                document.sourcePath(),
+                document.fileName(),
+                message,
+                document.updatedAt(),
+                lastFailure
         );
     }
 
@@ -43,7 +61,8 @@ public record KnowledgeProblemDocumentResponse(
                 file.sourcePath(),
                 file.fileName(),
                 message,
-                file.lastModified()
+                file.lastModified(),
+                null
         );
     }
 }

@@ -15,6 +15,19 @@ export function failureStageLabel(failure) {
   return FAILURE_STAGE_LABELS[failure?.stage] || failure?.stage || '未知阶段'
 }
 
+export function failureProgressLabel(failure) {
+  const completedPages = Number(failure?.completedPages)
+  const totalPages = Number(failure?.totalPages)
+  const resumePage = Number(failure?.resumePage)
+  if (!Number.isInteger(completedPages) || !Number.isInteger(totalPages) || totalPages <= 0) {
+    return ''
+  }
+  if (Number.isInteger(resumePage) && resumePage > 0) {
+    return `已保存 ${completedPages} / ${totalPages} 页，下次同步将从第 ${resumePage} 页继续。`
+  }
+  return `已保存 ${completedPages} / ${totalPages} 页。`
+}
+
 export function failureTechnicalRows(failure) {
   if (!failure) {
     return []
@@ -24,6 +37,10 @@ export function failureTechnicalRows(failure) {
     ['Provider', failure.provider],
     ['模型', failure.modelName],
     ['PDF 页码', failure.pageNumber ? `第 ${failure.pageNumber} 页` : ''],
+    ['OCR 进度', failure.completedPages !== null && failure.completedPages !== undefined
+      ? `${failure.completedPages} / ${failure.totalPages} 页`
+      : ''],
+    ['下次继续', failure.resumePage ? `第 ${failure.resumePage} 页` : ''],
     ['HTTP 状态', failure.httpStatus],
     ['服务商错误码', failure.providerErrorCode],
     ['技术详情', failure.detail]

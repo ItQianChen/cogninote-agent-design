@@ -1357,18 +1357,21 @@ public class KnowledgeHealthService {
                 .filter(document -> document.status() == DocumentStatus.FAILED
                         || document.status() == DocumentStatus.OCR_REQUIRED
                         || document.hasLastFailure())
-                .map(document -> KnowledgeProblemDocumentResponse.from(
-                        document,
-                        problemDocumentMessage(document)
-                ))
+                .map(document -> {
+                    DocumentFailureResponse failure = failureCodec.fromDocument(document);
+                    return KnowledgeProblemDocumentResponse.from(
+                            document,
+                            problemDocumentMessage(document, failure),
+                            failure
+                    );
+                })
                 .toList();
     }
 
-    private String problemDocumentMessage(KnowledgeDocument document) {
+    private String problemDocumentMessage(KnowledgeDocument document, DocumentFailureResponse failure) {
         if (document.status() == DocumentStatus.OCR_REQUIRED) {
             return PDF_OCR_REQUIRED_DOCUMENT_MESSAGE;
         }
-        DocumentFailureResponse failure = failureCodec.fromDocument(document);
         return failure == null
                 ? PARSE_FAILED_DOCUMENT_MESSAGE
                 : failure.message();

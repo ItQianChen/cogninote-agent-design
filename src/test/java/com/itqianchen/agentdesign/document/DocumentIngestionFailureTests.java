@@ -25,12 +25,14 @@ import com.itqianchen.agentdesign.domain.support.ingestion.DocumentParserRegistr
 import com.itqianchen.agentdesign.domain.support.ingestion.TextChunker;
 import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentChunk;
 import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
+import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentParseRequest;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedSection;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.service.document.DocumentFailureCodec;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionPersistence;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
+import com.itqianchen.agentdesign.service.document.DocumentOcrCheckpointService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -58,7 +60,7 @@ class DocumentIngestionFailureTests {
 
         when(documentRepository.findById(anyString())).thenReturn(Optional.empty());
         when(parserRegistry.parserFor(FileType.TEXT)).thenReturn(parser);
-        when(parser.parse(any(Path.class))).thenThrow(new DocumentParseException("parse failed"));
+        when(parser.parse(any(DocumentParseRequest.class))).thenThrow(new DocumentParseException("parse failed"));
         doThrow(new IllegalStateException("sqlite unavailable"))
                 .when(ingestionPersistence)
                 .replaceFailedDocument(any(KnowledgeDocument.class));
@@ -70,7 +72,8 @@ class DocumentIngestionFailureTests {
                 mock(TextChunker.class),
                 new DocumentIdentity(),
                 knowledgeStore,
-                new DocumentFailureCodec(new ObjectMapper())
+                new DocumentFailureCodec(new ObjectMapper()),
+                mock(DocumentOcrCheckpointService.class)
         );
 
         IngestDocumentsResponse response = ingestionService.ingestFolder(tempDir.toString(), true);
@@ -103,7 +106,7 @@ class DocumentIngestionFailureTests {
         KnowledgeStore knowledgeStore = mock(KnowledgeStore.class);
         when(documentRepository.findById(documentId)).thenReturn(Optional.of(existing));
         when(parserRegistry.parserFor(FileType.TEXT)).thenReturn(parser);
-        when(parser.parse(any(Path.class))).thenThrow(new DocumentParseException("temporary parse failure"));
+        when(parser.parse(any(DocumentParseRequest.class))).thenThrow(new DocumentParseException("temporary parse failure"));
 
         DocumentIngestionService ingestionService = service(
                 documentRepository,
@@ -151,7 +154,7 @@ class DocumentIngestionFailureTests {
         KnowledgeStore knowledgeStore = mock(KnowledgeStore.class);
         when(documentRepository.findById(documentId)).thenReturn(Optional.of(existing));
         when(parserRegistry.parserFor(FileType.TEXT)).thenReturn(parser);
-        when(parser.parse(any(Path.class))).thenReturn(new ParsedDocument(
+        when(parser.parse(any(DocumentParseRequest.class))).thenReturn(new ParsedDocument(
                 FileType.TEXT,
                 List.of(new ParsedSection("updated text", null, null))
         ));
@@ -203,7 +206,7 @@ class DocumentIngestionFailureTests {
         KnowledgeStore knowledgeStore = mock(KnowledgeStore.class);
         when(documentRepository.findById(anyString())).thenReturn(Optional.empty());
         when(parserRegistry.parserFor(FileType.TEXT)).thenReturn(parser);
-        when(parser.parse(any(Path.class))).thenThrow(new DocumentParseException("parse failed"));
+        when(parser.parse(any(DocumentParseRequest.class))).thenThrow(new DocumentParseException("parse failed"));
 
         DocumentIngestionService ingestionService = service(
                 documentRepository,
@@ -224,6 +227,99 @@ class DocumentIngestionFailureTests {
         verify(knowledgeStore).deleteByDocumentId(documentCaptor.getValue().id());
     }
 
+    @Test
+    void syncDoesNotSkipUnchangedPdfWithPendingOcrCheckpoint() throws Exception {
+        Path documentPath = tempDir.resolve("resume.pdf");
+        Files.writeString(documentPath, "fake pdf bytes");
+        DocumentIdentity documentIdentity = new DocumentIdentity();
+        String normalizedPath = documentPath.toAbsolutePath().normalize().toString();
+        String documentId = documentIdentity.idForPath(normalizedPath);
+        String contentHash = documentIdentity.hashFile(documentPath);
+        long now = System.currentTimeMillis();
+        KnowledgeDocument existing = new KnowledgeDocument(
+                documentId,
+                "folder-resume",
+                normalizedPath,
+                documentPath.getFileName().toString(),
+                FileType.PDF,
+                Files.size(documentPath),
+                Files.getLastModifiedTime(documentPath).toMillis(),
+                contentHash,
+                DocumentStatus.PARSED,
+                now,
+                now,
+                now,
+                1
+        );
+        DocumentRepository documentRepository = mock(DocumentRepository.class);
+        DocumentIngestionPersistence ingestionPersistence = mock(DocumentIngestionPersistence.class);
+        DocumentParserRegistry parserRegistry = mock(DocumentParserRegistry.class);
+        DocumentParser parser = mock(DocumentParser.class);
+        TextChunker textChunker = mock(TextChunker.class);
+        KnowledgeStore knowledgeStore = mock(KnowledgeStore.class);
+        DocumentOcrCheckpointService checkpointService = mock(DocumentOcrCheckpointService.class);
+        when(documentRepository.findById(documentId)).thenReturn(Optional.of(existing));
+        when(checkpointService.exists(documentId, contentHash)).thenReturn(true);
+        when(parserRegistry.parserFor(FileType.PDF)).thenReturn(parser);
+        when(parser.parse(any(DocumentParseRequest.class))).thenReturn(new ParsedDocument(
+                FileType.PDF,
+                List.of(new ParsedSection("resumed page", null, 1))
+        ));
+        when(textChunker.chunk(any(ParsedDocument.class))).thenReturn(
+                List.of(new DocumentChunk(0, "resumed page", 1, null, 2))
+        );
+
+        IngestDocumentsResponse response = service(
+                documentRepository,
+                ingestionPersistence,
+                parserRegistry,
+                textChunker,
+                documentIdentity,
+                knowledgeStore,
+                checkpointService
+        ).syncKnowledgeFolder("folder-resume", tempDir.toString(), true);
+
+        assertThat(response.parsedCount()).isEqualTo(1);
+        assertThat(response.skippedCount()).isZero();
+        verify(parser).parse(any(DocumentParseRequest.class));
+    }
+
+    @Test
+    void reparseClearsPdfCheckpointBeforeParsing() throws Exception {
+        Path documentPath = tempDir.resolve("restart.pdf");
+        Files.writeString(documentPath, "fake pdf bytes");
+        DocumentIdentity documentIdentity = new DocumentIdentity();
+        String documentId = documentIdentity.idForPath(documentPath.toAbsolutePath().normalize().toString());
+        DocumentRepository documentRepository = mock(DocumentRepository.class);
+        DocumentIngestionPersistence ingestionPersistence = mock(DocumentIngestionPersistence.class);
+        DocumentParserRegistry parserRegistry = mock(DocumentParserRegistry.class);
+        DocumentParser parser = mock(DocumentParser.class);
+        TextChunker textChunker = mock(TextChunker.class);
+        DocumentOcrCheckpointService checkpointService = mock(DocumentOcrCheckpointService.class);
+        when(documentRepository.findById(documentId)).thenReturn(Optional.empty());
+        when(parserRegistry.parserFor(FileType.PDF)).thenReturn(parser);
+        when(parser.parse(any(DocumentParseRequest.class))).thenReturn(new ParsedDocument(
+                FileType.PDF,
+                List.of(new ParsedSection("fresh page", null, 1))
+        ));
+        when(textChunker.chunk(any(ParsedDocument.class))).thenReturn(
+                List.of(new DocumentChunk(0, "fresh page", 1, null, 2))
+        );
+
+        service(
+                documentRepository,
+                ingestionPersistence,
+                parserRegistry,
+                textChunker,
+                documentIdentity,
+                mock(KnowledgeStore.class),
+                checkpointService
+        ).reparseKnowledgeFolder("folder-restart", tempDir.toString(), true);
+
+        verify(checkpointService).clear(documentId);
+        verify(parser).parse(any(DocumentParseRequest.class));
+    }
+
     private static DocumentIngestionService service(
             DocumentRepository documentRepository,
             DocumentIngestionPersistence ingestionPersistence,
@@ -232,6 +328,26 @@ class DocumentIngestionFailureTests {
             DocumentIdentity documentIdentity,
             KnowledgeStore knowledgeStore
     ) {
+        return service(
+                documentRepository,
+                ingestionPersistence,
+                parserRegistry,
+                textChunker,
+                documentIdentity,
+                knowledgeStore,
+                mock(DocumentOcrCheckpointService.class)
+        );
+    }
+
+    private static DocumentIngestionService service(
+            DocumentRepository documentRepository,
+            DocumentIngestionPersistence ingestionPersistence,
+            DocumentParserRegistry parserRegistry,
+            TextChunker textChunker,
+            DocumentIdentity documentIdentity,
+            KnowledgeStore knowledgeStore,
+            DocumentOcrCheckpointService checkpointService
+    ) {
         return new DocumentIngestionService(
                 documentRepository,
                 ingestionPersistence,
@@ -239,7 +355,8 @@ class DocumentIngestionFailureTests {
                 textChunker,
                 documentIdentity,
                 knowledgeStore,
-                new DocumentFailureCodec(new ObjectMapper())
+                new DocumentFailureCodec(new ObjectMapper()),
+                checkpointService
         );
     }
 

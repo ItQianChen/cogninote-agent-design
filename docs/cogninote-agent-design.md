@@ -661,6 +661,26 @@ CREATE TABLE chunks (
     FOREIGN KEY (document_id) REFERENCES documents(id)
 );
 
+CREATE TABLE document_ocr_checkpoints (
+    document_id TEXT PRIMARY KEY,
+    source_content_hash TEXT NOT NULL,
+    ocr_signature TEXT NOT NULL,
+    total_pages INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+);
+
+CREATE TABLE document_ocr_checkpoint_pages (
+    document_id TEXT NOT NULL,
+    page_number INTEGER NOT NULL,
+    page_text TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (document_id, page_number),
+    FOREIGN KEY (document_id) REFERENCES document_ocr_checkpoints(document_id) ON DELETE CASCADE
+);
+
 CREATE TABLE model_configs (
     id TEXT PRIMARY KEY,
     role TEXT NOT NULL,
@@ -801,6 +821,8 @@ CREATE TABLE knowledge_graph_views (
 `knowledge_folder_runs` 是知识库维护队列和历史记录的事实源。第 31 阶段它只保存完成后的导入、同步、重建索引、启用、停用和删除结果；第 33 阶段升级为本地 FIFO 队列，`status` 覆盖 `QUEUED`、`RUNNING`、`CANCELLING`、`CANCELLED`、`COMPLETED`、`COMPLETED_WITH_WARNINGS`、`FAILED`，`phase/current_item/progress_*` 用于表达当前阶段和当前处理对象。运行记录的 `failed_count` 表示本次维护操作失败的文件数，即使保留旧 `PARSED` 结果也会计数；健康快照的 `failedCount` 则只统计当前不可检索的 `FAILED` 和 `OCR_REQUIRED` 文档。`failures_json` 保存单文件结构化失败列表；`error_stage/error_code/error_detail` 保存目录扫描、索引初始化等任务整体失败。旧版两字段 `failures_json` 读取时归一化为 `UNKNOWN/LEGACY_FAILURE`。`started_at`、`completed_at` 和 `duration_ms` 对等待中或未结束任务可以为空，调用方必须以 `status` 判断生命周期。健康快照不落表，而是由 `knowledge_folders`、`documents.status`、`documents.indexed_at`、最近失败信息、文件大小、修改时间、本地路径存在性和 Lucene reader 统计即时派生；这样能避免用户在应用外移动或修改文件后，持久化健康状态立刻变成过期副本。删除知识库目录时会清理该目录 scope 下的维护记录，`ALL` scope 和其他目录运行记录不受影响。
 
 `documents.last_failure_*` 保存最近一次文档处理诊断，阶段覆盖扫描、读取、解析、OCR、模型配置、模型调用、切块、SQLite 持久化和 Lucene 索引。文档成功完成解析和索引后会清空这些字段。维护同步失败但旧解析结果仍可用时，文档继续保持 `PARSED`，同时保留最近失败信息；前端以黄色警告提示“当前仍使用旧索引”。因此 `failed_count` 只统计当前不可检索的 `FAILED` 和 `OCR_REQUIRED`，不会把保留旧结果的警告计入不可用文档数。
+
+`document_ocr_checkpoints` 和 `document_ocr_checkpoint_pages` 保存无文本层 PDF 的页级模型 OCR 进度。页面识别成功后立即独立提交，后续页面失败不会回滚；普通同步按文件哈希和 OCR 执行签名恢复进度，整份完成后才原子生成正式 chunks 并清除检查点。执行签名覆盖 Provider、Base URL、模型、Prompt、解析版本和渲染 DPI，不包含 API Key、超时或预算。只有经渲染像素检查确认近乎纯白的页面才会以空文本记为已完成；非空页面的模型空响应归类为 `MODEL_EMPTY_RESPONSE`，不写检查点并在下次普通同步时重试。`REPARSE` 会主动清除检查点并从第一页开始。检查点文本不进入 Lucene，也不保存页面图片或模型请求体。
 
 `model_configs.context_window_tokens` 是第 22 阶段新增的 Chat 上下文窗口字段。默认 Chat 配置为 `128000`，Embedding 配置为 `null`；旧库启动时由 schema 初始化自动补列。
 
@@ -1415,6 +1437,7 @@ POST   /api/chat/stream/{requestId}/cancel
 - PDF 无文本层时持久化为 `OCR_REQUIRED`，健康诊断生成 `PDF_OCR_REQUIRED`。
 - 设置中心新增“策略 -> OCR 识别”，第一版接入 `MODEL_VISION`；密钥归属独立视觉模型配置，并可在模型设置页明文回显。
 - 新增 `REPARSE` 维护动作，用于 OCR 配置开启后重新解析目录内无文本层 PDF。
+- 模型 OCR 支持 SQLite 页级检查点：普通同步从失败页续传，`REPARSE` 清除进度并从第一页开始；完整 PDF 处理完成前不进入知识库检索。
 
 ## 12. 后续版本规划
 

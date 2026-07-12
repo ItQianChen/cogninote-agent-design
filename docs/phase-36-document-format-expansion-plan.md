@@ -209,7 +209,7 @@ PDF_OCR:tesseract-cli:v1:lang=chi_sim+eng:dpi=300
 
 36-3 已落地，详见 [第 36-3 阶段计划：PDF OCR 需求检测和用户可见诊断](phase-36-3-pdf-ocr-required-diagnosis-plan.md)。
 
-当前实现只把没有可抽取文本层的 PDF 诊断为 `OCR_REQUIRED`，并在健康诊断中展示 `PDF_OCR_REQUIRED`；不执行 OCR，不引入 Tesseract/Tika，不改 SQLite/Lucene schema。
+36-3 先把没有可抽取文本层的 PDF 诊断为 `OCR_REQUIRED`，并在健康诊断中展示 `PDF_OCR_REQUIRED`；该阶段本身不执行 OCR，不引入 Tesseract/Tika，也不修改 SQLite/Lucene schema。后续 36-4 已补充模型 OCR 和独立页级检查点表。
 
 ### 实现方案
 
@@ -281,9 +281,12 @@ PDFTextStripper extracts text layer
   -> if any page has text: return text sections, do not OCR blank pages
   -> if no page has text and OCR disabled/unavailable: OCR_REQUIRED
   -> if no page has text and model OCR enabled:
-       PDFRenderer.renderImageWithDPI(pageIndex, 200)
-       call VISION model with page image
-       return ParsedSection(pageText, null, pageNumber)
+       load matching SQLite page checkpoints
+       for each unfinished page:
+         PDFRenderer.renderImageWithDPI(pageIndex, 200)
+         call VISION model with page image
+         persist page text checkpoint immediately
+       after all pages complete: return full ParsedSection list
 ```
 
 实现约束：
@@ -293,13 +296,16 @@ PDFTextStripper extracts text layer
 - OCR 设置只保存开关和限制；密钥归属 `VISION` 模型配置，设置响应只返回视觉模型摘要。
 - `POST /api/ocr/test` 使用后端生成的小测试图片验证视觉模型图片输入能力，不上传用户文件，不返回密钥。
 - OCR 结果只进入 SQLite chunks 和 Lucene 索引，不修改用户原 PDF。
+- OCR 页面原文先进入独立 SQLite 检查点；完整 PDF 成功前不生成正式 chunks 或 Lucene 索引。
+- 只有经像素检查确认近乎纯白的页面才保存空文本检查点；非空页面的模型空响应不标记为完成。
 - OCR 失败不覆盖已有成功解析结果，继续遵守现有 `FailedDocumentPolicy`。
-- `REPARSE` 忽略 `isUnchanged(...)`，用于 OCR 配置开启后重新处理旧的 `OCR_REQUIRED` 文档。
-- 普通 `SYNC` 仍保持增量跳过，`REBUILD_INDEX` 仍只负责索引重建。
+- 普通 `SYNC` 从有效检查点的首个未完成页面继续；存在检查点或 OCR/模型失败诊断时不能被未变化逻辑跳过。
+- `REPARSE` 忽略 `isUnchanged(...)`，并清除 OCR 检查点后从第一页开始。
+- `REBUILD_INDEX` 仍只负责索引重建。
 
 ### parser signature
 
-36-4 仍不新增 `parser_signature` 字段，先用显式 `REPARSE` 维护动作解决策略变化后的重新解析问题。
+36-4 仍不在 `documents` 增加 `parser_signature` 字段。页级检查点使用独立 `ocr_signature`，由 Provider、Base URL、模型、Prompt、解析版本和 DPI 计算；签名变化自动丢弃旧页面，显式 `REPARSE` 也会清除进度。
 
 后续如需要 schema 字段，可使用以下设计值：
 
@@ -319,6 +325,7 @@ DOC:poi-hwpf:v1
 - OCR 设置保存开关和限制；视觉模型密钥在模型配置页明文可见、可复制、可清空。
 - 测试连接成功/失败都有明确反馈，且响应中不包含密钥。
 - 目录管理和健康诊断能引导用户对 `PDF_OCR_REQUIRED` 执行“配置视觉模型”或“重新解析目录”。
+- OCR 中途失败会在维护详情、目录文档行和健康诊断中展示已保存页数与续传页；普通同步不重复调用已完成页面。
 
 ## 阶段 5：本地 / 离线 OCR 扩展评估
 

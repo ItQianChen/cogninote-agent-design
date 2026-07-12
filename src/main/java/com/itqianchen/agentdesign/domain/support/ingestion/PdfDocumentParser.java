@@ -3,7 +3,13 @@ package com.itqianchen.agentdesign.domain.support.ingestion;
 import com.itqianchen.agentdesign.domain.enums.document.FileType;
 import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
 import com.itqianchen.agentdesign.domain.exception.ingestion.PdfOcrRequiredException;
+import com.itqianchen.agentdesign.domain.exception.ingestion.OcrProgressException;
+import com.itqianchen.agentdesign.domain.exception.ingestion.OcrPageProcessingException;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureCode;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureStage;
+import com.itqianchen.agentdesign.domain.interfaces.ingestion.DocumentParseCheckpoint;
 import com.itqianchen.agentdesign.domain.interfaces.ingestion.DocumentParser;
+import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentParseRequest;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedSection;
 import com.itqianchen.agentdesign.service.ocr.OcrEngine;
@@ -16,7 +22,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import javax.imageio.ImageIO;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -35,6 +43,8 @@ import org.springframework.stereotype.Component;
 public class PdfDocumentParser implements DocumentParser {
 
     private static final int OCR_RENDER_DPI = 200;
+    private static final int BLANK_PIXEL_CHANNEL_THRESHOLD = 245;
+    private static final double MAX_BLANK_PAGE_NON_WHITE_RATIO = 0.00002d;
 
     private final OcrSettingsProvider ocrSettingsProvider;
     private final OcrEngineRegistry ocrEngineRegistry;
@@ -72,6 +82,12 @@ public class PdfDocumentParser implements DocumentParser {
      */
     @Override
     public ParsedDocument parse(Path path) {
+        return parse(DocumentParseRequest.direct(path));
+    }
+
+    @Override
+    public ParsedDocument parse(DocumentParseRequest request) {
+        Path path = request.path();
         try (PDDocument document = Loader.loadPDF(path.toFile())) {
             PDFTextStripper stripper = new PDFTextStripper();
             stripper.setSortByPosition(true);
@@ -88,7 +104,7 @@ public class PdfDocumentParser implements DocumentParser {
             }
 
             if (sections.isEmpty()) {
-                sections = parseWithOcr(path, document);
+                sections = parseWithOcr(path, document, request.checkpoint());
             }
 
             return new ParsedDocument(FileType.PDF, sections);
@@ -97,7 +113,11 @@ public class PdfDocumentParser implements DocumentParser {
         }
     }
 
-    private List<ParsedSection> parseWithOcr(Path path, PDDocument document) {
+    private List<ParsedSection> parseWithOcr(
+            Path path,
+            PDDocument document,
+            DocumentParseCheckpoint checkpoint
+    ) {
         OcrSettingsSnapshot settings = ocrSettingsProvider == null
                 ? OcrSettingsSnapshot.defaults()
                 : ocrSettingsProvider.snapshot();
@@ -109,26 +129,107 @@ public class PdfDocumentParser implements DocumentParser {
         }
 
         OcrEngine engine = ocrEngineRegistry.engineFor(settings.provider());
+        int totalPages = document.getNumberOfPages();
+        String parserSignature = "PDF_OCR:v1:dpi=" + OCR_RENDER_DPI + ":" + engine.checkpointSignature(settings);
+        Map<Integer, ParsedSection> completedSections = prepareCheckpoint(
+                checkpoint,
+                parserSignature,
+                totalPages
+        );
         PDFRenderer renderer = new PDFRenderer(document);
-        List<ParsedSection> sections = new ArrayList<>();
-        for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); pageIndex++) {
+        List<ParsedSection> sections = new ArrayList<>(completedSections.values().stream()
+                .filter(section -> section.content() != null && !section.content().isBlank())
+                .toList());
+        int completedPages = completedSections.size();
+        for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+            int pageNumber = pageIndex + 1;
+            if (completedSections.containsKey(pageNumber)) {
+                continue;
+            }
             try {
                 BufferedImage image = renderer.renderImageWithDPI(pageIndex, OCR_RENDER_DPI, ImageType.RGB);
+                if (isVisuallyBlank(image)) {
+                    checkpoint.save(new ParsedSection("", null, pageNumber));
+                    completedPages++;
+                    continue;
+                }
                 String text = engine.recognize(
-                        new OcrPageImage(path, pageIndex + 1, toPngBytes(image)),
+                        new OcrPageImage(path, pageNumber, toPngBytes(image)),
                         settings
                 );
-                if (text != null && !text.isBlank()) {
-                    sections.add(new ParsedSection(text, null, pageIndex + 1));
+                if (text == null || text.isBlank()) {
+                    throw new OcrPageProcessingException(
+                            DocumentFailureStage.MODEL_CALL,
+                            DocumentFailureCode.MODEL_EMPTY_RESPONSE,
+                            "视觉模型没有返回可用文字。",
+                            "Vision model returned empty text for a non-blank PDF page",
+                            pageNumber,
+                            settings.provider().name(),
+                            null
+                    );
                 }
+                ParsedSection section = new ParsedSection(text, null, pageNumber);
+                checkpoint.save(section);
+                completedPages++;
+                sections.add(section);
             } catch (IOException ex) {
-                throw new DocumentParseException("Failed to OCR PDF file: " + path, ex);
+                throw progressFailure(
+                        checkpoint,
+                        new OcrPageProcessingException(
+                                DocumentFailureStage.OCR,
+                                DocumentFailureCode.OCR_RENDER_FAILED,
+                                "PDF 页面渲染失败。",
+                                "Failed to render or encode PDF page " + pageNumber + ": " + path,
+                                pageNumber,
+                                settings.provider().name(),
+                                ex
+                        ),
+                        completedPages,
+                        totalPages,
+                        pageNumber
+                );
+            } catch (RuntimeException ex) {
+                throw progressFailure(checkpoint, ex, completedPages, totalPages, pageNumber);
             }
         }
+        sections.sort((left, right) -> Integer.compare(left.pageNumber(), right.pageNumber()));
         if (sections.isEmpty()) {
-            throw new DocumentParseException("PDF OCR produced no usable text: " + path);
+            RuntimeException failure = new DocumentParseException("PDF OCR produced no usable text: " + path);
+            throw progressFailure(checkpoint, failure, completedPages, totalPages, null);
         }
         return sections;
+    }
+
+    private static Map<Integer, ParsedSection> prepareCheckpoint(
+            DocumentParseCheckpoint checkpoint,
+            String parserSignature,
+            int totalPages
+    ) {
+        try {
+            Map<Integer, ParsedSection> sections = new LinkedHashMap<>();
+            for (ParsedSection section : checkpoint.prepare(parserSignature, totalPages)) {
+                if (section.pageNumber() != null
+                        && section.pageNumber() >= 1
+                        && section.pageNumber() <= totalPages) {
+                    sections.put(section.pageNumber(), section);
+                }
+            }
+            return sections;
+        } catch (RuntimeException ex) {
+            throw progressFailure(checkpoint, ex, 0, totalPages, 1);
+        }
+    }
+
+    private static RuntimeException progressFailure(
+            DocumentParseCheckpoint checkpoint,
+            RuntimeException failure,
+            int completedPages,
+            int totalPages,
+            Integer resumePage
+    ) {
+        return checkpoint.durable()
+                ? new OcrProgressException(failure, completedPages, totalPages, resumePage)
+                : failure;
     }
 
     private static byte[] toPngBytes(BufferedImage image) throws IOException {
@@ -136,6 +237,32 @@ public class PdfDocumentParser implements DocumentParser {
             ImageIO.write(image, "png", outputStream);
             return outputStream.toByteArray();
         }
+    }
+
+    /**
+     * 只把近乎纯白的页面视为确认空白，避免把模型偶发空响应误记为已完成页面。
+     */
+    private static boolean isVisuallyBlank(BufferedImage image) {
+        long pixelCount = (long) image.getWidth() * image.getHeight();
+        long maximumNonWhitePixels = Math.max(8L, (long) (pixelCount * MAX_BLANK_PAGE_NON_WHITE_RATIO));
+        long nonWhitePixels = 0;
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                int rgb = image.getRGB(x, y);
+                int red = (rgb >>> 16) & 0xff;
+                int green = (rgb >>> 8) & 0xff;
+                int blue = rgb & 0xff;
+                if (red < BLANK_PIXEL_CHANNEL_THRESHOLD
+                        || green < BLANK_PIXEL_CHANNEL_THRESHOLD
+                        || blue < BLANK_PIXEL_CHANNEL_THRESHOLD) {
+                    nonWhitePixels++;
+                    if (nonWhitePixels > maximumNonWhitePixels) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 }
 

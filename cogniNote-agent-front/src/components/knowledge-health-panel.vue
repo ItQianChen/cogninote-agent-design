@@ -30,6 +30,7 @@ import { useSearchStore } from '../stores/search'
 import { formatTime } from '../utils/formatters'
 import { buildIssueCategories } from '../utils/knowledge-health-issues'
 import {
+  failureProgressLabel,
   failureStageLabel,
   failureTechnicalRows,
   groupFailuresByStage
@@ -1021,6 +1022,7 @@ defineExpose({
             <article v-for="failure in group.items" :key="`${failure.sourcePath}-${failure.code}-${failure.message}`">
               <strong>{{ failure.sourcePath }}</strong>
               <p>{{ failure.message }}</p>
+              <span v-if="failureProgressLabel(failure)">{{ failureProgressLabel(failure) }}</span>
               <span v-if="failure.suggestion">{{ failure.suggestion }}</span>
               <details v-if="failureTechnicalRows(failure).length">
                 <summary>查看技术详情</summary>

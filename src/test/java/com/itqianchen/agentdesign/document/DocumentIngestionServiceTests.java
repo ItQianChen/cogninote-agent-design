@@ -26,6 +26,7 @@ import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRepository
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
 import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import com.itqianchen.agentdesign.service.ocr.OcrSettingsService;
+import java.awt.Color;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
 import java.io.IOException;
 import java.net.URL;
@@ -301,7 +302,7 @@ class DocumentIngestionServiceTests {
     void reparseKnowledgeFolderUsesOcrForPreviousOcrRequiredPdf() throws Exception {
         String folderId = upsertKnowledgeFolder("folder-reparse-ocr");
         Path pdf = tempDir.resolve("reparse-scanned.pdf");
-        writeBlankPdf(pdf);
+        writeImageOnlyPdf(pdf);
         ingestionService.ingestKnowledgeFolder(folderId, tempDir.toString(), true);
         KnowledgeDocument ocrRequired = documentRepository.findAllOrderByUpdatedAtDesc().getFirst();
         assertThat(ocrRequired.status()).isEqualTo(DocumentStatus.OCR_REQUIRED);
@@ -405,6 +406,21 @@ class DocumentIngestionServiceTests {
         Files.deleteIfExists(path);
         try (PDDocument document = new PDDocument()) {
             document.addPage(new PDPage());
+            document.save(path.toFile());
+        }
+    }
+
+    private void writeImageOnlyPdf(Path path) throws Exception {
+        Files.deleteIfExists(path);
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+                // 非文本图形用于模拟扫描页，PDFTextStripper 不会把它误判成文本层。
+                contentStream.setNonStrokingColor(Color.BLACK);
+                contentStream.addRect(72, 680, 180, 24);
+                contentStream.fill();
+            }
             document.save(path.toFile());
         }
     }

@@ -274,7 +274,7 @@ class KnowledgeGraphServiceTests {
         private final Map<String, KnowledgeDocument> documents = new HashMap<>();
 
         private FakeDocumentRepository() {
-            super(null);
+            super(null, null);
         }
 
         @Override

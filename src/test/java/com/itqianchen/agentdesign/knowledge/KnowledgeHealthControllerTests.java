@@ -193,6 +193,54 @@ class KnowledgeHealthControllerTests {
     }
 
     @Test
+    void folderHealthIncludesPersistedOcrResumeProgress() throws Exception {
+        long now = System.currentTimeMillis();
+        String folderId = "folder-ocr-progress";
+        folderRepository.upsert(new KnowledgeFolder(
+                folderId,
+                tempDir.toAbsolutePath().normalize().toString(),
+                "OCR Progress Folder",
+                true,
+                true,
+                now,
+                now,
+                now,
+                now
+        ));
+        Path path = tempDir.resolve("partial.pdf");
+        Files.writeString(path, "placeholder");
+        Path normalizedPath = path.toAbsolutePath().normalize();
+        documentRepository.upsertDocument(new KnowledgeDocument(
+                documentIdentity.idForPath(normalizedPath.toString()),
+                folderId,
+                normalizedPath.toString(),
+                path.getFileName().toString(),
+                FileType.PDF,
+                Files.size(path),
+                Files.getLastModifiedTime(path).toMillis(),
+                "hash-partial.pdf",
+                DocumentStatus.FAILED,
+                null,
+                now,
+                now,
+                0,
+                "MODEL_CALL",
+                "MODEL_TIMEOUT",
+                "视觉模型调用超时。",
+                "timeoutSeconds=600",
+                "{\"pageNumber\":8,\"completedPages\":7,\"totalPages\":10,\"resumePage\":8}",
+                now
+        ));
+
+        mockMvc.perform(get("/api/knowledge-health/folders/{id}", folderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.failedDocuments[0].lastFailure.code").value("MODEL_TIMEOUT"))
+                .andExpect(jsonPath("$.data.failedDocuments[0].lastFailure.completedPages").value(7))
+                .andExpect(jsonPath("$.data.failedDocuments[0].lastFailure.totalPages").value(10))
+                .andExpect(jsonPath("$.data.failedDocuments[0].lastFailure.resumePage").value(8));
+    }
+
+    @Test
     void folderHealthReportsNewLocalFileAfterImport() throws Exception {
         Files.writeString(tempDir.resolve("imported.md"), "# Imported\n\nalready in knowledge base");
         String folderId = importFolder(tempDir);

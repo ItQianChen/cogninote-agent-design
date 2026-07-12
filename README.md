@@ -70,7 +70,7 @@
 - 本地搜索索引：Lucene 提供 BM25 关键词检索、向量检索和混合检索；支持中文正文、代码标识符、路径片段和流程图节点检索，向量检索会使用 active Embedding 模型生成查询向量。Embedding 调用按模型配置中的 RPM、TPM 和 batch size 限速；供应商返回 429、rate limit、TPM/RPM limit 时会自动退避重试，并提示用户这是供应商配额限制，不是文档解析失败。
 - RAG 对话：通过 Spring AI ChatClient + Advisor 注入会话记忆和知识库片段；知识库模式可按 `AUTO/ALWAYS/OFF` 策略补全省略、指代、动作型和领域切换追问的检索 query，并保留空白的 SSE 流式输出答案、展示引用来源；模型截断、异常或流提前断开时会标记“未完成”，避免半截回答伪装成完成。
 - 联网搜索 Tool Calling：全局配置 Exa API Key 后，用户可在单轮聊天设置中显式开启联网。后端只有在“本轮开关 + 全局启用 + API Key 已配置”同时满足时才挂载 `WebSearchTools.searchWeb`；工具结果通过 SSE `tool` 事件增量回传，并以 `WEB` 来源和本地知识库来源一起展示、落库。
-- OCR 识别：全局启用模型 OCR 后，无文本层 PDF 可按页渲染为图片并上传到当前 VISION 模型识别，识别文本进入 SQLite chunks 和 Lucene 索引，不修改用户原始 PDF；模型密钥只保存在本机，模型配置页会明文回显，日志、异常、测试结果和维护运行记录不输出密钥。
+- OCR 识别：全局启用模型 OCR 后，无文本层 PDF 可按页渲染为图片并上传到当前 VISION 模型识别；每页成功后先保存本地检查点，普通同步可从失败页继续，整份完成后才进入 SQLite chunks 和 Lucene 索引。该流程不修改用户原始 PDF；模型密钥只保存在本机，模型配置页会明文回显，日志、异常、测试结果和维护运行记录不输出密钥。
 - 知识图谱：基于已导入 chunks 调用 active Chat 模型抽取实体、中文关系谓词、关系描述和证据，写入 SQLite 图谱缓存与派生视图；进入图谱页先展示可搜索、可筛选的已有全库/目录/文件图谱清单，点击“查看”后才按需加载完整视图；已有图谱可重新生成或删除，删除只清理图谱节点、关系、证据、视图和运行记录，不删除原始目录、文件、chunks 或 chunk 抽取缓存；关系 `type` 只做内部粗分类，画布、邻接表、Inspector 和证据抽屉直接展示后端校验后的中文 `displayLabel` 与 `description`。
 - 模型配置：Chat / Embedding / Vision 独立配置和启用；支持阿里百炼 DashScope 默认通道、OpenAI-compatible 自定义 Base URL，模型 ID 可下拉搜索、模糊匹配或手动输入；Chat 模型可配置上下文窗口，默认 `128K`；Embedding 模型可配置请求限速，标准默认值为 `300 RPM / 300000 TPM / batch 16`，也可按供应商控制台配额自定义；Vision 模型用于无文本层 PDF 的模型 OCR。
 - Prompt 配置：聊天、RAG、追问补全、连接测试和知识图谱抽取 Prompt 统一放在 `src/main/resources/cogninote-prompts.yaml`；`application.yaml` 只导入该专用配置文件并保留运行配置。

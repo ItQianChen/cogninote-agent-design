@@ -27,6 +27,8 @@ class DatabaseSchemaInitializerTests {
             assertThat(tableNames(sqlSession)).contains(
                     "knowledge_folders",
                     "documents",
+                    "document_ocr_checkpoints",
+                    "document_ocr_checkpoint_pages",
                     "chunks",
                     "model_configs",
                     "chat_sessions",
@@ -51,6 +53,17 @@ class DatabaseSchemaInitializerTests {
                     "last_failure_detail",
                     "last_failure_context_json",
                     "last_failed_at"
+            );
+            assertThat(columnNames(sqlSession, "document_ocr_checkpoints")).contains(
+                    "document_id",
+                    "source_content_hash",
+                    "ocr_signature",
+                    "total_pages"
+            );
+            assertThat(columnNames(sqlSession, "document_ocr_checkpoint_pages")).contains(
+                    "document_id",
+                    "page_number",
+                    "page_text"
             );
             assertThat(columnNames(sqlSession, "model_configs")).contains("context_window_tokens");
             assertThat(columnNames(sqlSession, "chat_messages")).contains("agent_type", "references_json");

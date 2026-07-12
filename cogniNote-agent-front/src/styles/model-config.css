@@ -274,10 +274,10 @@
   min-width: 0;
   min-height: 30px;
   padding: 0 6px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  color: #b9c7d8;
-  background: rgba(15, 23, 42, 0.24);
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-surface-muted) 72%, transparent);
   cursor: pointer;
   font-size: 11px;
   font-weight: 850;
@@ -288,7 +288,7 @@
 .context-window-preset:focus-visible,
 .context-window-preset.active {
   border-color: var(--color-action-border);
-  color: #f8fafc;
+  color: var(--color-selected-text);
   background: var(--color-action-soft);
 }
 
@@ -308,6 +308,7 @@
   align-items: center;
 }
 
+/* 帮助链接触摸主题 action/link token，避免日间模式下残留夜间蓝字。 */
 .embedding-rate-limit-help {
   display: inline-flex;
   min-width: 0;
@@ -315,7 +316,7 @@
   align-items: center;
   padding: 0;
   border: 0;
-  color: #8fb8ff;
+  color: var(--color-link);
   background: transparent;
   cursor: help;
   font: inherit;
@@ -332,12 +333,12 @@
 
 .embedding-rate-limit-help:hover,
 .embedding-rate-limit-help:focus-visible {
-  color: #bfdbfe;
+  color: var(--color-link-hover);
 }
 
 .embedding-rate-limit-panel .field-heading small {
   max-width: 520px;
-  color: #8fa1b5;
+  color: var(--color-text-muted);
   font-size: 12px;
   line-height: 1.5;
   text-align: right;
@@ -349,6 +350,7 @@
   gap: 8px;
 }
 
+/* 档位卡片使用中性 surface，不写死夜间 slate；active 只换 action soft。 */
 .embedding-rate-limit-preset {
   display: grid;
   min-width: 0;
@@ -356,12 +358,16 @@
   gap: 5px;
   align-content: center;
   padding: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  color: #b9c7d8;
-  background: rgba(15, 23, 42, 0.24);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface-muted) 78%, var(--color-surface));
   cursor: pointer;
   text-align: left;
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
 }
 
 .embedding-rate-limit-preset strong,
@@ -373,20 +379,33 @@
 }
 
 .embedding-rate-limit-preset strong {
-  color: #f8fafc;
+  color: var(--color-text-strong);
   font-size: 13px;
 }
 
 .embedding-rate-limit-preset span {
-  color: #8fa1b5;
+  color: var(--color-text-muted);
   font-size: 11px;
 }
 
 .embedding-rate-limit-preset:hover,
-.embedding-rate-limit-preset:focus-visible,
+.embedding-rate-limit-preset:focus-visible {
+  border-color: var(--color-action-border);
+  background: color-mix(in srgb, var(--color-action-soft) 58%, var(--color-surface));
+}
+
 .embedding-rate-limit-preset.active {
   border-color: var(--color-action-border);
+  color: var(--color-selected-text);
   background: var(--color-action-soft);
+}
+
+.embedding-rate-limit-preset.active strong {
+  color: var(--color-selected-text);
+}
+
+.embedding-rate-limit-preset.active span {
+  color: color-mix(in srgb, var(--color-selected-text) 78%, var(--color-text-muted));
 }
 
 .embedding-rate-limit-custom {
@@ -406,13 +425,13 @@
 .embedding-rate-limit-notes {
   display: grid;
   gap: 8px;
-  color: #d7e2f0;
+  color: var(--color-text);
   font-size: 12px;
   line-height: 1.55;
 }
 
 .embedding-rate-limit-notes strong {
-  color: #f8fafc;
+  color: var(--color-text-strong);
   font-size: 13px;
 }
 
@@ -424,7 +443,7 @@
 }
 
 .embedding-rate-limit-notes li::marker {
-  color: #60a5fa;
+  color: var(--color-action);
 }
 
 .model-active-summary {

@@ -4,7 +4,7 @@
 
 36-4 从“公共 OCR Provider 接入”调整为“模型视觉识别 OCR”。无文本层 PDF 继续先由 PDFBox 判断，只有整篇无可抽取文本时，才把 PDF 页面渲染成图片，交给用户配置的多模态视觉模型识别文字。
 
-本阶段不引入 Apache Tika，不实现 Tesseract CLI，不新增 SQLite / Lucene 文档 schema，不实现 `parser_signature`。OCR 默认关闭，第一版只复用项目已有 `DASHSCOPE` 和 `OPENAI_COMPATIBLE` 模型 Provider，并新增独立 `VISION` 模型配置，不复用当前 Chat 模型。
+本阶段不引入 Apache Tika，不实现 Tesseract CLI，不修改 Lucene schema，也不在 `documents` 增加 `parser_signature`。OCR 默认关闭，第一版只复用项目已有 `DASHSCOPE` 和 `OPENAI_COMPATIBLE` 模型 Provider，并新增独立 `VISION` 模型配置，不复用当前 Chat 模型。后续补充 SQLite 页级检查点表，用于长 PDF 的 OCR 断点续传。
 
 ## Key Changes
 
@@ -31,16 +31,20 @@
     - OCR 未启用或 `VISION` 模型未配置 API Key：继续抛 `PdfOcrRequiredException`。
     - OCR 启用且可用：按页渲染 PNG，调用 `ModelVisionOcrEngine`，生成 `ParsedSection(text, null, pageNumber)`。
   - 识别 Prompt 统一配置在 `cogninote-prompts.yaml` 的 `app.ocr.prompts`，规则为只返回图片中的原文文字，尽量保留段落、换行、列表和表格结构，不解释、不总结、不翻译。
-  - OCR 输出为空时抛普通 `DocumentParseException("PDF OCR produced no usable text: ...")`。
+  - 经渲染像素检查确认近乎纯白的页面以空文本检查点标记为已完成；非空页面的模型空响应归类为 `MODEL_EMPTY_RESPONSE`，不保存检查点并允许普通同步重试。
+  - 每页识别成功后立即写入 SQLite OCR 检查点；后续页面失败时保留已完成页，普通同步从首个未完成页面继续。
+  - 文件哈希、Provider、Base URL、模型、Prompt、解析版本或渲染 DPI 变化时清除旧进度；超时、API Key 和预算变化不让检查点失效。
+  - 整份 PDF 完成前不生成正式 chunks 或 Lucene 索引；完整落库后在同一事务清除检查点。
 - 强制重新解析：
   - 不新增 `parser_signature` schema。
   - 沿用 `KnowledgeFolderRunOperation.REPARSE`。
   - `POST /api/knowledge-maintenance/runs/folders/{id}/reparse` 忽略 `isUnchanged(...)`，用于 OCR 配置开启后处理旧的 `OCR_REQUIRED` 文档。
+  - 普通 `SYNC` 复用有效检查点；`REPARSE` 清除检查点并从第一页重新识别。
 - 前端页面：
   - 设置中心保留“策略 / OCR 识别”，页面改为“模型 OCR”。
   - 页面展示当前视觉模型、启用状态、页数上限、超时、预算提示和测试连接。
   - 明确提示：启用后，无文本层 PDF 页面图片会上传到所选多模态模型服务商，可能产生模型 token 或图片费用。
-  - `PDF_OCR_REQUIRED` 健康诊断在未配置时引导“配置视觉模型”；配置可用时引导“重新解析目录”。
+  - `PDF_OCR_REQUIRED` 健康诊断在未配置时引导“配置视觉模型”；配置可用时引导“重新解析目录”；文档健康详情复用结构化失败对象展示已完成页数和续传页。
 
 ## Test Plan
 
@@ -49,6 +53,7 @@
   - `ModelConfigServiceTests` 覆盖 `VISION` role 默认配置、激活、删除后兜底 active。
   - `ModelVisionOcrEngineTests` 使用 fake `AiChatRuntime` 覆盖图片调用、空结果、异常包装和 prompt 脱敏。
   - `PdfDocumentParserTests` 覆盖文本 PDF 不触发视觉模型、无文本层 PDF 未启用时仍为 `OCR_REQUIRED`、启用后按页生成 sections。
+  - `PdfDocumentParserTests` 和检查点服务测试覆盖页面失败后续传、视觉空白页完成标记、非空页模型空响应重试、签名失效和重启恢复。
   - `DocumentIngestionServiceTests` 覆盖模型 OCR 成功后文档为 `PARSED`、chunk 数大于 0、搜索可命中。
 - 前端：
   - OCR 设置页不再出现百度字段。
@@ -71,7 +76,7 @@ npm --prefix cogniNote-agent-front run build
 - 第一版不直连 Claude/Gemini 原生 API；需要这些模型时通过后续 Provider 扩展或 OpenAI-compatible 网关接入。
 - 模型 OCR 结果不是传统 OCR 的逐字保证，可能受模型能力、图片清晰度、prompt 和费用限制影响。
 - `monthlyCallBudget` 仍是本地提醒/配置，不做强制账单拦截。
-- `OCR_REQUIRED`、`PDF_OCR_REQUIRED` 和 `REPARSE` 继续沿用，不改 SQLite/Lucene 文档 schema。
+- `OCR_REQUIRED`、`PDF_OCR_REQUIRED` 和 `REPARSE` 继续沿用；新增独立 SQLite OCR 检查点表，不修改正式 documents/chunks 字段或 Lucene schema。
 - 旧百度 OCR 配置不会迁移密钥到视觉模型配置，避免误把百度密钥当模型 API Key 使用。
 
 ## References

@@ -4,6 +4,9 @@ import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
 import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureCode;
 import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureStage;
 import com.itqianchen.agentdesign.domain.exception.ingestion.PdfOcrRequiredException;
+import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentCheckpointPersistenceException;
+import com.itqianchen.agentdesign.domain.exception.ingestion.OcrProgressException;
+import com.itqianchen.agentdesign.domain.exception.ingestion.OcrPageProcessingException;
 import com.itqianchen.agentdesign.service.ocr.OcrProviderException;
 import java.nio.file.Path;
 import java.util.Locale;
@@ -21,6 +24,40 @@ public final class DocumentFailureClassifier {
             long occurredAt
     ) {
         String normalizedPath = sourcePath == null ? null : sourcePath.toString();
+        if (exception instanceof OcrProgressException progressException) {
+            return classify(sourcePath, fallbackStage, progressException.processingFailure(), occurredAt)
+                    .withOcrProgress(
+                            progressException.completedPages(),
+                            progressException.totalPages(),
+                            progressException.resumePage()
+                    );
+        }
+        if (exception instanceof DocumentCheckpointPersistenceException) {
+            return failure(
+                    normalizedPath,
+                    DocumentFailureStage.PERSIST,
+                    DocumentFailureCode.DATABASE_WRITE_FAILED,
+                    "OCR 页面进度写入本地数据库失败。",
+                    exception,
+                    occurredAt
+            );
+        }
+        if (exception instanceof OcrPageProcessingException ocrPageException) {
+            return DocumentFailureResponse.of(
+                    normalizedPath,
+                    ocrPageException.stage(),
+                    ocrPageException.code(),
+                    ocrPageException.getMessage(),
+                    DocumentFailureSanitizer.sanitize(ocrPageException.detail()),
+                    DocumentFailureMessages.suggestion(ocrPageException.code()),
+                    occurredAt,
+                    ocrPageException.pageNumber(),
+                    ocrPageException.provider(),
+                    null,
+                    null,
+                    null
+            );
+        }
         if (exception instanceof OcrProviderException ocrException) {
             return ocrException.toFailure(normalizedPath, occurredAt);
         }

@@ -60,7 +60,10 @@ public class DocumentFailureCodec {
                 failure.provider(),
                 failure.modelName(),
                 failure.httpStatus(),
-                failure.providerErrorCode()
+                failure.providerErrorCode(),
+                failure.completedPages(),
+                failure.totalPages(),
+                failure.resumePage()
         );
         if (context.isEmpty()) {
             return null;
@@ -90,7 +93,10 @@ public class DocumentFailureCodec {
                 context.provider(),
                 context.modelName(),
                 context.httpStatus(),
-                context.providerErrorCode()
+                context.providerErrorCode(),
+                context.completedPages(),
+                context.totalPages(),
+                context.resumePage()
         ).normalized();
     }
 
@@ -111,16 +117,24 @@ public class DocumentFailureCodec {
             String provider,
             String modelName,
             Integer httpStatus,
-            String providerErrorCode
+            String providerErrorCode,
+            Integer completedPages,
+            Integer totalPages,
+            Integer resumePage
     ) {
-        private static final FailureContext EMPTY = new FailureContext(null, null, null, null, null);
+        private static final FailureContext EMPTY = new FailureContext(
+                null, null, null, null, null, null, null, null
+        );
 
         private boolean isEmpty() {
             return pageNumber == null
                     && provider == null
                     && modelName == null
                     && httpStatus == null
-                    && providerErrorCode == null;
+                    && providerErrorCode == null
+                    && completedPages == null
+                    && totalPages == null
+                    && resumePage == null;
         }
     }
 }

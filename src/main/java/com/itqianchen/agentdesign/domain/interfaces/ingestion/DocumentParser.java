@@ -3,6 +3,7 @@ package com.itqianchen.agentdesign.domain.interfaces.ingestion;
 
 import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedDocument;
+import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentParseRequest;
 import com.itqianchen.agentdesign.domain.enums.document.FileType;
 import java.nio.file.Path;
 
@@ -31,6 +32,19 @@ public interface DocumentParser {
      * @throws DocumentParseException 当文件读取或格式解析失败时抛出
      */
     ParsedDocument parse(Path path);
+
+    /**
+     * 使用可选增量检查点解析文档。
+     *
+     * <p>默认实现保持现有 parser 的一次性解析行为；长耗时 parser 可以覆盖该方法，在每个稳定
+     * section 完成后报告进度，但不得直接依赖数据库或索引实现。</p>
+     *
+     * @param request 解析路径和检查点边界
+     * @return 供切块流程消费的完整文档文本结构
+     */
+    default ParsedDocument parse(DocumentParseRequest request) {
+        return parse(request.path());
+    }
 }
 
 

@@ -15,6 +15,10 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -71,6 +75,26 @@ public class ModelVisionOcrEngine implements OcrEngine {
                 pageImage.pageNumber()
         );
         return text == null ? "" : text.trim();
+    }
+
+    @Override
+    public String checkpointSignature(OcrSettingsSnapshot settings) {
+        ModelConfig config = requireVisionConfig(null);
+        String material = String.join("\n",
+                "MODEL_VISION:v1",
+                config.provider().name(),
+                config.baseUrl(),
+                config.modelName(),
+                String.valueOf(config.temperature()),
+                promptProperties.system(),
+                promptProperties.page()
+        );
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(material.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is not available", ex);
+        }
     }
 
     @Override

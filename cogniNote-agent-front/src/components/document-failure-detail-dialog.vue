@@ -1,7 +1,11 @@
 <script setup>
 import { computed } from 'vue'
 import { AlertTriangle } from 'lucide-vue-next'
-import { failureStageLabel, failureTechnicalRows } from '../utils/document-failures'
+import {
+  failureProgressLabel,
+  failureStageLabel,
+  failureTechnicalRows
+} from '../utils/document-failures'
 
 const props = defineProps({
   modelValue: {
@@ -24,6 +28,7 @@ const isOpen = computed({
   set: (value) => emit('update:modelValue', value)
 })
 const technicalRows = computed(() => failureTechnicalRows(props.failure))
+const progressLabel = computed(() => failureProgressLabel(props.failure))
 </script>
 
 <template>
@@ -44,6 +49,7 @@ const technicalRows = computed(() => failureTechnicalRows(props.failure))
       <p class="document-failure-detail__path">{{ failure.sourcePath }}</p>
       <section class="document-failure-detail__summary">
         <strong>{{ failure.message }}</strong>
+        <p v-if="progressLabel" class="document-failure-detail__progress">{{ progressLabel }}</p>
         <p v-if="failure.suggestion">{{ failure.suggestion }}</p>
       </section>
       <details v-if="technicalRows.length" class="document-failure-detail__technical">
@@ -104,6 +110,11 @@ const technicalRows = computed(() => failureTechnicalRows(props.failure))
   margin: 6px 0 0;
   color: var(--color-text);
   line-height: 1.5;
+}
+
+.document-failure-detail__summary .document-failure-detail__progress {
+  color: var(--color-primary);
+  font-weight: 700;
 }
 
 .document-failure-detail__technical summary {

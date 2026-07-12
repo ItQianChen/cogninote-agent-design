@@ -15,6 +15,7 @@ import { useKnowledgeMaintenanceStore } from '../stores/knowledge-maintenance'
 import { useOcrSettingsStore } from '../stores/ocr-settings'
 import { useSearchStore } from '../stores/search'
 import { formatTime } from '../utils/formatters'
+import { failureProgressLabel } from '../utils/document-failures'
 import { buildIssueCategories, issueMetaText } from '../utils/knowledge-health-issues'
 
 const knowledgeStore = useKnowledgeFoldersStore()
@@ -301,6 +302,9 @@ function openIssueSection(section) {
           <strong>{{ document.fileName }}</strong>
           <p class="path-text">{{ document.sourcePath }}</p>
           <span>{{ document.message }}</span>
+          <span v-if="failureProgressLabel(document.lastFailure)">
+            {{ failureProgressLabel(document.lastFailure) }}
+          </span>
           <em>更新 {{ formatTime(document.updatedAt) }}</em>
         </div>
         <el-button text aria-label="复制文件路径" @click="copyPath(document.sourcePath)">

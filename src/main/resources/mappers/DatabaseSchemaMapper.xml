@@ -41,6 +41,30 @@
         )
     </update>
 
+    <update id="createDocumentOcrCheckpointsTable">
+        CREATE TABLE IF NOT EXISTS document_ocr_checkpoints (
+            document_id TEXT PRIMARY KEY,
+            source_content_hash TEXT NOT NULL,
+            ocr_signature TEXT NOT NULL,
+            total_pages INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+        )
+    </update>
+
+    <update id="createDocumentOcrCheckpointPagesTable">
+        CREATE TABLE IF NOT EXISTS document_ocr_checkpoint_pages (
+            document_id TEXT NOT NULL,
+            page_number INTEGER NOT NULL,
+            page_text TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            PRIMARY KEY (document_id, page_number),
+            FOREIGN KEY (document_id) REFERENCES document_ocr_checkpoints(document_id) ON DELETE CASCADE
+        )
+    </update>
+
     <update id="createChunksTable">
         CREATE TABLE IF NOT EXISTS chunks (
             id TEXT PRIMARY KEY,

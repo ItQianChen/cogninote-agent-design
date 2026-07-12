@@ -3,6 +3,7 @@ package com.itqianchen.agentdesign.service.document;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeChunk;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
+import com.itqianchen.agentdesign.repository.document.DocumentOcrCheckpointRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,14 +18,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class DocumentIngestionPersistence {
 
     private final DocumentRepository documentRepository;
+    private final DocumentOcrCheckpointRepository checkpointRepository;
 
     /**
      * 注入文档仓储。
      *
      * @param documentRepository 文档仓储
      */
-    public DocumentIngestionPersistence(DocumentRepository documentRepository) {
+    public DocumentIngestionPersistence(
+            DocumentRepository documentRepository,
+            DocumentOcrCheckpointRepository checkpointRepository
+    ) {
         this.documentRepository = documentRepository;
+        this.checkpointRepository = checkpointRepository;
     }
 
     /**
@@ -37,6 +43,7 @@ public class DocumentIngestionPersistence {
     public void replaceParsedDocument(KnowledgeDocument document, List<KnowledgeChunk> chunks) {
         documentRepository.upsertDocument(document);
         documentRepository.replaceChunks(document.id(), chunks);
+        checkpointRepository.deleteByDocumentId(document.id());
     }
 
     /**
