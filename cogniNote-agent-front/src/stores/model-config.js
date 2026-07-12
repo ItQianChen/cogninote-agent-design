@@ -626,6 +626,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     apiKeyPlaceholder,
     activeList,
     selectedConfig,
+    activeConfigFor,
     activeConfigForRole,
     isEditingExisting,
     roleLabel,
