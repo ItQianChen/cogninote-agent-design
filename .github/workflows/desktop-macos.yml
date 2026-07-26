@@ -30,8 +30,12 @@ env:
   COGNINOTE_DESKTOP_VERSION: 0.1.70
 
 jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+
   build-macos:
     name: 构建 macOS Apple Silicon 桌面安装包
+    needs: verify
     runs-on: macos-15
 
     steps:
@@ -131,6 +135,7 @@ jobs:
           APPLE_PROVIDER_SHORT_NAME: ${{ secrets.APPLE_PROVIDER_SHORT_NAME }}
         run: |
           set -euo pipefail
+          echo 'Tests skipped because the reusable verification job succeeded.'
           bash ./scripts/build-desktop-app-macos.sh --skip-tests --sign
 
       - name: Build unsigned macOS desktop package
@@ -139,6 +144,7 @@ jobs:
           COGNINOTE_TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
         run: |
           set -euo pipefail
+          echo 'Tests skipped because the reusable verification job succeeded.'
           bash ./scripts/build-desktop-app-macos.sh --skip-tests
 
       - name: Verify and notarize macOS artifacts
@@ -221,6 +227,25 @@ jobs:
           fi
           mkdir -p artifacts/macos
           ditto -c -k --keepParent "$APP_PATH" "artifacts/macos/CogniNote-${COGNINOTE_DESKTOP_VERSION}-macos-arm64-${{ steps.macos-signing.outputs.artifact_suffix }}.app.zip"
+
+      - name: Smoke macOS app and DMG
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find cogniNote-agent-front/src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          DMG_PATH="$(find cogniNote-agent-front/src-tauri/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -type f | head -n 1)"
+          bash ./scripts/smoke-desktop-package-macos.sh "$APP_PATH" "$DMG_PATH" "$COGNINOTE_DESKTOP_VERSION"
+
+      - name: Check macOS desktop package budget
+        run: |
+          set -euo pipefail
+          suffix='${{ steps.macos-signing.outputs.artifact_suffix }}'
+          APP_PATH="$(find cogniNote-agent-front/src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -type d | head -n 1)"
+          DMG_PATH="$(find cogniNote-agent-front/src-tauri/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -type f | head -n 1)"
+          node scripts/check-desktop-package-budget.mjs \
+            --metric "macosAppZip=artifacts/macos/CogniNote-${COGNINOTE_DESKTOP_VERSION}-macos-arm64-${suffix}.app.zip" \
+            --metric "macosDmg=${DMG_PATH}" \
+            --metric "embeddedBackend=${APP_PATH}/Contents/Resources/backend/CogniNoteBackend.app" \
+            --metric 'backendJar=target/cogninote-agent-design.jar'
 
       - name: Upload macOS app artifact
         uses: actions/upload-artifact@v4

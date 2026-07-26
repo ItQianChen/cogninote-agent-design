@@ -1,0 +1,1 @@
+CogniNote maintenance smoke validates queued, running, and completed task states without external services.

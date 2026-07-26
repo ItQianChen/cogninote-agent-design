@@ -7,12 +7,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.itqianchen.agentdesign.repository.settings.AppSettingRepository;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import com.itqianchen.agentdesign.support.TestStorageProperties;
+import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -22,12 +28,19 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-chat-settings-controller",
-        "app.storage.database-path=target/test-cogninote-chat-settings-controller/cogninote.db",
         "server.address=127.0.0.1"
 })
 class ChatSettingsControllerTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private MockMvc mockMvc;

@@ -23,7 +23,7 @@ function Test-Jdk25Home {
         return $false
     }
 
-    $versionLine = cmd /c "`"$candidateJava`" -version 2>&1" | Select-Object -First 1
+    $versionLine = & $candidateJava -version 2>&1 | Select-Object -First 1
     return $versionLine -match 'version "25(\.|")'
 }
 

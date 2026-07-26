@@ -63,6 +63,19 @@ npm run build
 
 生产构建产物会输出到 `dist/`，整包构建时由根目录 Maven `with-frontend` profile 复制进 Spring Boot 静态资源目录。
 
+### Test and Browser Smoke
+
+```powershell
+$ErrorActionPreference = 'Stop'
+npm run test
+npm run test:coverage
+npm run build
+node ..\scripts\check-frontend-bundle-budget.mjs
+npm run test:e2e
+```
+
+Vitest 使用独立配置，不加载 Vite DevTools；Playwright smoke 使用隔离临时存储和随机端口。模型连接与 RAG SSE 使用确定性 route mock，目录导入、搜索、维护和重启持久化走真实本地后端。完整门禁说明见 `../docs/testing-and-release-gates.md`。
+
 ### Desktop Build
 
 桌面打包入口在项目根目录，不建议从前端子目录直接运行完整构建：

@@ -10,6 +10,7 @@ import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
 import com.itqianchen.agentdesign.domain.interfaces.search.EmbeddingGateway;
 import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import com.itqianchen.agentdesign.support.TestStorageProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -23,17 +24,27 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-vector-search",
-        "app.storage.database-path=target/test-cogninote-vector-search/cogninote.db",
         "server.address=127.0.0.1"
 })
 class SearchVectorIntegrationTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -58,9 +69,7 @@ class SearchVectorIntegrationTests {
 
     @Test
     void vectorAndHybridSearchUseConfiguredEmbeddingGateway() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("alpha.txt"), "alpha memory vector payload");
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("beta.txt"), "beta unrelated payload");
         ingestionService.ingestFolder(tempDir.toString(), true);
 
@@ -95,7 +104,6 @@ class SearchVectorIntegrationTests {
 
     @Test
     void embeddingGatewayUsesDocumentAndQueryPurposes() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("purpose.txt"), "purpose alpha payload");
         ingestionService.ingestFolder(tempDir.toString(), true);
         RecordingEmbeddingGateway gateway = (RecordingEmbeddingGateway) knowledgeStoreStatusAwareGateway();

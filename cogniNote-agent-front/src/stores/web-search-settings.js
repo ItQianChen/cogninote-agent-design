@@ -30,6 +30,8 @@ export const useWebSearchSettingsStore = defineStore('webSearchSettings', () => 
   const error = ref('')
   const message = ref('')
   const lastTestResult = ref(null)
+  let draftRevision = 0
+  let apiKeyRevision = 0
 
   const canEnable = computed(() => Boolean(settings.value.apiKeyConfigured || settings.value.apiKey.trim()))
   const available = computed(() => Boolean(settings.value.enabled && settings.value.apiKeyConfigured))
@@ -50,7 +52,10 @@ export const useWebSearchSettingsStore = defineStore('webSearchSettings', () => 
     loading.value = true
     error.value = ''
     try {
-      settings.value = normalizeSettings(await getWebSearchSettings())
+      const remoteSettings = normalizeSettings(await getWebSearchSettings())
+      settings.value = draftRevision > 0
+        ? mergeRemoteWithDraft(remoteSettings, settings.value)
+        : remoteSettings
       loaded.value = true
       return settings.value
     } catch (err) {
@@ -66,11 +71,17 @@ export const useWebSearchSettingsStore = defineStore('webSearchSettings', () => 
       ...settings.value,
       ...patch
     }, { keepDraftApiKey: true })
+    draftRevision += 1
+    if (Object.prototype.hasOwnProperty.call(patch, 'apiKey')) {
+      apiKeyRevision += 1
+    }
     error.value = ''
     message.value = ''
   }
 
   async function saveSettings() {
+    const submittedRevision = draftRevision
+    const submittedApiKeyRevision = apiKeyRevision
     saving.value = true
     error.value = ''
     message.value = ''
@@ -84,7 +95,16 @@ export const useWebSearchSettingsStore = defineStore('webSearchSettings', () => 
         timeoutMs: settings.value.timeoutMs,
         searchMode: settings.value.searchMode
       }
-      settings.value = normalizeSettings(await updateWebSearchSettings(payload))
+      const remoteSettings = normalizeSettings(await updateWebSearchSettings(payload))
+      if (draftRevision === submittedRevision) {
+        settings.value = remoteSettings
+        draftRevision = 0
+      } else {
+        // 普通字段与密钥分别跟踪；旧响应不能覆盖新编辑，也不能保留已提交的明文密钥。
+        settings.value = mergeRemoteWithDraft(remoteSettings, settings.value, {
+          keepDraftApiKey: apiKeyRevision !== submittedApiKeyRevision
+        })
+      }
       loaded.value = true
       message.value = '联网搜索设置已保存'
       return settings.value
@@ -150,6 +170,15 @@ function normalizeSettings(value, { keepDraftApiKey = false } = {}) {
     timeoutMs: clampInteger(value?.timeoutMs, 1000, 30000, DEFAULT_SETTINGS.timeoutMs),
     searchMode: String(value?.searchMode || '').toLowerCase() === 'fast' ? 'fast' : 'auto'
   }
+}
+
+function mergeRemoteWithDraft(remoteSettings, draftSettings, { keepDraftApiKey = true } = {}) {
+  return normalizeSettings({
+    ...remoteSettings,
+    ...draftSettings,
+    apiKey: keepDraftApiKey ? draftSettings.apiKey : '',
+    apiKeyConfigured: remoteSettings.apiKeyConfigured
+  }, { keepDraftApiKey })
 }
 
 function clampInteger(value, min, max, fallback) {

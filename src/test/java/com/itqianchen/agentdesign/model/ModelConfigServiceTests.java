@@ -1,9 +1,5 @@
 package com.itqianchen.agentdesign.model;
 
-
-import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
-import com.itqianchen.agentdesign.domain.exception.model.ModelConfigurationException;
-import com.itqianchen.agentdesign.domain.support.model.ModelConfigDefaults;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -16,19 +12,32 @@ import com.itqianchen.agentdesign.domain.dto.model.ModelConfigRequest;
 import com.itqianchen.agentdesign.domain.dto.model.ModelConfigUpsertRequest;
 import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import com.itqianchen.agentdesign.support.TestStorageProperties;
+import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-model-config",
-        "app.storage.database-path=target/test-cogninote-model-config/cogninote.db",
         "server.address=127.0.0.1"
 })
 class ModelConfigServiceTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private ModelConfigService modelConfigService;

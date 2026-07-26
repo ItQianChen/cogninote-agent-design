@@ -1,8 +1,5 @@
 package com.itqianchen.agentdesign.chat;
 
-
-import com.itqianchen.agentdesign.domain.enums.chat.ChatMessageRole;
-import com.itqianchen.agentdesign.domain.enums.chat.ChatMessageStatus;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.itqianchen.agentdesign.domain.enums.agent.AgentType;
@@ -13,10 +10,16 @@ import com.itqianchen.agentdesign.domain.enums.search.SearchMode;
 import com.itqianchen.agentdesign.mapper.test.TestDatabaseMapper;
 import com.itqianchen.agentdesign.repository.chat.ChatSessionRepository;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import com.itqianchen.agentdesign.support.TestStorageProperties;
+import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 
 /**
@@ -25,12 +28,19 @@ import org.springframework.test.context.TestPropertySource;
  * <p>重点保护 SSE 预分配 conversationId 和会话物理删除消息两类行为。</p>
  */
 @SpringBootTest
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-chat-session-repository",
-        "app.storage.database-path=target/test-cogninote-chat-session-repository/cogninote.db",
         "server.address=127.0.0.1"
 })
 class ChatSessionRepositoryTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private ChatSessionRepository chatSessionRepository;

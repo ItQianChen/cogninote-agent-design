@@ -6,10 +6,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.itqianchen.agentdesign.config.DesktopSessionTokenFilter;
+import com.itqianchen.agentdesign.support.TestStorageProperties;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -20,14 +26,21 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-desktop-token",
-        "app.storage.database-path=target/test-cogninote-desktop-token/cogninote.db",
         "app.desktop.enabled=true",
         "app.desktop.session-token=test-desktop-token",
         "server.address=127.0.0.1"
 })
 class DesktopSessionTokenFilterTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -61,14 +74,21 @@ class DesktopSessionTokenFilterTests {
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-desktop-token-disabled",
-        "app.storage.database-path=target/test-cogninote-desktop-token-disabled/cogninote.db",
         "app.desktop.enabled=false",
         "app.desktop.session-token=test-desktop-token",
         "server.address=127.0.0.1"
 })
 class DesktopSessionTokenFilterDisabledTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private MockMvc mockMvc;

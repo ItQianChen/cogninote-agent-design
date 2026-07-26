@@ -19,6 +19,7 @@ import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRepository;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import com.itqianchen.agentdesign.support.TestStorageProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -29,17 +30,27 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-knowledge-health",
-        "app.storage.database-path=target/test-cogninote-knowledge-health/cogninote.db",
         "server.address=127.0.0.1"
 })
 class KnowledgeHealthControllerTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private MockMvc mockMvc;

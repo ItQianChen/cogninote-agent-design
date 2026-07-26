@@ -122,7 +122,8 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
     public synchronized void indexDocument(IndexedDocument document) {
         try {
             ensureIndexDirectory();
-            try (IndexWriter writer = newWriter()) {
+            try (FSDirectory directory = FSDirectory.open(appStorage.luceneIndexDir());
+                 IndexWriter writer = newWriter(directory)) {
                 replaceDocument(writer, document);
                 writer.commit();
             }
@@ -140,7 +141,8 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
     public synchronized void deleteByDocumentId(String documentId) {
         try {
             ensureIndexDirectory();
-            try (IndexWriter writer = newWriter()) {
+            try (FSDirectory directory = FSDirectory.open(appStorage.luceneIndexDir());
+                 IndexWriter writer = newWriter(directory)) {
                 writer.deleteDocuments(new Term(SearchFieldNames.DOCUMENT_ID, documentId));
                 writer.commit();
             }
@@ -168,7 +170,8 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
 
         try {
             ensureIndexDirectory();
-            try (IndexWriter writer = newWriter()) {
+            try (FSDirectory directory = FSDirectory.open(appStorage.luceneIndexDir());
+                 IndexWriter writer = newWriter(directory)) {
                 for (IndexedDocument document : documents) {
                     writer.deleteDocuments(new Term(SearchFieldNames.DOCUMENT_ID, document.id()));
                     try {
@@ -270,7 +273,8 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
         try {
             ensureIndexDirectory();
             List<IndexedDocument> documents = documentRepository.findAllParsedDocumentsForIndexing();
-            try (IndexWriter writer = newWriter()) {
+            try (FSDirectory directory = FSDirectory.open(appStorage.luceneIndexDir());
+                 IndexWriter writer = newWriter(directory)) {
                 writer.deleteAll();
                 for (IndexedDocument document : documents) {
                     try {
@@ -680,16 +684,17 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
     /**
      * 创建 Lucene IndexWriter。
      *
+     * <p>目录由调用方持有并关闭。IndexWriter 不拥有传入的 Directory，若只关闭 writer，
+     * Windows 上可能残留目录句柄并阻止测试临时目录删除。</p>
+     *
+     * @param directory 当前写入会话使用的索引目录
      * @return 配置好 analyzer 和 BM25 的写入器
      * @throws IOException 当索引目录无法打开时抛出
      */
-    private IndexWriter newWriter() throws IOException {
+    private IndexWriter newWriter(FSDirectory directory) throws IOException {
         IndexWriterConfig config = new IndexWriterConfig(analyzer);
         config.setSimilarity(bm25Similarity());
-        return new IndexWriter(
-                FSDirectory.open(appStorage.luceneIndexDir()),
-                config
-        );
+        return new IndexWriter(directory, config);
     }
 
     /**
@@ -707,7 +712,6 @@ public class LuceneKnowledgeStore implements KnowledgeStore {
      * @throws IOException 当目录无法创建时抛出
      */
     private void ensureIndexDirectory() throws IOException {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.createDirectories(appStorage.luceneIndexDir());
     }
 

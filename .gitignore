@@ -16,6 +16,9 @@ logs/
 资料参考/
 .claude/
 output/
+artifacts/*
+!artifacts/budgets/
+!artifacts/budgets/desktop-package-budget.json
 .codex-local/
 .playwright-cli/
 

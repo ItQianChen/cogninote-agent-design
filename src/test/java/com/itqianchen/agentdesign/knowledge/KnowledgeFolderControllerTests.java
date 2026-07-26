@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import com.itqianchen.agentdesign.support.TestStorageProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
@@ -22,18 +23,28 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-knowledge-folders",
-        "app.storage.database-path=target/test-cogninote-knowledge-folders/cogninote.db",
         "server.address=127.0.0.1"
 })
 class KnowledgeFolderControllerTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -59,7 +70,6 @@ class KnowledgeFolderControllerTests {
 
     @Test
     void importFolderListsDocumentsAndGroupsThemByFolder() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("phase10.md"), "# Phase 10\n\nFolder level knowledge base.");
 
         importFolder(tempDir);
@@ -75,7 +85,6 @@ class KnowledgeFolderControllerTests {
 
     @Test
     void disabledFolderIsRemovedFromSearchAndEnableRestoresIndex() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("disable-search.txt"), "folder-toggle-keyword should disappear when disabled.");
         String folderId = importFolder(tempDir);
 
@@ -101,7 +110,6 @@ class KnowledgeFolderControllerTests {
     @Test
     void deleteFolderDeletesOnlyApplicationRecords() throws Exception {
         Path note = tempDir.resolve("keep-local-file.txt");
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(note, "Deleting a knowledge folder must not delete the user's local file.");
         String folderId = importFolder(tempDir);
 
@@ -124,9 +132,7 @@ class KnowledgeFolderControllerTests {
     void deleteFolderCleansOnlyItsMaintenanceRuns() throws Exception {
         Path first = Files.createDirectory(tempDir.resolve("first"));
         Path second = Files.createDirectory(tempDir.resolve("second"));
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(first.resolve("first.txt"), "first-maintenance-token");
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(second.resolve("second.txt"), "second-maintenance-token");
         String firstFolderId = importFolder(first);
         String secondFolderId = importFolder(second);
@@ -156,7 +162,6 @@ class KnowledgeFolderControllerTests {
 
     @Test
     void smokeImportSearchHealthDeleteAndRunCleanup() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("smoke.txt"), "phase32-smoke-token");
         String folderId = importFolder(tempDir);
 
@@ -178,13 +183,10 @@ class KnowledgeFolderControllerTests {
 
     @Test
     void syncFolderIndexesOnlyNewFiles() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("first.txt"), "synckeepone");
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("second.txt"), "synckeeptwo");
         String folderId = importFolder(tempDir);
 
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("third.txt"), "synconlynewtoken");
         mockMvc.perform(post("/api/knowledge-folders/{id}/sync", folderId))
                 .andExpect(status().isOk())
@@ -203,13 +205,10 @@ class KnowledgeFolderControllerTests {
     void rebuildFolderRemovesDocumentsDeletedFromLocalDirectory() throws Exception {
         Path keep = tempDir.resolve("keep.txt");
         Path stale = tempDir.resolve("stale.txt");
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(keep, "remainingonlytoken");
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(stale, "obsoleteonlytoken");
         String folderId = importFolder(tempDir);
 
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.delete(stale);
         mockMvc.perform(post("/api/knowledge-folders/{id}/rebuild", folderId))
                 .andExpect(status().isOk())

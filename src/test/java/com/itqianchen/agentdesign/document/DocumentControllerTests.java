@@ -10,6 +10,7 @@ import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionService;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import com.itqianchen.agentdesign.support.TestStorageProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,17 +19,27 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-document-controller",
-        "app.storage.database-path=target/test-cogninote-document-controller/cogninote.db",
         "server.address=127.0.0.1"
 })
 class DocumentControllerTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -53,7 +64,6 @@ class DocumentControllerTests {
     @Test
     void deleteDocumentReturnsNoContentOrNotFound() throws Exception {
         Path note = tempDir.resolve("delete-api.txt");
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(note, "Delete through the REST API.");
         ingestionService.ingestFolder(tempDir.toString(), true);
         KnowledgeDocument document = documentRepository.findAllOrderByUpdatedAtDesc().getFirst();
@@ -68,7 +78,6 @@ class DocumentControllerTests {
     @Test
     void getChunkReturnsStoredContent() throws Exception {
         Path note = tempDir.resolve("chunk-detail.txt");
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(note, "Full chunk detail text should be returned by the document chunk endpoint.");
         ingestionService.ingestFolder(tempDir.toString(), true);
         KnowledgeDocument document = documentRepository.findAllOrderByUpdatedAtDesc().getFirst();

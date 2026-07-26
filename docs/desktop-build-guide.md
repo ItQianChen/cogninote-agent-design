@@ -20,6 +20,26 @@
 
 脚本默认要求工作区干净；如果确实要在已有改动上预览或更新，可加 `-AllowDirty`。
 
+## 发布验证门禁
+
+Windows 和 macOS 发布 workflow 都先调用 `.github/workflows/verify.yml`。只有 reusable verify job 的后端测试、前端测试、生产构建、bundle budget、浏览器 smoke 和知识库 smoke 全部成功后，平台 packaging job 才能运行。
+
+发布 job 会明确输出“tests skipped because the reusable verification job succeeded”，然后使用 `-SkipTests` 或 `--skip-tests` 避免同一 workflow 重复执行 Maven 测试。本地直接运行构建脚本时仍应使用默认参数执行测试：
+
+```powershell
+$ErrorActionPreference = 'Stop'
+.\scripts\build-desktop-app.ps1
+```
+
+平台打包后还会执行：
+
+- Windows portable/backend 启动、status/静态资源/版本检查，以及 NSIS 静默安装和卸载。
+- macOS DMG 挂载、临时 Applications 复制、嵌入 backend 启动及 status/静态资源/版本检查。
+- 包内容泄漏检查和桌面产物体积预算。
+- signed 模式原有 Authenticode 或 codesign/notary/stapler/Gatekeeper 检查。
+
+完整命令、required checks、重复性记录和体积基线更新规则见 [测试与发布门禁](testing-and-release-gates.md)。
+
 ## Windows 产物说明
 
 第六阶段的桌面交付由两部分组成：
@@ -55,8 +75,8 @@ Windows 桌面打包需要：
 
 - JDK 25。本机默认使用 `D:\CodeApps\Java-JDK\jdk-25.0.2`；若设置了 `JAVA_HOME`，脚本会优先使用 `JAVA_HOME`。必须是包含 `jlink` 和 `jpackage` 的完整 JDK，不能是 JRE。
 - Maven 3.9+。
-- Node.js 20.19.6 或兼容版本。
-- npm 10.8.2 或兼容版本。
+- Node.js 22.18 或兼容的 Node 22 版本。
+- npm 10.9 或兼容版本。
 - Rust stable toolchain 和 Cargo。
 - MSVC Build Tools。
 - WebView2 Runtime。
@@ -82,8 +102,8 @@ macOS 第一版只支持 Apple Silicon arm64。需要：
 
 - JDK 25 arm64，设置 `JDK_HOME` 或 `JAVA_HOME` 指向包含 `jlink` 和 `jpackage` 的完整 JDK。
 - Maven 3.9+。
-- Node.js 20.19+ 或兼容版本。
-- npm。
+- Node.js 22.18 或兼容的 Node 22 版本。
+- npm 10.9 或兼容版本。
 - Rust stable toolchain 和 Cargo。
 - Xcode Command Line Tools。
 

@@ -30,8 +30,12 @@ env:
   COGNINOTE_DESKTOP_VERSION: 0.1.70
 
 jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+
   build-windows:
     name: 构建 Windows 桌面安装包
+    needs: verify
     runs-on: windows-latest
 
     steps:
@@ -88,7 +92,9 @@ jobs:
           COGNINOTE_TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: .\scripts\build-desktop-app.ps1 -SkipTests
+        run: |
+          Write-Host 'Tests skipped because the reusable verification job succeeded.'
+          .\scripts\build-desktop-app.ps1 -SkipTests
 
       - name: Sign final Windows artifacts
         if: steps.windows-signing.outputs.artifact_suffix == 'signed'
@@ -147,6 +153,32 @@ jobs:
           Copy-Item -LiteralPath 'cogniNote-agent-front/src-tauri/target/release/backend' -Destination "$portableRoot/backend" -Recurse -Force
 
           Compress-Archive -LiteralPath $portableRoot -DestinationPath "artifacts/CogniNote-${version}-windows-x64-${suffix}-portable.zip" -Force
+
+      - name: Smoke Windows portable and installer
+        shell: pwsh
+        run: |
+          $suffix = '${{ steps.windows-signing.outputs.artifact_suffix }}'
+          $version = $env:COGNINOTE_DESKTOP_VERSION
+          $installer = Get-ChildItem -LiteralPath 'cogniNote-agent-front/src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File | Select-Object -First 1
+          if (-not $installer) {
+            throw 'Windows NSIS installer was not generated.'
+          }
+          .\scripts\smoke-desktop-package.ps1 `
+            -PortableZip "artifacts/CogniNote-${version}-windows-x64-${suffix}-portable.zip" `
+            -InstallerPath $installer.FullName `
+            -ExpectedVersion $version
+
+      - name: Check Windows desktop package budget
+        shell: pwsh
+        run: |
+          $suffix = '${{ steps.windows-signing.outputs.artifact_suffix }}'
+          $version = $env:COGNINOTE_DESKTOP_VERSION
+          $installer = Get-ChildItem -LiteralPath 'cogniNote-agent-front/src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File | Select-Object -First 1
+          node scripts/check-desktop-package-budget.mjs `
+            --metric "windowsPortableZip=artifacts/CogniNote-${version}-windows-x64-${suffix}-portable.zip" `
+            --metric "windowsInstaller=$($installer.FullName)" `
+            --metric 'embeddedBackend=cogniNote-agent-front/src-tauri/target/release/backend/CogniNoteBackend' `
+            --metric 'backendJar=target/cogninote-agent-design.jar'
 
       - name: Upload Windows portable artifact
         uses: actions/upload-artifact@v4

@@ -1,7 +1,5 @@
 package com.itqianchen.agentdesign.chat;
 
-
-import com.itqianchen.agentdesign.domain.support.model.ModelConfigDefaults;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
@@ -22,6 +20,7 @@ import com.itqianchen.agentdesign.domain.dto.model.ModelConfigRequest;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import com.itqianchen.agentdesign.support.TestStorageProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -38,6 +37,9 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -47,12 +49,19 @@ import reactor.core.publisher.Flux;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-chat-controller",
-        "app.storage.database-path=target/test-cogninote-chat-controller/cogninote.db",
         "server.address=127.0.0.1"
 })
 class ChatControllerTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -87,7 +96,6 @@ class ChatControllerTests {
 
     @Test
     void chatStreamReturnsMetaDeltaAndDoneEvents() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("packaging.md"), "CogniNote uses Launch4j for Windows EXE packaging.");
         modelConfigService.save(new ModelConfigRequest(
                 null,

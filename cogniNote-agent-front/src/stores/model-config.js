@@ -174,6 +174,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     replaceEditorForm(normalizedRole, defaultForm(normalizedRole))
     invalidateModelOptionsIfStale(normalizedRole)
     state.error = ''
+    state.dirty = false
     state.revision += 1
     visibleApiKeyByRole.value[normalizedRole] = false
     message.value = ''
@@ -192,7 +193,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   }
 
   function markFormTouched() {
-    // 新 store 不再依赖 touched 状态。保留此方法是为了兼容模板事件绑定。
+    currentState.value.dirty = true
+    currentState.value.revision += 1
   }
 
   async function saveModelConfig(formOverride = null) {
@@ -202,13 +204,18 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     state.saving = true
     state.error = ''
     message.value = ''
+    const submittedRevision = state.revision
+    const submittedApiKeyRevision = state.apiKeyRevision
 
     try {
       const payload = formPayload(role, formOverride)
       const snapshot = state.selectedConfig?.id
         ? await updateSettingsModelConfig(state.selectedConfig.id, payload)
         : await createSettingsModelConfig(payload)
-      applySnapshot(snapshot)
+      applySnapshot(snapshot, {
+        preserveDraftRole: state.revision === submittedRevision ? null : role
+      })
+      clearSubmittedApiKeyDraft(state, submittedApiKeyRevision)
       message.value = `${roleLabel.value}配置已保存`
       if (role === ROLES.EMBEDDING) {
         // 向量模型变更会影响检索可用性，保存后立刻刷新索引状态提示。
@@ -356,6 +363,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
         : null
     })
     invalidateModelOptions(role)
+    state.dirty = true
+    state.revision += 1
     state.error = ''
     message.value = ''
   }
@@ -370,12 +379,18 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     if (state.form.apiKey.trim()) {
       state.form.clearApiKey = false
     }
+    state.dirty = true
+    state.revision += 1
+    state.apiKeyRevision += 1
   }
 
   function clearApiKey(role = activeRole.value) {
     const state = roleState.value[role]
     state.form.apiKey = ''
     state.form.clearApiKey = true
+    state.dirty = true
+    state.revision += 1
+    state.apiKeyRevision += 1
     state.error = ''
     message.value = '保存后将清空当前 API Key'
   }
@@ -418,7 +433,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
 
     try {
       const snapshot = await getModelConfigSettings(role)
-      applySnapshot(snapshot)
+      applySnapshot(snapshot, { preserveDraftRole: role })
       return snapshot
     } catch (err) {
       state.error = `模型配置读取失败：${err.message}`
@@ -428,7 +443,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     }
   }
 
-  function applySnapshot(snapshot) {
+  function applySnapshot(snapshot, { preserveDraftRole = null } = {}) {
     if (!snapshot) {
       return
     }
@@ -441,14 +456,18 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     const role = normalizeRoleValue(snapshot.role || activeRole.value)
     activeRole.value = role
     const state = roleState.value[role]
+    const preserveDraft = preserveDraftRole === role && state.dirty
     state.configs = (snapshot.configs || []).map(config => normalizeConfigForRole(config, role))
     state.selectedConfig = snapshot.selectedConfig ? normalizeConfigForRole(snapshot.selectedConfig, role) : null
-    replaceEditorForm(role, snapshot.selectedConfig
-      ? formFromConfig(state.selectedConfig)
-      : defaultForm(role))
+    if (!preserveDraft) {
+      replaceEditorForm(role, snapshot.selectedConfig
+        ? formFromConfig(state.selectedConfig)
+        : defaultForm(role))
+    }
     invalidateModelOptionsIfStale(role)
     state.loaded = true
     state.error = ''
+    state.dirty = preserveDraft
     state.revision += 1
   }
 
@@ -459,6 +478,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     state.selectedConfig = normalizedConfig
     replaceEditorForm(normalizedRole, normalizedConfig ? formFromConfig(normalizedConfig) : defaultForm(normalizedRole))
     invalidateModelOptionsIfStale(normalizedRole)
+    state.dirty = false
     state.revision += 1
   }
 
@@ -509,6 +529,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       ...roleState.value[role].form,
       contextWindowTokens: normalizeContextWindowTokens(value)
     })
+    roleState.value[role].dirty = true
+    roleState.value[role].revision += 1
   }
 
   function setEmbeddingRateLimitPreset(presetValue, role = activeRole.value) {
@@ -526,6 +548,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       embeddingTokensPerMinute: preset.tokensPerMinute,
       embeddingBatchSize: preset.batchSize
     })
+    roleState.value[role].dirty = true
+    roleState.value[role].revision += 1
   }
 
   function autoSelectModel(role) {
@@ -671,8 +695,18 @@ function emptyRoleState(role) {
     deleting: false,
     activating: false,
     error: '',
-    revision: 0
+    dirty: false,
+    revision: 0,
+    apiKeyRevision: 0
   }
+}
+
+function clearSubmittedApiKeyDraft(state, submittedApiKeyRevision) {
+  if (state.apiKeyRevision !== submittedApiKeyRevision) {
+    return
+  }
+  state.form.apiKey = ''
+  state.form.clearApiKey = false
 }
 
 function defaultForm(role) {

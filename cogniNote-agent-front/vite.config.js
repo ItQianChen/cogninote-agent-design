@@ -9,6 +9,7 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 const packageJson = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+const backendPort = process.env.COGNINOTE_E2E_BACKEND_PORT || '18080'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -27,10 +28,13 @@ export default defineConfig({
       dts: false,
     }),
   ],
+  build: {
+    manifest: true
+  },
   server: {
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:18080',
+        target: `http://127.0.0.1:${backendPort}`,
         changeOrigin: true,
       },
     },

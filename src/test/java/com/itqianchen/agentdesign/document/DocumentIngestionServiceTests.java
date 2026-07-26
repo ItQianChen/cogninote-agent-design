@@ -28,6 +28,7 @@ import com.itqianchen.agentdesign.service.model.ModelConfigService;
 import com.itqianchen.agentdesign.service.ocr.OcrSettingsService;
 import java.awt.Color;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import com.itqianchen.agentdesign.support.TestStorageProperties;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
@@ -52,17 +53,27 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.util.MimeType;
 import reactor.core.publisher.Flux;
 
 @SpringBootTest
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-ingestion",
-        "app.storage.database-path=target/test-cogninote-ingestion/cogninote.db",
         "server.address=127.0.0.1"
 })
 class DocumentIngestionServiceTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private DocumentIngestionService ingestionService;
@@ -110,7 +121,6 @@ class DocumentIngestionServiceTests {
     @Test
     void ingestFolderParsesMarkdownAndSkipsUnchangedFiles() throws Exception {
         Path note = tempDir.resolve("note.md");
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(note, "# Note\n\nThis is a local note.");
 
         IngestDocumentsResponse first = ingestionService.ingestFolder(tempDir.toString(), true);
@@ -340,7 +350,6 @@ class DocumentIngestionServiceTests {
     @Test
     void deleteDocumentOnlyDeletesDatabaseRows() throws Exception {
         Path note = tempDir.resolve("delete-me.txt");
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(note, "Keep the original file.");
 
         ingestionService.ingestFolder(tempDir.toString(), true);

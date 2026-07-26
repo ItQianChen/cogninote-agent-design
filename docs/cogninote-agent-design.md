@@ -1439,6 +1439,16 @@ POST   /api/chat/stream/{requestId}/cancel
 - 新增 `REPARSE` 维护动作，用于 OCR 配置开启后重新解析目录内无文本层 PDF。
 - 模型 OCR 支持 SQLite 页级检查点：普通同步从失败页续传，`REPARSE` 清除进度并从第一页开始；完整 PDF 处理完成前不进入知识库检索。
 
+### Milestone 37：可重复验证与发布门禁
+
+- 持久化 Spring 集成测试使用类级临时存储和动态属性，不再共享固定 `target/test-cogninote-*` SQLite/Lucene 目录。
+- Lucene writer 与 `FSDirectory` 使用同一资源生命周期，连续全量测试验证每轮结束后 Windows 临时索引目录可以正常清理。
+- 前端新增 Vitest/happy-dom，覆盖健康/失败/导航归一化、Chat 来源与引用、维护任务刷新、模型和联网设置草稿保护。
+- Playwright 使用随机端口和隔离临时存储，真实验证首次启动、配置、导入、搜索、维护和后端重启；真实模型与外网 endpoint 使用确定性 route mock。
+- `verify.yml` 统一后端、前端、生产构建、浏览器和知识库 smoke；Windows/macOS 发布 workflow 必须先通过 reusable verify job。
+- 前端和桌面产物建立机器可读体积预算；发布 packaging job 执行平台结构、backend status、静态资源、版本和安装 smoke。
+- Windows 重复性 workflow 每周运行 5 轮，并支持发布候选手动运行 20 轮。操作说明见 [测试与发布门禁](testing-and-release-gates.md)。
+
 ## 12. 后续版本规划
 
 ### v0.2

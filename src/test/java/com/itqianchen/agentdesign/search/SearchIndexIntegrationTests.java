@@ -12,6 +12,7 @@ import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.domain.entity.document.KnowledgeDocument;
 import com.itqianchen.agentdesign.domain.interfaces.search.KnowledgeStore;
 import com.itqianchen.agentdesign.support.TestDatabaseCleaner;
+import com.itqianchen.agentdesign.support.TestStorageProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,17 +22,27 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
-        "app.storage.base-dir=target/test-cogninote-search",
-        "app.storage.database-path=target/test-cogninote-search/cogninote.db",
         "server.address=127.0.0.1"
 })
 class SearchIndexIntegrationTests {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void registerStorageProperties(DynamicPropertyRegistry registry) {
+        TestStorageProperties.register(registry, storageRoot);
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -59,7 +70,6 @@ class SearchIndexIntegrationTests {
 
     @Test
     void ingestMarkdownAutomaticallyIndexesKeywordSearch() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("packaging.md"), "# 打包方案\n\nCogniNote 使用 Launch4j 生成 Windows EXE。");
 
         ingestionService.ingestFolder(tempDir.toString(), true);
@@ -84,7 +94,6 @@ class SearchIndexIntegrationTests {
 
     @Test
     void keywordSearchHitsChineseProseCodeIdentifiersAndMermaidDiagram() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("technical-note.md"), """
                 # 多智能体路由
 
@@ -151,7 +160,6 @@ class SearchIndexIntegrationTests {
 
     @Test
     void rebuildUsesSqliteAsSourceOfTruth() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("rag.txt"), "SQLite is the source of truth and Lucene can be rebuilt.");
         ingestionService.ingestFolder(tempDir.toString(), true);
         knowledgeStore.rebuildAll();
@@ -165,7 +173,6 @@ class SearchIndexIntegrationTests {
 
     @Test
     void deleteDocumentRemovesLuceneHit() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("delete-search.txt"), "This deleted document should not be searchable.");
         ingestionService.ingestFolder(tempDir.toString(), true);
         KnowledgeDocument document = documentRepository.findAllOrderByUpdatedAtDesc().getFirst();
@@ -188,7 +195,6 @@ class SearchIndexIntegrationTests {
 
     @Test
     void vectorAndHybridSearchReturnBadRequestWhenEmbeddingIsUnavailable() throws Exception {
-        // 文件系统访问可能抛出 IO 异常，调用方需要保留失败上下文。
         Files.writeString(tempDir.resolve("keyword-only.txt"), "Keyword search works without an embedding model.");
         ingestionService.ingestFolder(tempDir.toString(), true);
 

@@ -26,7 +26,7 @@ function Test-Jdk25Home {
         return $false
     }
 
-    $versionLine = cmd /c "`"$candidateJava`" -version 2>&1" | Select-Object -First 1
+    $versionLine = & $candidateJava -version 2>&1 | Select-Object -First 1
     return $versionLine -match 'version "25(\.|")'
 }
 
@@ -120,7 +120,7 @@ function Enable-WindowsTauriSigning {
         $config.bundle | Add-Member -MemberType NoteProperty -Name windows -Value ([pscustomobject]@{})
     }
 
-    $signCommand = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../../scripts/sign-windows-artifact.ps1 -FilePath "%1"'
+    $signCommand = 'pwsh -NoProfile -File ../../scripts/sign-windows-artifact.ps1 -FilePath "%1"'
     if ($config.bundle.windows.PSObject.Properties.Name -contains 'signCommand') {
         $config.bundle.windows.signCommand = $signCommand
     } else {

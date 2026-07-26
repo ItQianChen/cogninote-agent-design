@@ -95,8 +95,8 @@
 
 - JDK 25，桌面打包必须使用包含 `jlink` 和 `jpackage` 的完整 JDK
 - Maven 3.9+
-- Node.js 20.19.6 或兼容版本
-- npm 10.8.2 或兼容版本
+- Node.js 22.18 或兼容的 Node 22 版本
+- npm 10.9 或兼容版本
 
 Windows 桌面打包还需要 Rust stable toolchain、MSVC Build Tools 和 WebView2 Runtime。macOS 桌面打包第一版只支持 Apple Silicon，需要 JDK 25 arm64、Rust stable 和 Xcode Command Line Tools。完整的桌面打包、签名、公证和故障排查见 [桌面构建指南](docs/desktop-build-guide.md)。
 
@@ -155,8 +155,10 @@ java -jar target/cogninote-agent-design.jar
 ### 构建 Windows 桌面应用
 
 ```powershell
-.\scripts\build-desktop-app.ps1 -SkipTests
+.\scripts\build-desktop-app.ps1
 ```
+
+本地直接打包默认执行测试。`-SkipTests` 只用于已经通过 reusable `verify.yml` 的发布 packaging job，不能作为无验证发布入口。
 
 构建完成后主要产物为：
 
@@ -174,7 +176,7 @@ GitHub Actions 发布、签名证书、默认 Release tag 和安装升级清理�
 macOS 和 Windows 打包链路分开维护。请在 Apple Silicon Mac 上执行：
 
 ```bash
-bash ./scripts/build-desktop-app-macos.sh --skip-tests
+bash ./scripts/build-desktop-app-macos.sh
 ```
 
 构建完成后主要产物为：
@@ -264,11 +266,25 @@ Vue Frontend
 # 后端测试
 mvn test
 
+# 后端连续重复验证（本地默认 5 次；发布候选使用 20 次）
+.\scripts\repeat-backend-tests.ps1 -Iterations 5
+
+# 前端单元测试
+npm --prefix cogniNote-agent-front ci
+npm --prefix cogniNote-agent-front run test
+
 # 后端开发运行，启用详细诊断日志
 mvn spring-boot:run '-Dspring-boot.run.profiles=dev'
 
 # 前端构建
 npm --prefix cogniNote-agent-front run build
+node scripts/check-frontend-bundle-budget.mjs
+
+# 浏览器关键路径（随机端口与隔离临时存储）
+npm --prefix cogniNote-agent-front run test:e2e
+
+# 知识库专项 smoke
+.\scripts\smoke-knowledge-health.ps1
 
 # 后端 + 前端整包
 mvn clean -Pwith-frontend package
@@ -276,8 +292,8 @@ mvn clean -Pwith-frontend package
 # 桌面工具链检查
 .\scripts\verify-desktop-toolchain.ps1
 
-# 桌面应用打包
-.\scripts\build-desktop-app.ps1 -SkipTests
+# 桌面应用打包（本地默认执行测试）
+.\scripts\build-desktop-app.ps1
 
 # macOS Apple Silicon 桌面应用打包
 bash ./scripts/build-desktop-app-macos.sh --skip-tests
@@ -291,6 +307,7 @@ bash ./scripts/build-desktop-app-macos.sh --skip-tests
 | [API 参考](docs/api-reference.md) | REST API、统一响应格式、SSE 事件和流式取消接口 |
 | [模型配置指南](docs/model-configuration-guide.md) | DashScope、OpenAI-compatible 与 Embedding 限速配置方式 |
 | [桌面构建指南](docs/desktop-build-guide.md) | 桌面打包、签名、公证、发布和故障排查 |
+| [测试与发布门禁](docs/testing-and-release-gates.md) | 后端重复性、Vitest、Playwright、CI required checks、体积预算和桌面 smoke |
 
 阶段计划和内部工程文档保存在 `docs/` 目录，用于追踪研发过程。
 
@@ -299,7 +316,7 @@ bash ./scripts/build-desktop-app-macos.sh --skip-tests
 当前项目已完成文档摄入、知识库目录管理与问答可用性诊断、维护任务 FIFO 队列、SSE 任务状态推送、维护记录分页弹窗、维护操作二次确认、补写缺失索引、重建/导入完成确认提示、Lucene 一致性检查、Embedding 降级与供应商限流提示、Embedding RPM/TPM/batch 限速和退避重试、图谱过期提示、重复内容和疑似版本冲突提示、目录删除时清理维护记录、独立目录管理列表（模糊搜索、筛选、分页和中文分页控件）、导入目录弹窗、代码友好的 Lucene 混合检索、模型驱动追问补全 Agent、追问补全自动触发与知识库设置页配置、知识图谱与思维导图、已有知识图谱清单按需加载和删除、知识图谱探索器重设计、图谱关系中文谓词直出与描述可读化、Prompt 专用配置文件、模型配置、联网搜索 Tool Calling 与网页来源展示、对话上下文窗口配置与 Token 估算优化、RAG 对话、路由式多智能体对话、模式隔离聊天记忆、聊天回复片段引用、智能体模型运行时重构、AI 流式 Markdown 与 Mermaid 渲染、SQLite 聊天记忆、纯模型对话、空白保真的 SSE 流式输出、流式截断识别与错误状态同步、MyBatis 统一数据访问层、Windows 桌面打包、macOS Apple Silicon 独立打包链路、`0.1.70` 双平台 unsigned/signed CI 打包链路、桌面安装/卸载/升级可靠性修复、桌面会话令牌保护、stable/preview 通道自动更新，以及中性主题与蓝色动作色的应用主题方案主要闭环。仍需重点补齐：
 
 - API Key 本地加密或凭据管理。
-- 更完整的发布验收和安装包测试。
+- 发布候选的连续 20 轮后端测试记录、required checks 稳定周期和双平台安装 smoke 实跑证据。
 - 托盘、Universal Binary、Intel Mac 支持等桌面增强能力。
 
 ## 友情链接

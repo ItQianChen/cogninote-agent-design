@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-26T00:00:00.000Z",
+  "warningGrowthPercent": 5,
+  "failureGrowthPercent": 10,
+  "failureAbsoluteGrowthBytes": 20971520,
+  "metrics": {
+    "windowsPortableZip": null,
+    "windowsInstaller": 125862049,
+    "macosAppZip": null,
+    "macosDmg": null,
+    "embeddedBackend": 148751011,
+    "backendJar": 92568371
+  },
+  "notes": {
+    "windowsInstaller": "Recorded from the latest local Windows installer artifact before Phase 37.",
+    "embeddedBackend": "Recorded from the latest local custom-runtime backend image before Phase 37.",
+    "backendJar": "Recorded from the Phase 30 custom-runtime baseline (88.28 MiB).",
+    "pending": "Portable and macOS values must be replaced by two reviewed release-run measurements before enabling their failure threshold."
+  }
+}

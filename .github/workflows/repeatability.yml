@@ -1,0 +1,38 @@
+name: Backend Repeatability
+
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: Consecutive backend test iterations
+        required: true
+        type: choice
+        default: '5'
+        options: ['5', '10', '20']
+  schedule:
+    - cron: '23 18 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  repeat-backend-tests:
+    name: Backend tests x${{ inputs.iterations || '5' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Run repeated backend tests
+        shell: pwsh
+        run: ./scripts/repeat-backend-tests.ps1 -Iterations ${{ inputs.iterations || '5' }}
+      - name: Upload repeatability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-repeatability-${{ github.run_id }}
+          path: artifacts/test-repeatability/
+          if-no-files-found: error

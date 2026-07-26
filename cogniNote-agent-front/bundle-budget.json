@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "projectVersion": "0.1.70",
+  "generatedAt": "2026-07-26T06:19:29.597Z",
+  "nodeVersion": "v22.18.0",
+  "thresholds": {
+    "warningGrowthPercent": 2,
+    "failureGrowthPercent": 5,
+    "entryGzipHardLimitBytes": 501760,
+    "maxRawChunkHardLimitBytes": 1625292
+  },
+  "metrics": {
+    "entryJs": {
+      "file": "assets/index-DQH-gcQD.js",
+      "rawBytes": 1456342,
+      "gzipBytes": 463837
+    },
+    "maxJsChunk": {
+      "file": "assets/index-DQH-gcQD.js",
+      "rawBytes": 1456342,
+      "gzipBytes": 463837
+    },
+    "totalJsGzipBytes": 3303299,
+    "totalCssGzipBytes": 68524,
+    "jsChunkCount": 411,
+    "cssChunkCount": 2
+  }
+}
