@@ -200,6 +200,7 @@ GitHub Actions 发布、签名公证、默认 Release tag 和 macOS 安装替换
   index\lucene\
   logs\app.log
   logs\desktop-backend.log
+  data-protection\
 ```
 
 macOS 桌面版默认写入：
@@ -210,6 +211,7 @@ macOS 桌面版默认写入：
   index/lucene/
   logs/app.log
   logs/desktop-backend.log
+  data-protection/
 ```
 
 SQLite 是业务事实来源，Lucene 是可重建索引。应用不会复制用户原始文件，只保存解析后的 chunk 文本、文档元数据、知识库维护队列与历史、聊天记录、知识图谱事实与视图缓存、图谱运行记录、索引数据和模型配置。健康状态由 SQLite 当前事实和轻量文件系统探针即时计算，不额外保存一份容易过期的健康表。用户删除知识库目录时，只删除应用内目录、文档、chunks、索引、图谱派生数据和该目录维护记录，不触碰本地原始文件；用户删除某个已有知识图谱时，只删除该 scope 的图谱派生数据和运行记录，不触碰原始资料或可复用的 chunk 抽取缓存。
@@ -219,6 +221,8 @@ SQLite 是业务事实来源，Lucene 是可重建索引。应用不会复制用
 日志分为三档：默认发布配置为 `INFO`，不落盘 Spring AI prompt/completion；本地开发使用 `dev` profile 保持详细日志；用户问题排查可临时启用 `diagnostic` profile。桌面安装包会自动带 `desktop` profile，Spring Boot 业务日志只写滚动 `app.log`，避免控制台日志重复撑大 `desktop-backend.log`。
 
 模型 API Key 和联网搜索 Exa API Key 当前仍明文保存到本机 SQLite，适合内部测试和小范围安装验证，不建议作为大范围公开生产发布。后端响应不会回显联网搜索 API Key 明文，桌面本机 API 已通过启动期会话令牌保护；公开发布前仍应改为 Windows 本地加密或系统凭据管理保存 API Key。
+
+设置中的完整备份会把 SQLite 和其中的 API Key 明文写入 `.cogninote-backup`。该文件只应保存在可信位置，不能作为诊断包上传或公开分享。恢复前会验证包格式、哈希、数据库版本和完整性；取消确认会立即清理恢复工作副本，未确认副本超过 24 小时也会自动删除。恢复在应用重启且 SQLite 连接池打开前执行，各阶段中断后可继续或回滚；Lucene 不进入备份，恢复成功后从 SQLite 重建。
 
 ## 架构概览
 

@@ -13,6 +13,9 @@
     "notification:allow-notify",
     "core:default",
     "allow-pick-knowledge-folder",
+    "allow-save-backup-file",
+    "allow-stage-restore-file",
+    "allow-restart-after-restore",
     "allow-get-desktop-session-token",
     "allow-check-desktop-update",
     "allow-install-desktop-update"

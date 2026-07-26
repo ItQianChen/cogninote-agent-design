@@ -76,6 +76,33 @@ GET /api/system/status
 
 返回应用名、版本、运行状态和当前数据目录。
 
+## 备份与恢复
+
+```text
+GET  /api/system/data-protection/status
+POST /api/system/backups
+POST /api/system/restores/preflight
+POST /api/system/restores/{restoreId}/schedule
+DELETE /api/system/restores/{restoreId}
+GET  /api/system/restores/{restoreId}
+```
+
+`POST /api/system/backups` 生成受控临时备份并返回 `backupId`、建议文件名、大小、SHA-256、schema 版本和 `containsSecrets=true`。桌面壳再通过保存对话框复制该 ID 对应的文件，后端接口不接受任意目标路径。
+
+`.cogninote-backup` 包含 SQLite 中的文档、chunks、聊天、模型配置、维护历史和知识图谱，也包含模型与联网搜索 API Key 明文。Lucene、日志、用户原始文件和 WebView 缓存不进入备份。
+
+恢复文件先由桌面壳复制到受控 inbox，`preflight` 请求只提交随机 `importId`：
+
+```json
+{
+  "importId": "01234567-89ab-cdef-0123-456789abcdef"
+}
+```
+
+预检会验证 ZIP 条目、manifest、大小、SHA-256、schema 版本、SQLite 完整性、外键和关键业务引用。通过后返回 `restoreId`、数据量和 `PREFLIGHTED` 状态；调用 `schedule` 后写入跨进程 marker，桌面壳重启应用，后端在连接池打开前恢复数据库并重建 Lucene。用户取消确认时调用 `DELETE`，任务进入 `DISCARDED` 并立即删除含明文密钥的工作副本；超过 24 小时未确认的预检任务也会自动清理。
+
+恢复状态可能为 `PREFLIGHTED`、`DISCARDED`、`SCHEDULED`、`SWAPPING`、`VALIDATING`、`REINDEXING`、`COMPLETED`、`ROLLED_BACK`、`REINDEX_FAILED`。无效包返回 `422 INVALID_BACKUP`，并发恢复返回 `409 CONFLICT`，空间不足返回 `507 INSUFFICIENT_STORAGE`。
+
 ## 文档
 
 ### 查询文档列表

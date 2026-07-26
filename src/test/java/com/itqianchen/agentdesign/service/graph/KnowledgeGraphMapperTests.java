@@ -17,7 +17,7 @@ import com.itqianchen.agentdesign.domain.entity.graph.KnowledgeGraphView;
 import com.itqianchen.agentdesign.domain.enums.graph.KnowledgeGraphViewType;
 import com.itqianchen.agentdesign.mapper.graph.KnowledgeGraphMapper;
 import com.itqianchen.agentdesign.mapper.graph.KnowledgeGraphSummaryRow;
-import com.itqianchen.agentdesign.mapper.schema.DatabaseSchemaMapper;
+import com.itqianchen.agentdesign.support.DatabaseMigrationTestSupport;
 import com.itqianchen.agentdesign.repository.graph.KnowledgeGraphRepository;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -35,9 +35,7 @@ class KnowledgeGraphMapperTests {
     @Test
     void findGeneratedGraphSummariesDeduplicatesViewsByScope() {
         try (SqlSession sqlSession = sqliteSqlSession()) {
-            DatabaseSchemaMapper schemaMapper = sqlSession.getMapper(DatabaseSchemaMapper.class);
             KnowledgeGraphMapper graphMapper = sqlSession.getMapper(KnowledgeGraphMapper.class);
-            schemaMapper.createKnowledgeGraphViewsTable();
             long now = 1780000000000L;
 
             graphMapper.insertView(view(
@@ -67,13 +65,7 @@ class KnowledgeGraphMapperTests {
     @Test
     void deleteGeneratedGraphRemovesScopeFactsViewsAndRuns() {
         try (SqlSession sqlSession = sqliteSqlSession()) {
-            DatabaseSchemaMapper schemaMapper = sqlSession.getMapper(DatabaseSchemaMapper.class);
             KnowledgeGraphMapper graphMapper = sqlSession.getMapper(KnowledgeGraphMapper.class);
-            schemaMapper.createKnowledgeGraphRunsTable();
-            schemaMapper.createKnowledgeGraphNodesTable();
-            schemaMapper.createKnowledgeGraphEdgesTable();
-            schemaMapper.createKnowledgeGraphEvidenceTable();
-            schemaMapper.createKnowledgeGraphViewsTable();
             KnowledgeGraphRepository repository = new KnowledgeGraphRepository(graphMapper);
             long now = 1780000000000L;
             KnowledgeGraphScope folderScope = new KnowledgeGraphScope(KnowledgeGraphScopeType.KNOWLEDGE_FOLDER, "folder-1", "项目资料");
@@ -189,8 +181,7 @@ class KnowledgeGraphMapperTests {
 
     private static SqlSession sqliteSqlSession() {
         try {
-            SQLiteDataSource dataSource = new SQLiteDataSource();
-            dataSource.setUrl("jdbc:sqlite::memory:");
+            SQLiteDataSource dataSource = DatabaseMigrationTestSupport.createMigratedDataSource();
             SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
             factoryBean.setDataSource(dataSource);
             factoryBean.setMapperLocations(new PathMatchingResourcePatternResolver()

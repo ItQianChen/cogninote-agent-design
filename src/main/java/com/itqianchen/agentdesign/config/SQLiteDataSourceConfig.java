@@ -1,6 +1,7 @@
 package com.itqianchen.agentdesign.config;
 
 import com.itqianchen.agentdesign.service.system.AppStorageInitializer;
+import com.itqianchen.agentdesign.service.system.DatabaseMigrationService;
 import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
 import org.sqlite.SQLiteConfig;
@@ -19,14 +20,19 @@ public class SQLiteDataSourceConfig {
     private static final int SQLITE_BUSY_TIMEOUT_MS = 30_000;
 
     private final AppStorageInitializer storageInitializer;
+    private final DatabaseMigrationService migrationService;
 
     /**
      * 注入应用存储初始化器。
      *
      * @param storageInitializer 应用存储初始化器
      */
-    public SQLiteDataSourceConfig(AppStorageInitializer storageInitializer) {
+    public SQLiteDataSourceConfig(
+            AppStorageInitializer storageInitializer,
+            DatabaseMigrationService migrationService
+    ) {
         this.storageInitializer = storageInitializer;
+        this.migrationService = migrationService;
     }
 
     /**
@@ -39,6 +45,7 @@ public class SQLiteDataSourceConfig {
         // Hikari 创建 DataSource 时可能立刻打开 SQLite 文件，早于 ApplicationReadyEvent。
         // 因此这里必须先确保 data 目录存在，避免首次启动因为数据库路径不存在失败。
         storageInitializer.ensureInitialized();
+        migrationService.migrateBeforeConnectionPool();
 
         HikariDataSource dataSource = new HikariDataSource();
         dataSource.setJdbcUrl("jdbc:sqlite:" + storageInitializer.appStorage().databasePath());
@@ -58,6 +65,8 @@ public class SQLiteDataSourceConfig {
          */
         config.setJournalMode(SQLiteConfig.JournalMode.WAL);
         config.setBusyTimeout(SQLITE_BUSY_TIMEOUT_MS);
+        config.enforceForeignKeys(true);
+        config.enableLoadExtension(false);
         return config.toProperties();
     }
 }

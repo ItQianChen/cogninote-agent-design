@@ -171,6 +171,9 @@ pub fn run() {
         }))
         .invoke_handler(tauri::generate_handler![
             pick_knowledge_folder,
+            save_backup_file,
+            stage_restore_file,
+            restart_after_restore,
             get_desktop_session_token,
             check_desktop_update,
             install_desktop_update
@@ -197,6 +200,172 @@ fn pick_knowledge_folder(app: AppHandle) -> Option<String> {
         .file()
         .blocking_pick_folder()
         .map(|path| path.to_string())
+}
+
+#[tauri::command]
+fn save_backup_file(
+    app: AppHandle,
+    backup_id: String,
+    suggested_file_name: String,
+) -> Result<bool, String> {
+    validate_data_protection_id(&backup_id)?;
+    let storage_dir = app_support_dir()?;
+    let source = storage_dir
+        .join("data-protection")
+        .join("exports")
+        .join(format!("{backup_id}.cogninote-backup"));
+    if !source.is_file() {
+        return Err("备份临时文件不存在，请重新生成备份。".to_string());
+    }
+
+    let safe_name = normalize_backup_file_name(&suggested_file_name);
+    let Some(destination) = app
+        .dialog()
+        .file()
+        .add_filter("CogniNote 备份", &["cogninote-backup"])
+        .set_file_name(safe_name)
+        .set_title("保存 CogniNote 备份")
+        .blocking_save_file()
+    else {
+        let _ = fs::remove_file(&source);
+        return Ok(false);
+    };
+    let destination = destination
+        .into_path()
+        .map_err(|error| format!("无法读取备份保存路径：{error}"))?;
+    if destination == source {
+        return Err("请选择应用临时目录以外的备份位置。".to_string());
+    }
+    let temporary = destination.with_extension("cogninote-backup.partial");
+    fs::copy(&source, &temporary).map_err(|error| format!("复制备份失败：{error}"))?;
+    if let Err(error) = replace_backup_file(&temporary, &destination) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error);
+    }
+    fs::remove_file(&source)
+        .map_err(|error| format!("备份已保存，但清理敏感临时文件失败：{error}"))?;
+    Ok(true)
+}
+
+/// 用同目录 rollback 保护已有目标，避免新文件就位失败时丢失用户上一份备份。
+fn replace_backup_file(temporary: &Path, destination: &Path) -> Result<(), String> {
+    let rollback = destination.with_extension("cogninote-backup.rollback");
+    if rollback.exists() {
+        if destination.exists() {
+            fs::remove_file(&rollback)
+                .map_err(|error| format!("无法清理上次保存留下的备份副本：{error}"))?;
+        } else {
+            fs::rename(&rollback, destination)
+                .map_err(|error| format!("无法恢复上次保存中断前的备份：{error}"))?;
+        }
+    }
+
+    let had_destination = destination.exists();
+    if had_destination {
+        fs::rename(destination, &rollback).map_err(|error| format!("无法保留已有备份：{error}"))?;
+    }
+
+    if let Err(replace_error) = fs::rename(temporary, destination) {
+        if had_destination {
+            if let Err(rollback_error) = fs::rename(&rollback, destination) {
+                return Err(format!(
+                    "完成备份保存失败：{replace_error}；恢复原备份也失败：{rollback_error}"
+                ));
+            }
+        }
+        return Err(format!("完成备份保存失败：{replace_error}"));
+    }
+
+    if had_destination {
+        fs::remove_file(&rollback)
+            .map_err(|error| format!("备份已保存，但清理旧备份副本失败：{error}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn stage_restore_file(app: AppHandle) -> Result<Option<String>, String> {
+    let Some(source) = app
+        .dialog()
+        .file()
+        .add_filter("CogniNote 备份", &["cogninote-backup"])
+        .set_title("选择 CogniNote 备份")
+        .blocking_pick_file()
+    else {
+        return Ok(None);
+    };
+    let source = source
+        .into_path()
+        .map_err(|error| format!("无法读取恢复文件路径：{error}"))?;
+    if source.extension().and_then(|value| value.to_str()) != Some("cogninote-backup") {
+        return Err("请选择 .cogninote-backup 文件。".to_string());
+    }
+    const MAX_RESTORE_PACKAGE_BYTES: u64 = 20 * 1024 * 1024 * 1024;
+    let source_size = fs::metadata(&source)
+        .map_err(|error| format!("无法读取恢复文件大小：{error}"))?
+        .len();
+    if source_size == 0 || source_size > MAX_RESTORE_PACKAGE_BYTES {
+        return Err("恢复文件大小无效。".to_string());
+    }
+
+    let import_id = generate_data_protection_id()?;
+    let inbox = app_support_dir()?
+        .join("data-protection")
+        .join("restore-inbox");
+    fs::create_dir_all(&inbox).map_err(|error| format!("无法创建恢复临时目录：{error}"))?;
+    let destination = inbox.join(format!("{import_id}.cogninote-backup"));
+    let temporary = inbox.join(format!("{import_id}.partial"));
+    fs::copy(&source, &temporary).map_err(|error| format!("复制恢复文件失败：{error}"))?;
+    fs::rename(&temporary, &destination).map_err(|error| format!("准备恢复文件失败：{error}"))?;
+    Ok(Some(import_id))
+}
+
+#[tauri::command]
+fn restart_after_restore(app: AppHandle) -> Result<(), String> {
+    let pending_restore = app_support_dir()?
+        .join("data-protection")
+        .join("pending-restore.json");
+    if !pending_restore.is_file() {
+        return Err("没有已安排的恢复任务。".to_string());
+    }
+    shutdown_backend(&app);
+    app.restart();
+}
+
+fn generate_data_protection_id() -> Result<String, String> {
+    let mut bytes = [0_u8; 16];
+    getrandom::getrandom(&mut bytes).map_err(|error| format!("无法生成恢复标识：{error}"))?;
+    Ok(format!(
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+    ))
+}
+
+fn validate_data_protection_id(value: &str) -> Result<(), String> {
+    let valid = value.len() == 36
+        && value.chars().enumerate().all(|(index, character)| {
+            if matches!(index, 8 | 13 | 18 | 23) {
+                character == '-'
+            } else {
+                character.is_ascii_hexdigit()
+            }
+        });
+    if valid {
+        Ok(())
+    } else {
+        Err("备份标识无效。".to_string())
+    }
+}
+
+fn normalize_backup_file_name(value: &str) -> String {
+    let candidate = Path::new(value)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| name.ends_with(".cogninote-backup"));
+    candidate
+        .unwrap_or("CogniNote.cogninote-backup")
+        .to_string()
 }
 
 #[tauri::command]
@@ -305,8 +474,14 @@ fn normalize_update_channel(channel: &str) -> Result<String, String> {
 
 fn updater_endpoints(channel: &str) -> Result<Vec<tauri::Url>, String> {
     let endpoints = match channel {
-        "stable" => [STABLE_PAGES_UPDATER_ENDPOINT, STABLE_RELEASE_UPDATER_ENDPOINT],
-        "preview" => [PREVIEW_PAGES_UPDATER_ENDPOINT, PREVIEW_RELEASE_UPDATER_ENDPOINT],
+        "stable" => [
+            STABLE_PAGES_UPDATER_ENDPOINT,
+            STABLE_RELEASE_UPDATER_ENDPOINT,
+        ],
+        "preview" => [
+            PREVIEW_PAGES_UPDATER_ENDPOINT,
+            PREVIEW_RELEASE_UPDATER_ENDPOINT,
+        ],
         other => return Err(format!("未知更新通道：{other}")),
     };
     endpoints
@@ -943,5 +1118,74 @@ fn show_startup_error(app: &AppHandle, message: &str) {
 fn append_log_line(log_path: &Path, line: &str) {
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(log_path) {
         let _ = writeln!(file, "{line}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_backup_file_name, replace_backup_file, validate_data_protection_id};
+    use std::{fs, process, time::SystemTime};
+
+    #[test]
+    fn data_protection_ids_reject_paths_and_partial_values() {
+        assert!(validate_data_protection_id("01234567-89ab-cdef-0123-456789abcdef").is_ok());
+        assert!(validate_data_protection_id("../01234567-89ab-cdef-0123-456789abcdef").is_err());
+        assert!(validate_data_protection_id("01234567").is_err());
+    }
+
+    #[test]
+    fn backup_file_name_never_preserves_parent_directories() {
+        assert_eq!(
+            normalize_backup_file_name("folder/CogniNote.cogninote-backup"),
+            "CogniNote.cogninote-backup"
+        );
+        assert_eq!(
+            normalize_backup_file_name("notes.txt"),
+            "CogniNote.cogninote-backup"
+        );
+    }
+
+    #[test]
+    fn replacing_existing_backup_removes_rollback_after_success() {
+        let directory = test_directory("replace-success");
+        let destination = directory.join("backup.cogninote-backup");
+        let temporary = directory.join("backup.cogninote-backup.partial");
+        fs::write(&destination, b"old").unwrap();
+        fs::write(&temporary, b"new").unwrap();
+
+        replace_backup_file(&temporary, &destination).unwrap();
+
+        assert_eq!(fs::read(&destination).unwrap(), b"new");
+        assert!(!destination
+            .with_extension("cogninote-backup.rollback")
+            .exists());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn failed_replacement_restores_existing_backup() {
+        let directory = test_directory("replace-failure");
+        let destination = directory.join("backup.cogninote-backup");
+        let missing_temporary = directory.join("missing.partial");
+        fs::write(&destination, b"old").unwrap();
+
+        assert!(replace_backup_file(&missing_temporary, &destination).is_err());
+
+        assert_eq!(fs::read(&destination).unwrap(), b"old");
+        assert!(!destination
+            .with_extension("cogninote-backup.rollback")
+            .exists());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    fn test_directory(label: &str) -> std::path::PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory =
+            std::env::temp_dir().join(format!("cogninote-{label}-{}-{nonce}", process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        directory
     }
 }

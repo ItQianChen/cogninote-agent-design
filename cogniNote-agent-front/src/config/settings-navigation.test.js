@@ -9,6 +9,7 @@ import {
 describe('settings navigation normalization', () => {
   it('keeps current ids and resolves legacy aliases', () => {
     expect(normalizeSettingsItem('model-chat')).toBe('model-chat')
+    expect(normalizeSettingsItem('data-protection')).toBe('data-protection')
     expect(normalizeSettingsItem('system-theme')).toBe('appearance')
     expect(normalizeSettingsItem('knowledge-query-contextualizer')).toBe('chat-retrieval')
   })

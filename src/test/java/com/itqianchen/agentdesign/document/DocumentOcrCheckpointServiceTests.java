@@ -9,12 +9,11 @@ import com.itqianchen.agentdesign.domain.enums.document.FileType;
 import com.itqianchen.agentdesign.domain.vo.ingestion.ParsedSection;
 import com.itqianchen.agentdesign.mapper.document.DocumentMapper;
 import com.itqianchen.agentdesign.mapper.document.DocumentOcrCheckpointMapper;
-import com.itqianchen.agentdesign.mapper.schema.DatabaseSchemaMapper;
 import com.itqianchen.agentdesign.repository.document.DocumentOcrCheckpointRepository;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.service.document.DocumentOcrCheckpointService;
 import com.itqianchen.agentdesign.service.document.DocumentIngestionPersistence;
-import com.itqianchen.agentdesign.service.system.DatabaseSchemaInitializer;
+import com.itqianchen.agentdesign.support.DatabaseMigrationTestSupport;
 import java.util.List;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -28,7 +27,6 @@ class DocumentOcrCheckpointServiceTests {
     @Test
     void savedPagesCanBeRestoredAndSignatureChangeClearsProgress() {
         try (SqlSession sqlSession = sqliteSqlSession()) {
-            new DatabaseSchemaInitializer(sqlSession.getMapper(DatabaseSchemaMapper.class)).initialize();
             DocumentOcrCheckpointRepository checkpointRepository = new DocumentOcrCheckpointRepository(
                     sqlSession.getMapper(DocumentOcrCheckpointMapper.class)
             );
@@ -65,7 +63,6 @@ class DocumentOcrCheckpointServiceTests {
     @Test
     void emptyPageIsPersistedAsCompleted() {
         try (SqlSession sqlSession = sqliteSqlSession()) {
-            new DatabaseSchemaInitializer(sqlSession.getMapper(DatabaseSchemaMapper.class)).initialize();
             DocumentOcrCheckpointRepository checkpointRepository = new DocumentOcrCheckpointRepository(
                     sqlSession.getMapper(DocumentOcrCheckpointMapper.class)
             );
@@ -91,7 +88,6 @@ class DocumentOcrCheckpointServiceTests {
     @Test
     void completeDocumentPersistenceClearsCheckpoint() {
         try (SqlSession sqlSession = sqliteSqlSession()) {
-            new DatabaseSchemaInitializer(sqlSession.getMapper(DatabaseSchemaMapper.class)).initialize();
             DocumentOcrCheckpointRepository checkpointRepository = new DocumentOcrCheckpointRepository(
                     sqlSession.getMapper(DocumentOcrCheckpointMapper.class)
             );
@@ -169,8 +165,7 @@ class DocumentOcrCheckpointServiceTests {
 
     private static SqlSession sqliteSqlSession() {
         try {
-            SQLiteDataSource dataSource = new SQLiteDataSource();
-            dataSource.setUrl("jdbc:sqlite::memory:");
+            SQLiteDataSource dataSource = DatabaseMigrationTestSupport.createMigratedDataSource();
             SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
             factoryBean.setDataSource(dataSource);
             factoryBean.setMapperLocations(new PathMatchingResourcePatternResolver()

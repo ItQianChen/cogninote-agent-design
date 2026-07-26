@@ -35,13 +35,19 @@ public class AppStorageInitializer implements ApplicationListener<ApplicationRea
         this.storageProperties = storageProperties;
         Path baseDir = resolveBaseDir(storageProperties.baseDir());
         Path dataDir = baseDir.resolve("data");
+        Path dataProtectionDir = baseDir.resolve("data-protection");
         this.appStorage = new AppStorage(
                 baseDir,
                 baseDir.resolve("config"),
                 dataDir,
                 resolveDatabasePath(storageProperties.databasePath(), dataDir.resolve("cogninote.db")),
                 baseDir.resolve("index").resolve("lucene"),
-                baseDir.resolve("logs")
+                baseDir.resolve("logs"),
+                dataProtectionDir,
+                dataProtectionDir.resolve("exports"),
+                dataProtectionDir.resolve("restore-inbox"),
+                dataProtectionDir.resolve("restore-work"),
+                dataProtectionDir.resolve("internal-backups")
         );
     }
 
@@ -76,6 +82,11 @@ public class AppStorageInitializer implements ApplicationListener<ApplicationRea
         createDirectory(appStorage.databasePath().getParent());
         createDirectory(appStorage.luceneIndexDir());
         createDirectory(appStorage.logsDir());
+        createDirectory(appStorage.dataProtectionDir());
+        createDirectory(appStorage.backupExportDir());
+        createDirectory(appStorage.restoreInboxDir());
+        createDirectory(appStorage.restoreWorkDir());
+        createDirectory(appStorage.internalBackupDir());
     }
 
     /**

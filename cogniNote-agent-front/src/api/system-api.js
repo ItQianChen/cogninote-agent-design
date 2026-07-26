@@ -1,4 +1,4 @@
-import { requestJson } from './http-client'
+import { jsonOptions, requestJson } from './http-client'
 
 /**
  * 后端健康检查 API。
@@ -7,4 +7,28 @@ import { requestJson } from './http-client'
  */
 export function getSystemStatus() {
   return requestJson('/api/system/status')
+}
+
+export function getDataProtectionStatus() {
+  return requestJson('/api/system/data-protection/status')
+}
+
+export function createBackup() {
+  return requestJson('/api/system/backups', jsonOptions('POST', {}))
+}
+
+export function preflightRestore(importId) {
+  return requestJson('/api/system/restores/preflight', jsonOptions('POST', { importId }))
+}
+
+export function scheduleRestore(restoreId) {
+  return requestJson(`/api/system/restores/${encodeURIComponent(restoreId)}/schedule`, jsonOptions('POST', {}))
+}
+
+export function discardRestore(restoreId) {
+  return requestJson(`/api/system/restores/${encodeURIComponent(restoreId)}`, { method: 'DELETE' })
+}
+
+export function getRestoreStatus(restoreId) {
+  return requestJson(`/api/system/restores/${encodeURIComponent(restoreId)}`)
 }

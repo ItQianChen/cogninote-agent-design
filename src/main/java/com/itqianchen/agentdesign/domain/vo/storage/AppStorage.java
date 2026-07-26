@@ -14,7 +14,12 @@ public record AppStorage(
         Path dataDir,
         Path databasePath,
         Path luceneIndexDir,
-        Path logsDir
+        Path logsDir,
+        Path dataProtectionDir,
+        Path backupExportDir,
+        Path restoreInboxDir,
+        Path restoreWorkDir,
+        Path internalBackupDir
 ) {
 }
 

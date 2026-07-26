@@ -36,9 +36,8 @@ import com.itqianchen.agentdesign.domain.dto.search.SearchRequest;
 import com.itqianchen.agentdesign.domain.dto.search.SearchResponse;
 import com.itqianchen.agentdesign.mapper.chat.ChatSessionMapper;
 import com.itqianchen.agentdesign.mapper.model.ModelConfigMapper;
-import com.itqianchen.agentdesign.mapper.schema.DatabaseSchemaMapper;
 import com.itqianchen.agentdesign.mapper.settings.AppSettingMapper;
-import com.itqianchen.agentdesign.service.system.DatabaseSchemaInitializer;
+import com.itqianchen.agentdesign.support.DatabaseMigrationTestSupport;
 import com.itqianchen.agentdesign.repository.chat.ChatSessionRepository;
 import com.itqianchen.agentdesign.repository.document.DocumentRepository;
 import com.itqianchen.agentdesign.repository.model.ModelConfigRepository;
@@ -592,7 +591,6 @@ class ChatAgentRouterTests {
             this.knowledgeStore = knowledgeStore;
             this.runtime = new RecordingAiRuntime(answer);
             SqlSession sqlSession = sqliteSqlSession();
-            new DatabaseSchemaInitializer(sqlSession.getMapper(DatabaseSchemaMapper.class)).initialize();
             ModelConfigRepository modelConfigRepository = new ModelConfigRepository(
                     sqlSession.getMapper(ModelConfigMapper.class)
             );
@@ -684,8 +682,7 @@ class ChatAgentRouterTests {
 
         private static SqlSession sqliteSqlSession() {
             try {
-                SQLiteDataSource dataSource = new SQLiteDataSource();
-                dataSource.setUrl("jdbc:sqlite::memory:");
+                SQLiteDataSource dataSource = DatabaseMigrationTestSupport.createMigratedDataSource();
                 SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
                 factoryBean.setDataSource(dataSource);
                 factoryBean.setMapperLocations(new PathMatchingResourcePatternResolver()

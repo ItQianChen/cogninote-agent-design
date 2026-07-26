@@ -201,6 +201,24 @@
           "markdownDescription": "Allows the frontend to ask the desktop shell to open the knowledge folder picker."
         },
         {
+          "description": "Allows the frontend to restart the desktop shell after a restore has been scheduled.",
+          "type": "string",
+          "const": "allow-restart-after-restore",
+          "markdownDescription": "Allows the frontend to restart the desktop shell after a restore has been scheduled."
+        },
+        {
+          "description": "Allows the frontend to save a backend-generated backup through a user-selected file dialog.",
+          "type": "string",
+          "const": "allow-save-backup-file",
+          "markdownDescription": "Allows the frontend to save a backend-generated backup through a user-selected file dialog."
+        },
+        {
+          "description": "Allows the frontend to copy a user-selected backup into the controlled restore inbox.",
+          "type": "string",
+          "const": "allow-stage-restore-file",
+          "markdownDescription": "Allows the frontend to copy a user-selected backup into the controlled restore inbox."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",

@@ -20,6 +20,7 @@ export const SETTINGS_NAV_GROUPS = [
     items: [
       { id: 'appearance', label: '外观' },
       { id: 'system-info', label: '系统信息' },
+      { id: 'data-protection', label: '备份与恢复' },
       { id: 'app-update', label: '应用更新' }
     ]
   },

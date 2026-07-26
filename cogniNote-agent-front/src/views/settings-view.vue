@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ChevronUp } from 'lucide-vue-next'
 import DesktopUpdateSettingsPanel from '../components/desktop-update-settings-panel.vue'
+import DataProtectionSettingsPanel from '../components/data-protection-settings-panel.vue'
 import OcrSettingsPanel from '../components/ocr-settings-panel.vue'
 import QueryContextualizerSettingsPanel from '../components/query-contextualizer-settings-panel.vue'
 import SystemStatusCard from '../components/system-status-card.vue'
@@ -112,6 +113,10 @@ async function loadActiveItemData(item) {
     return
   }
 
+  if (item === 'data-protection') {
+    return
+  }
+
   if (item === 'chat-retrieval') {
     await chatSettingsStore.fetchSettings({ force: true })
     return
@@ -198,6 +203,7 @@ function readRouteItem(item = route.query.item) {
       </section>
 
       <DesktopUpdateSettingsPanel v-else-if="activeItem === 'app-update'" />
+      <DataProtectionSettingsPanel v-else-if="activeItem === 'data-protection'" />
       <QueryContextualizerSettingsPanel v-else-if="activeItem === 'chat-retrieval'" />
       <WebSearchSettingsPanel v-else-if="activeItem === 'web-search'" />
       <OcrSettingsPanel v-else-if="activeItem === 'ocr'" />

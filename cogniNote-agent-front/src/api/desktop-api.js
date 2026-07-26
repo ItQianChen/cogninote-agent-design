@@ -19,6 +19,30 @@ export async function pickKnowledgeFolder() {
   }
 }
 
+export async function saveBackupFile(backupId, suggestedFileName) {
+  if (!isTauriRuntime()) {
+    throw new Error('备份文件只能在桌面版保存')
+  }
+  const { invoke } = await import('@tauri-apps/api/core')
+  return invoke('save_backup_file', { backupId, suggestedFileName })
+}
+
+export async function stageRestoreFile() {
+  if (!isTauriRuntime()) {
+    throw new Error('恢复文件只能在桌面版选择')
+  }
+  const { invoke } = await import('@tauri-apps/api/core')
+  return invoke('stage_restore_file')
+}
+
+export async function restartAfterRestore() {
+  if (!isTauriRuntime()) {
+    throw new Error('恢复重启只能在桌面版执行')
+  }
+  const { invoke } = await import('@tauri-apps/api/core')
+  return invoke('restart_after_restore')
+}
+
 /**
  * 读取桌面壳注入的本机会话令牌。
  *

@@ -6,6 +6,21 @@ description = "Allows the frontend to ask the desktop shell to open the knowledg
 commands.allow = ["pick_knowledge_folder"]
 
 [[permission]]
+identifier = "allow-save-backup-file"
+description = "Allows the frontend to save a backend-generated backup through a user-selected file dialog."
+commands.allow = ["save_backup_file"]
+
+[[permission]]
+identifier = "allow-stage-restore-file"
+description = "Allows the frontend to copy a user-selected backup into the controlled restore inbox."
+commands.allow = ["stage_restore_file"]
+
+[[permission]]
+identifier = "allow-restart-after-restore"
+description = "Allows the frontend to restart the desktop shell after a restore has been scheduled."
+commands.allow = ["restart_after_restore"]
+
+[[permission]]
 identifier = "allow-get-desktop-session-token"
 description = "Allows the frontend to read the desktop session token fallback from the shell."
 commands.allow = ["get_desktop_session_token"]

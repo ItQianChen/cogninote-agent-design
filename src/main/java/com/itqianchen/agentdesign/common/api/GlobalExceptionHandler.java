@@ -2,6 +2,7 @@ package com.itqianchen.agentdesign.common.api;
 
 
 import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
+import com.itqianchen.agentdesign.domain.exception.storage.DataProtectionException;
 import com.itqianchen.agentdesign.domain.exception.graph.KnowledgeGraphException;
 import com.itqianchen.agentdesign.domain.exception.knowledge.KnowledgeMaintenanceException;
 import com.itqianchen.agentdesign.domain.exception.model.ModelConfigurationException;
@@ -175,6 +176,36 @@ public class GlobalExceptionHandler {
         // 返回空响应可以避免二次 HttpMessageConverter 报错污染日志。
         log.warn("async_request_timeout");
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 备份恢复错误使用稳定 HTTP 状态，且不回显底层路径、ZIP 条目内容或 SQLite 异常。
+     */
+    @ExceptionHandler(DataProtectionException.class)
+    public ResponseEntity<?> handleDataProtectionException(
+            DataProtectionException ex,
+            HttpServletResponse response
+    ) {
+        return switch (ex.reason()) {
+            case INVALID_PACKAGE -> errorResponse(
+                    response, HttpStatus.UNPROCESSABLE_ENTITY, ApiErrorCode.INVALID_BACKUP, ex.getMessage()
+            );
+            case CONFLICT -> errorResponse(
+                    response, HttpStatus.CONFLICT, ApiErrorCode.CONFLICT, ex.getMessage()
+            );
+            case NOT_FOUND -> errorResponse(
+                    response, HttpStatus.NOT_FOUND, ApiErrorCode.NOT_FOUND, ex.getMessage()
+            );
+            case INSUFFICIENT_STORAGE -> errorResponse(
+                    response, HttpStatus.INSUFFICIENT_STORAGE, ApiErrorCode.INSUFFICIENT_STORAGE, ex.getMessage()
+            );
+            case IO_FAILURE -> {
+                log.error("data_protection_io_failure", ex);
+                yield errorResponse(
+                        response, HttpStatus.INTERNAL_SERVER_ERROR, ApiErrorCode.INTERNAL_ERROR, ex.getMessage()
+                );
+            }
+        };
     }
 
     /**

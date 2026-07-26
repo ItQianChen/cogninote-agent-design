@@ -3,6 +3,8 @@ spring: # Spring Boot 与 Spring AI 自动配置入口。
     import: classpath:cogninote-prompts.yaml # 模型 Prompt 统一放在专用配置文件，避免 application.yaml 混入大段模板文本。
   application: # 应用基础信息配置。
     name: cogninote-agent-design # Spring 应用名，用于日志、上下文和测试启动识别。
+  flyway:
+    enabled: false # 迁移必须在 Hikari 打开前由 DatabaseMigrationService 显式执行。
   ai: # Spring AI 总配置；默认关闭不使用的模型类型，避免无密钥时自动创建外部模型 Bean。
     model: # Spring AI 各模型能力的自动配置开关。
       chat: none # 关闭全局 ChatModel 自动配置；CogniNote 运行时会从 SQLite active CHAT 配置动态创建模型。
