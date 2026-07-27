@@ -78,14 +78,16 @@ const RUN_OPERATION_LABELS = {
 const RUN_STATUS_LABELS = {
   QUEUED: '等待中',
   RUNNING: '运行中',
+  RETRY_WAIT: '恢复等待',
   CANCELLING: '取消中',
   CANCELLED: '已取消',
   COMPLETED: '完成',
   COMPLETED_WITH_WARNINGS: '有失败项',
-  FAILED: '失败'
+  FAILED: '失败',
+  INTERRUPTED: '已中断'
 }
 const RUNNING_STATUSES = new Set(['RUNNING', 'CANCELLING'])
-const TERMINAL_STATUSES = new Set(['CANCELLED', 'COMPLETED', 'COMPLETED_WITH_WARNINGS', 'FAILED'])
+const TERMINAL_STATUSES = new Set(['CANCELLED', 'COMPLETED', 'COMPLETED_WITH_WARNINGS', 'FAILED', 'INTERRUPTED'])
 const RUN_OPERATION_OPTIONS = Object.entries(RUN_OPERATION_LABELS).map(([value, label]) => ({ value, label }))
 const RUN_STATUS_OPTIONS = Object.entries(RUN_STATUS_LABELS).map(([value, label]) => ({ value, label }))
 const ISSUE_CATEGORY_ICONS = {
@@ -125,7 +127,7 @@ const queueRuns = computed(() => {
 })
 const currentRuns = computed(() => queueRuns.value.filter((run) => RUNNING_STATUSES.has(run.status)))
 const queuedRuns = computed(() => queueRuns.value
-  .filter((run) => run.status === 'QUEUED')
+  .filter((run) => run.status === 'QUEUED' || run.status === 'RETRY_WAIT')
   .sort((left, right) => (left.queuePosition || 0) - (right.queuePosition || 0))
 )
 const folderDisplayById = computed(() => {
@@ -397,6 +399,12 @@ async function deleteRun(run) {
   await refreshAfterRunHistoryChanged()
 }
 
+async function retryRun(run) {
+  await maintenanceStore.retryRun(run.id)
+  ElMessage.success('已创建新的维护任务。')
+  await refreshAfterRunHistoryChanged()
+}
+
 async function batchDeleteRuns() {
   if (!selectedRunIds.value.length) {
     return
@@ -479,6 +487,10 @@ function runCountSummary(run) {
 
 function isTerminalRun(run) {
   return TERMINAL_STATUSES.has(run?.status)
+}
+
+function canRetryRun(run) {
+  return (run?.status === 'FAILED' || run?.status === 'INTERRUPTED') && run?.resumable !== false
 }
 
 function runTimeLabel(run) {
@@ -893,9 +905,18 @@ defineExpose({
             {{ runDurationLabel(row) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="128">
+        <el-table-column label="操作" fixed="right" width="168">
           <template #default="{ row }">
             <div class="knowledge-run-history-table__actions">
+              <el-button
+                v-if="canRetryRun(row)"
+                text
+                title="重试任务"
+                aria-label="重试任务"
+                @click="retryRun(row)"
+              >
+                <RefreshCw aria-hidden="true" />
+              </el-button>
               <el-button
                 text
                 title="查看详情"
@@ -983,6 +1004,14 @@ defineExpose({
           <div>
             <dt>耗时</dt>
             <dd>{{ runDurationLabel(healthStore.selectedRunDetail) }}</dd>
+          </div>
+          <div v-if="healthStore.selectedRunDetail.attempt != null">
+            <dt>执行次数</dt>
+            <dd>{{ healthStore.selectedRunDetail.attempt }} / {{ healthStore.selectedRunDetail.maxAttempts || 1 }}</dd>
+          </div>
+          <div v-if="healthStore.selectedRunDetail.nextAttemptAt">
+            <dt>下次恢复</dt>
+            <dd>{{ formatTime(healthStore.selectedRunDetail.nextAttemptAt) }}</dd>
           </div>
         </dl>
         <dl class="knowledge-run-detail__metrics">

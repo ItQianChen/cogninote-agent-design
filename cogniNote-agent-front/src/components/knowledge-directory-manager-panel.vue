@@ -65,11 +65,13 @@ const RUN_OPERATION_LABELS = {
 const RUN_STATUS_LABELS = {
   QUEUED: '等待中',
   RUNNING: '运行中',
+  RETRY_WAIT: '恢复等待',
   CANCELLING: '取消中',
   CANCELLED: '已取消',
   COMPLETED: '完成',
   COMPLETED_WITH_WARNINGS: '有失败项',
-  FAILED: '失败'
+  FAILED: '失败',
+  INTERRUPTED: '已中断'
 }
 
 const DOCUMENT_STATUS_LABELS = {
@@ -241,6 +243,9 @@ function repairLabel(folder) {
   const run = maintenanceStore.activeRunForFolder(folder.id)
   if (run?.status === 'QUEUED') {
     return '已排队'
+  }
+  if (run?.status === 'RETRY_WAIT') {
+    return '等待恢复'
   }
   if (run?.status === 'CANCELLING') {
     return '取消中'

@@ -196,7 +196,8 @@
   white-space: nowrap;
 }
 
-.knowledge-run-status--queued {
+.knowledge-run-status--queued,
+.knowledge-run-status--retry_wait {
   color: var(--color-info);
 }
 
@@ -211,7 +212,8 @@
 }
 
 .knowledge-run-status--completed_with_warnings,
-.knowledge-run-status--failed {
+.knowledge-run-status--failed,
+.knowledge-run-status--interrupted {
   color: var(--color-danger);
 }
 

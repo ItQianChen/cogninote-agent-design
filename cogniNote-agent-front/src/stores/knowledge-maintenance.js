@@ -13,18 +13,20 @@ import {
   enqueueSyncFolder,
   getMaintenanceQueue,
   getMaintenanceRun,
+  retryMaintenanceRun,
   streamMaintenanceRun
 } from '../api/knowledge-maintenance-api'
 
-const ACTIVE_STATUSES = new Set(['QUEUED', 'RUNNING', 'CANCELLING'])
+const ACTIVE_STATUSES = new Set(['QUEUED', 'RUNNING', 'RETRY_WAIT', 'CANCELLING'])
 const RUNNING_STATUSES = new Set(['RUNNING', 'CANCELLING'])
-const TERMINAL_STATUSES = new Set(['CANCELLED', 'COMPLETED', 'COMPLETED_WITH_WARNINGS', 'FAILED'])
-const COMPLETION_NOTICE_STATUSES = new Set(['COMPLETED', 'COMPLETED_WITH_WARNINGS', 'FAILED'])
+const TERMINAL_STATUSES = new Set(['CANCELLED', 'COMPLETED', 'COMPLETED_WITH_WARNINGS', 'FAILED', 'INTERRUPTED'])
+const COMPLETION_NOTICE_STATUSES = new Set(['COMPLETED', 'COMPLETED_WITH_WARNINGS', 'FAILED', 'INTERRUPTED'])
 
 /**
  * 知识库维护任务统一状态源。
  *
- * 后端的 knowledge_folder_runs 是事实源；本 store 只缓存队列快照和 SSE 事件。
+ * 后端的 durable_task_runs 管理生命周期事实，knowledge_folder_runs 只保存领域投影；
+ * 本 store 只缓存队列快照和 SSE 事件。
  * 目录、可信状态和检索页面不能再用局部 busy 标记推断真实任务状态。
  */
 export const useKnowledgeMaintenanceStore = defineStore('knowledgeMaintenance', () => {
@@ -39,6 +41,7 @@ export const useKnowledgeMaintenanceStore = defineStore('knowledgeMaintenance', 
   const completionNoticeRuns = ref([])
   let runAbortController = null
   let subscribedRunId = null
+  let reconnectTimer = null
   let snapshotRefreshPromise = null
 
   const currentRun = computed(() => currentRuns.value[0] || null)
@@ -102,6 +105,10 @@ export const useKnowledgeMaintenanceStore = defineStore('knowledgeMaintenance', 
     return enqueue(() => enqueueDeleteFolder(id))
   }
 
+  async function retryRun(runId) {
+    return enqueue(() => retryMaintenanceRun(runId), { notifyOnComplete: true })
+  }
+
   async function enqueue(action, options = {}) {
     isEnqueueing.value = true
     error.value = ''
@@ -139,7 +146,7 @@ export const useKnowledgeMaintenanceStore = defineStore('knowledgeMaintenance', 
       return
     }
     const run = allActiveRuns().find((item) => item.id === runId)
-    if (run?.status !== 'QUEUED') {
+    if (run?.status !== 'QUEUED' && run?.status !== 'RETRY_WAIT') {
       error.value = '只能取消等待中的维护任务；正在运行的任务会自动执行到安全完成点。'
       return
     }
@@ -179,7 +186,7 @@ export const useKnowledgeMaintenanceStore = defineStore('knowledgeMaintenance', 
   function applyQueue(queue) {
     const activeRuns = uniqueRuns([...(queue?.currentRuns || []), ...(queue?.queuedRuns || [])])
     currentRuns.value = activeRuns.filter((run) => RUNNING_STATUSES.has(run.status))
-    queuedRuns.value = activeRuns.filter((run) => run.status === 'QUEUED').sort(queueSort)
+    queuedRuns.value = activeRuns.filter((run) => run.status === 'QUEUED' || run.status === 'RETRY_WAIT').sort(queueSort)
     latestRun.value = queue?.latestRun || null
     // SSE 当前只跟随一个 run；队列刷新兜底捕获用户触发任务的终态。
     maybePublishCompletionNotice(latestRun.value)
@@ -193,7 +200,7 @@ export const useKnowledgeMaintenanceStore = defineStore('knowledgeMaintenance', 
     queuedRuns.value = queuedRuns.value.filter((item) => item.id !== run.id)
     if (run.status === 'RUNNING' || run.status === 'CANCELLING') {
       currentRuns.value = [run, ...currentRuns.value]
-    } else if (run.status === 'QUEUED') {
+    } else if (run.status === 'QUEUED' || run.status === 'RETRY_WAIT') {
       queuedRuns.value = [...queuedRuns.value, run].sort(queueSort)
     } else if (TERMINAL_STATUSES.has(run.status)) {
       latestRun.value = run
@@ -237,6 +244,7 @@ export const useKnowledgeMaintenanceStore = defineStore('knowledgeMaintenance', 
       return
     }
     stopRunStream()
+    clearReconnectTimer()
     const controller = new AbortController()
     runAbortController = controller
     subscribedRunId = runId
@@ -247,27 +255,50 @@ export const useKnowledgeMaintenanceStore = defineStore('knowledgeMaintenance', 
       if (!controller.signal.aborted) {
         void refreshKnowledgeSnapshots()
       }
-    }).catch((err) => {
+    }).catch(async (err) => {
       if (err.name === 'AbortError' || controller.signal.aborted) {
         return
       }
       error.value = `维护任务进度连接已断开：${err.message}`
-      void refreshKnowledgeSnapshots()
+      await refreshKnowledgeSnapshots()
     }).finally(() => {
       if (runAbortController === controller) {
         runAbortController = null
         subscribedRunId = null
+        if (!controller.signal.aborted) {
+          scheduleRunReconnect()
+        }
       }
     })
   }
 
   function stopRunStream() {
+    clearReconnectTimer()
     if (!runAbortController) {
       return
     }
     runAbortController.abort()
     runAbortController = null
     subscribedRunId = null
+  }
+
+  function scheduleRunReconnect() {
+    clearReconnectTimer()
+    const target = currentRun.value || queuedRuns.value[0]
+    if (!target?.id) {
+      return
+    }
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      subscribeToRun(target.id)
+    }, 1000)
+  }
+
+  function clearReconnectTimer() {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
   }
 
   function refreshKnowledgeSnapshots() {
@@ -403,6 +434,7 @@ export const useKnowledgeMaintenanceStore = defineStore('knowledgeMaintenance', 
     repairFolderIndex,
     setFolderEnabled,
     deleteFolder,
+    retryRun,
     cancelRun,
     activeRunForFolder,
     activeRunForOperation,

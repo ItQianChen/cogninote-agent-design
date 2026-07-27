@@ -3,7 +3,7 @@ package com.itqianchen.agentdesign.domain.enums.knowledge;
 /**
  * 知识库维护任务状态。
  *
- * <p>状态会持久化到 knowledge_folder_runs.status，同时驱动前端队列展示和按钮禁用规则；
+ * <p>状态由 durable_task_runs 持久化，同时驱动前端队列展示和按钮禁用规则；
  * 新增或改名必须同步 SQLite 迁移、Mapper、前端状态映射和测试。</p>
  */
 public enum KnowledgeFolderRunStatus {
@@ -12,6 +12,9 @@ public enum KnowledgeFolderRunStatus {
 
     /** 操作正在执行，前端应禁用冲突操作并展示进度。 */
     RUNNING,
+
+    /** 上次进程中断，等待重新获取租约后恢复。 */
+    RETRY_WAIT,
 
     /** 已收到取消请求，任务会在下一个安全检查点停止。 */
     CANCELLING,
@@ -26,5 +29,8 @@ public enum KnowledgeFolderRunStatus {
     COMPLETED_WITH_WARNINGS,
 
     /** 操作整体失败。 */
-    FAILED
+    FAILED,
+
+    /** 任务无法自动恢复，需要用户检查后手动重试。 */
+    INTERRUPTED
 }

@@ -31,7 +31,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class DatabaseMigrationService {
 
-    public static final int CURRENT_SCHEMA_VERSION = 2;
+    public static final int CURRENT_SCHEMA_VERSION = 3;
     private static final Logger log = LoggerFactory.getLogger(DatabaseMigrationService.class);
     private static final DateTimeFormatter SNAPSHOT_TIME = DateTimeFormatter
             .ofPattern("yyyyMMdd-HHmmss")
@@ -108,6 +108,9 @@ public class DatabaseMigrationService {
 
             flyway.migrate();
             snapshotService.validate(databasePath);
+            if (appliedRestore.isPresent()) {
+                interruptRestoredActiveTasks(databasePath);
+            }
             appliedRestore.ifPresent(pendingRestoreService::complete);
             migrated.set(true);
             pruneInternalSnapshots(storage.internalBackupDir());
@@ -138,6 +141,35 @@ public class DatabaseMigrationService {
                 .load()
                 .migrate();
         snapshotService.validate(databasePath);
+    }
+
+    private void interruptRestoredActiveTasks(Path databasePath) {
+        long now = System.currentTimeMillis();
+        try (Connection connection = snapshotService.dataSource(databasePath, false).getConnection();
+             var statement = connection.prepareStatement("""
+                     UPDATE durable_task_runs
+                     SET status = 'INTERRUPTED',
+                         step = 'INTERRUPTED',
+                         completed_at = ?,
+                         duration_ms = CASE WHEN started_at IS NULL THEN 0 ELSE MAX(0, ? - started_at) END,
+                         lease_owner = NULL,
+                         lease_expires_at = NULL,
+                         heartbeat_at = NULL,
+                         error_code = 'RESTORE_BOUNDARY',
+                         error_message = '备份恢复不会自动重放备份时仍在活动的任务，请手动重试。',
+                         updated_at = ?
+                     WHERE status IN ('QUEUED', 'RUNNING', 'RETRY_WAIT', 'CANCELLING')
+                     """)) {
+            statement.setLong(1, now);
+            statement.setLong(2, now);
+            statement.setLong(3, now);
+            int interrupted = statement.executeUpdate();
+            if (interrupted > 0) {
+                log.info("restored_durable_tasks_interrupted count={}", interrupted);
+            }
+        } catch (SQLException ex) {
+            throw new DatabaseMigrationException("Failed to isolate restored durable tasks", ex);
+        }
     }
 
     public int currentSchemaVersion() {

@@ -1,51 +1,60 @@
 package com.itqianchen.agentdesign.service.knowledge;
 
 import com.itqianchen.agentdesign.common.api.ResourceNotFoundException;
-import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
 import com.itqianchen.agentdesign.domain.dto.document.DocumentFailureResponse;
-import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureStage;
+import com.itqianchen.agentdesign.domain.dto.document.IngestDocumentsResponse;
 import com.itqianchen.agentdesign.domain.dto.index.RebuildIndexResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRebuildResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeFolderRunResponse;
 import com.itqianchen.agentdesign.domain.dto.knowledge.KnowledgeMaintenanceQueueResponse;
 import com.itqianchen.agentdesign.domain.entity.knowledge.KnowledgeFolderRun;
+import com.itqianchen.agentdesign.domain.entity.task.DurableTaskRun;
+import com.itqianchen.agentdesign.domain.enums.document.DocumentFailureStage;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOperation;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
+import com.itqianchen.agentdesign.domain.enums.task.DurableTaskStatus;
 import com.itqianchen.agentdesign.domain.exception.ingestion.DocumentParseException;
 import com.itqianchen.agentdesign.domain.exception.knowledge.KnowledgeMaintenanceException;
 import com.itqianchen.agentdesign.domain.vo.ingestion.DocumentIdentity;
+import com.itqianchen.agentdesign.domain.vo.knowledge.MaintenanceTaskPayloadV1;
 import com.itqianchen.agentdesign.repository.knowledge.KnowledgeFolderRunRepository;
+import com.itqianchen.agentdesign.repository.task.DurableTaskRunRepository;
 import com.itqianchen.agentdesign.service.document.DocumentFailureClassifier;
 import com.itqianchen.agentdesign.service.document.DocumentFailureCodec;
 import com.itqianchen.agentdesign.service.index.IndexService;
+import com.itqianchen.agentdesign.service.task.DurableTaskContext;
+import com.itqianchen.agentdesign.service.task.DurableTaskFailure;
+import com.itqianchen.agentdesign.service.task.DurableTaskHandler;
+import com.itqianchen.agentdesign.service.task.DurableTaskOutcome;
+import com.itqianchen.agentdesign.service.task.DurableTaskScheduler;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.ApplicationListener;
-import org.springframework.core.Ordered;
-import org.springframework.core.task.TaskExecutor;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * 知识库维护任务的唯一调度者。
+ * 知识维护 API 与通用耐久任务核心之间的领域适配器。
  *
- * <p>知识库维护会同时写 SQLite、Lucene 和图谱派生数据；这里使用单 worker FIFO 队列，牺牲并发换取
- * 本地桌面应用最重要的一致性和可解释状态。所有维护按钮都应先入队，再由该服务串行执行。</p>
+ * <p>任务参数和生命周期只保存在 SQLite；本类不保存进程内任务副本，也不判断 worker 是否空闲。</p>
  */
 @Service
-public class KnowledgeMaintenanceQueueService implements ApplicationListener<ApplicationReadyEvent>, Ordered {
+public class KnowledgeMaintenanceQueueService implements DurableTaskHandler {
+
+    static final String TASK_TYPE = "KNOWLEDGE_MAINTENANCE";
+    static final String QUEUE_NAME = "KNOWLEDGE_MUTATION";
+    static final int MAX_ATTEMPTS = 3;
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeMaintenanceQueueService.class);
 
     private final KnowledgeFolderRunRepository runRepository;
+    private final DurableTaskRunRepository taskRepository;
     private final KnowledgeFolderService folderService;
     private final IndexService indexService;
     private final KnowledgeFolderRunService runService;
@@ -53,12 +62,12 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
     private final KnowledgeMaintenanceProgressReporter progressReporter;
     private final DocumentIdentity documentIdentity;
     private final DocumentFailureCodec failureCodec;
-    private final TaskExecutor taskExecutor;
-    private final Map<String, MaintenanceTaskRequest> taskRequests = new ConcurrentHashMap<>();
-    private boolean workerRunning;
+    private final MaintenanceTaskPayloadCodec payloadCodec;
+    private final ObjectProvider<DurableTaskScheduler> schedulerProvider;
 
     public KnowledgeMaintenanceQueueService(
             KnowledgeFolderRunRepository runRepository,
+            DurableTaskRunRepository taskRepository,
             KnowledgeFolderService folderService,
             IndexService indexService,
             KnowledgeFolderRunService runService,
@@ -66,9 +75,11 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
             KnowledgeMaintenanceProgressReporter progressReporter,
             DocumentIdentity documentIdentity,
             DocumentFailureCodec failureCodec,
-            TaskExecutor taskExecutor
+            MaintenanceTaskPayloadCodec payloadCodec,
+            ObjectProvider<DurableTaskScheduler> schedulerProvider
     ) {
         this.runRepository = runRepository;
+        this.taskRepository = taskRepository;
         this.folderService = folderService;
         this.indexService = indexService;
         this.runService = runService;
@@ -76,20 +87,31 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
         this.progressReporter = progressReporter;
         this.documentIdentity = documentIdentity;
         this.failureCodec = failureCodec;
-        this.taskExecutor = taskExecutor;
+        this.payloadCodec = payloadCodec;
+        this.schedulerProvider = schedulerProvider;
     }
 
     @Override
-    public void onApplicationEvent(ApplicationReadyEvent event) {
-        int cleaned = runRepository.cleanupInterruptedRuns();
-        if (cleaned > 0) {
-            log.info("knowledge_maintenance_interrupted_runs_cleaned count={}", cleaned);
+    public String taskType() {
+        return TASK_TYPE;
+    }
+
+    @Override
+    public String queueName() {
+        return QUEUE_NAME;
+    }
+
+    @Override
+    public boolean supports(String operation, int payloadVersion) {
+        if (payloadVersion != MaintenanceTaskPayloadCodec.PAYLOAD_VERSION) {
+            return false;
         }
-    }
-
-    @Override
-    public int getOrder() {
-        return Ordered.HIGHEST_PRECEDENCE + 100;
+        try {
+            KnowledgeFolderRunOperation.valueOf(operation);
+            return true;
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            return false;
+        }
     }
 
     public KnowledgeFolderRunResponse enqueueImport(String folderPath, boolean recursive) {
@@ -98,10 +120,9 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
             throw new DocumentParseException("Folder does not exist or is not a directory: " + folder);
         }
         String normalizedPath = folder.toString();
-        String folderId = documentIdentity.idForPath(normalizedPath);
-        return enqueue(new MaintenanceTaskRequest(
+        return enqueue(new MaintenanceTaskPayloadV1(
                 KnowledgeFolderRunScopeType.KNOWLEDGE_FOLDER,
-                folderId,
+                documentIdentity.idForPath(normalizedPath),
                 KnowledgeFolderRunOperation.IMPORT,
                 normalizedPath,
                 recursive,
@@ -110,25 +131,11 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
     }
 
     public KnowledgeFolderRunResponse enqueueRebuildAllIndex() {
-        return enqueue(new MaintenanceTaskRequest(
-                KnowledgeFolderRunScopeType.ALL,
-                null,
-                KnowledgeFolderRunOperation.REBUILD_INDEX,
-                null,
-                true,
-                null
-        ));
+        return enqueue(allTask(KnowledgeFolderRunOperation.REBUILD_INDEX));
     }
 
     public KnowledgeFolderRunResponse enqueueRepairAllIndex() {
-        return enqueue(new MaintenanceTaskRequest(
-                KnowledgeFolderRunScopeType.ALL,
-                null,
-                KnowledgeFolderRunOperation.REPAIR_INDEX,
-                null,
-                true,
-                null
-        ));
+        return enqueue(allTask(KnowledgeFolderRunOperation.REPAIR_INDEX));
     }
 
     public KnowledgeFolderRunResponse enqueueFolderSync(String folderId) {
@@ -148,7 +155,7 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
     }
 
     public KnowledgeFolderRunResponse enqueueFolderEnabled(String folderId, boolean enabled) {
-        return enqueue(new MaintenanceTaskRequest(
+        return enqueue(new MaintenanceTaskPayloadV1(
                 KnowledgeFolderRunScopeType.KNOWLEDGE_FOLDER,
                 folderId,
                 enabled ? KnowledgeFolderRunOperation.ENABLE : KnowledgeFolderRunOperation.DISABLE,
@@ -178,50 +185,104 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
 
     public SseEmitter subscribe(String runId) {
         KnowledgeFolderRunResponse snapshot = getRun(runId);
-        boolean terminal = isTerminal(snapshot.status());
-        return publisher.subscribe(runId, snapshot, terminal);
+        return publisher.subscribe(runId, snapshot, isTerminal(snapshot.status()));
     }
 
     public boolean cancel(String runId) {
-        KnowledgeFolderRun run = runRepository.findById(runId)
-                .orElseThrow(() -> new ResourceNotFoundException("Knowledge maintenance run not found: " + runId));
-        if (run.status() == KnowledgeFolderRunStatus.QUEUED) {
-            taskRequests.remove(runId);
-            runRepository.markCancelled(runId, "用户取消排队中的维护任务。");
-            runRepository.findById(runId).map(KnowledgeFolderRunResponse::from)
-                    .ifPresent(response -> publisher.publishCancelled(runId, response));
-            publisher.publishQueueUpdated(queue());
-            return true;
+        KnowledgeFolderRun run = requireRun(runId);
+        if (run.status() != KnowledgeFolderRunStatus.QUEUED
+                && run.status() != KnowledgeFolderRunStatus.RETRY_WAIT) {
+            throw new KnowledgeMaintenanceException("只能取消等待中的维护任务；正在运行的任务会自动执行到安全完成点。");
         }
-        throw new KnowledgeMaintenanceException("只能取消等待中的维护任务；正在运行的任务会自动执行到安全完成点。");
+        if (!taskRepository.cancel(runId, "用户取消等待中的维护任务。")) {
+            throw new KnowledgeMaintenanceException("任务状态已变化，请刷新后重试。");
+        }
+        runRepository.findById(runId).map(KnowledgeFolderRunResponse::from)
+                .ifPresent(response -> publisher.publishCancelled(runId, response));
+        publisher.publishQueueUpdated(queue());
+        wakeScheduler();
+        return true;
     }
 
-    private synchronized KnowledgeFolderRunResponse enqueue(MaintenanceTaskRequest request) {
-        return runRepository.findActiveByScopeAndOperation(request.scopeType(), request.scopeId(), request.operation())
-                .map(KnowledgeFolderRunResponse::from)
-                .orElseGet(() -> createQueuedRun(request));
+    public KnowledgeFolderRunResponse retry(String runId) {
+        KnowledgeFolderRun previous = requireRun(runId);
+        if (previous.status() != KnowledgeFolderRunStatus.FAILED
+                && previous.status() != KnowledgeFolderRunStatus.INTERRUPTED) {
+            throw new KnowledgeMaintenanceException("只能重试失败或中断的维护任务。");
+        }
+        DurableTaskRun previousTask = taskRepository.findById(runId)
+                .orElseThrow(() -> new ResourceNotFoundException("Durable task not found: " + runId));
+        MaintenanceTaskPayloadV1 payload;
+        try {
+            payload = decodeAndVerify(previousTask);
+        } catch (UnsupportedMaintenancePayloadException ex) {
+            throw new KnowledgeMaintenanceException("该任务的参数版本不受当前版本支持，无法重试。");
+        }
+        return enqueue(payload, runId);
     }
 
-    private KnowledgeFolderRunResponse createQueuedRun(MaintenanceTaskRequest request) {
+    private synchronized KnowledgeFolderRunResponse enqueue(MaintenanceTaskPayloadV1 payload) {
+        return enqueue(payload, null);
+    }
+
+    private synchronized KnowledgeFolderRunResponse enqueue(MaintenanceTaskPayloadV1 payload, String retryOfRunId) {
+        String idempotencyKey = payloadCodec.idempotencyKey(payload);
+        return taskRepository.findActiveByIdempotency(TASK_TYPE, idempotencyKey)
+                .map(task -> getRun(task.id()))
+                .orElseGet(() -> createQueuedRun(payload, idempotencyKey, retryOfRunId));
+    }
+
+    private KnowledgeFolderRunResponse createQueuedRun(
+            MaintenanceTaskPayloadV1 payload,
+            String idempotencyKey,
+            String retryOfRunId
+    ) {
         long now = System.currentTimeMillis();
-        KnowledgeFolderRun run = new KnowledgeFolderRun(
-                UUID.randomUUID().toString(),
-                request.scopeType(),
-                request.scopeId(),
-                request.operation(),
+        String runId = UUID.randomUUID().toString();
+        DurableTaskRun task = new DurableTaskRun(
+                runId,
+                TASK_TYPE,
+                QUEUE_NAME,
+                payload.operation().name(),
+                DurableTaskStatus.QUEUED,
+                "QUEUED",
+                MaintenanceTaskPayloadCodec.PAYLOAD_VERSION,
+                payloadCodec.encode(payload),
+                null,
+                null,
+                true,
+                0,
+                MAX_ATTEMPTS,
+                idempotencyKey,
+                retryOfRunId,
+                null,
+                null,
+                null,
+                now,
+                0,
+                1,
+                currentItem(payload),
+                null,
+                null,
+                now,
+                null,
+                null,
+                null,
+                now,
+                now
+        );
+        KnowledgeFolderRun detail = new KnowledgeFolderRun(
+                runId,
+                payload.scopeType(),
+                payload.scopeId(),
+                payload.operation(),
                 KnowledgeFolderRunStatus.QUEUED,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
+                0, 0, 0, 0, 0, 0, 0,
                 null,
                 "QUEUED",
                 0,
-                0,
-                currentItem(request),
+                1,
+                currentItem(payload),
                 now,
                 null,
                 null,
@@ -230,181 +291,132 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
                 now,
                 now
         );
-        runRepository.insert(run);
-        taskRequests.put(run.id(), request);
-        KnowledgeFolderRunResponse response = KnowledgeFolderRunResponse.from(run);
-        publisher.publishQueued(run.id(), response);
-        dispatchNext();
-        return runRepository.findById(run.id())
-                .map(KnowledgeFolderRunResponse::from)
-                .orElse(response);
-    }
-
-    private void dispatchNext() {
-        DispatchCandidate candidate = nextDispatchCandidate();
-        if (candidate == null) {
-            return;
-        }
-
-        if (!markRunStarted(candidate.runId(), candidate.request())) {
-            finishDispatchWithoutExecution(candidate.runId());
-            return;
-        }
-
         try {
-            taskExecutor.execute(() -> runTask(candidate.runId(), candidate.request()));
-        } catch (RuntimeException ex) {
-            failBeforeExecution(candidate.runId(), candidate.request(), ex);
+            runRepository.insertDurable(task, detail);
+        } catch (DataIntegrityViolationException ex) {
+            return taskRepository.findActiveByIdempotency(TASK_TYPE, idempotencyKey)
+                    .map(active -> getRun(active.id()))
+                    .orElseThrow(() -> ex);
         }
+        KnowledgeFolderRunResponse response = getRun(runId);
+        publisher.publishQueued(runId, response);
+        wakeScheduler();
+        return response;
     }
 
-    private synchronized DispatchCandidate nextDispatchCandidate() {
-        if (workerRunning) {
-            return null;
-        }
-        while (true) {
-            List<KnowledgeFolderRun> queuedRuns = runRepository.findQueuedRuns();
-            if (queuedRuns.isEmpty()) {
-                publisher.publishQueueUpdated(queue());
-                return null;
-            }
-            KnowledgeFolderRun next = queuedRuns.getFirst();
-            MaintenanceTaskRequest request = taskRequests.get(next.id());
-            if (request != null) {
-                workerRunning = true;
-                return new DispatchCandidate(next.id(), request);
-            }
-            runRepository.markCancelled(next.id(), "任务参数已丢失，维护任务已取消。");
-            runRepository.findById(next.id()).map(KnowledgeFolderRunResponse::from)
-                    .ifPresent(response -> publisher.publishCancelled(next.id(), response));
-        }
-    }
-
-    private boolean markRunStarted(String runId, MaintenanceTaskRequest request) {
-        /*
-         * 先把数据库事实状态切到 RUNNING，再把任务交给后台线程。
-         * 否则前端刷新队列时会短暂看到“没有当前任务 + 第一个任务等待中”，
-         * 用户会误以为运行中的任务仍可取消排队。
-         */
-        int updated = runRepository.markStarted(
-                runId,
-                phaseFor(request.operation()),
-                1,
-                currentItem(request),
-                System.currentTimeMillis()
+    @Override
+    public DurableTaskOutcome execute(DurableTaskRun run, DurableTaskContext context) {
+        MaintenanceTaskPayloadV1 payload = decodeAndVerify(run);
+        context.progress(phaseFor(payload.operation()), 0, 1, currentItem(payload), run.checkpointJson());
+        KnowledgeMaintenanceCompletion completion = progressReporter.withRun(
+                context,
+                () -> executeOperation(payload, context.runId())
+        );
+        int updated = runRepository.updateCompletion(
+                run.id(),
+                completion.scannedCount(),
+                completion.parsedCount(),
+                completion.skippedCount(),
+                completion.failedCount(),
+                completion.indexedDocumentCount(),
+                completion.indexedChunkCount(),
+                completion.failedDocumentCount(),
+                failureCodec.encodeFailures(completion.failures())
         );
         if (updated == 0) {
-            return false;
+            throw new IllegalStateException("Knowledge maintenance detail is missing: " + run.id());
         }
-        runRepository.findById(runId).map(KnowledgeFolderRunResponse::from)
-                .ifPresent(response -> publisher.publishStarted(runId, response));
-        return true;
+        DurableTaskStatus status = completion.status() == KnowledgeFolderRunStatus.COMPLETED_WITH_WARNINGS
+                ? DurableTaskStatus.COMPLETED_WITH_WARNINGS
+                : DurableTaskStatus.COMPLETED;
+        return new DurableTaskOutcome(status, null, completion.progressTotal(), completion.progressTotal());
     }
 
-    private void finishDispatchWithoutExecution(String runId) {
-        taskRequests.remove(runId);
-        synchronized (this) {
-            workerRunning = false;
+    @Override
+    public DurableTaskFailure classifyFailure(DurableTaskRun run, RuntimeException exception) {
+        if (exception instanceof UnsupportedMaintenancePayloadException) {
+            return DurableTaskFailure.interrupted("INVALID_PAYLOAD", exception.getMessage());
         }
-        publisher.publishQueueUpdated(queue());
-        dispatchNext();
-    }
-
-    private void failBeforeExecution(String runId, MaintenanceTaskRequest request, RuntimeException ex) {
-        DocumentFailureResponse failure = classifyRunFailure(request, ex);
-        String message = failure.message();
-        runRepository.markFailed(runId, message, failure.stage(), failure.code(), failure.detail());
-        runRepository.findById(runId).map(KnowledgeFolderRunResponse::from)
-                .ifPresent(response -> publisher.publishFailed(runId, response));
-        log.warn("knowledge_maintenance_run_dispatch_failed runId={} operation={} scopeType={} scopeId={} reason={}",
-                runId,
-                request.operation(),
-                request.scopeType(),
-                request.scopeId(),
-                message
-        );
-        taskRequests.remove(runId);
-        synchronized (this) {
-            workerRunning = false;
-        }
-        dispatchNext();
-    }
-
-    private void runTask(String runId, MaintenanceTaskRequest request) {
+        MaintenanceTaskPayloadV1 payload;
         try {
-            ensureNotCancelledBeforeSideEffects(runId);
-            KnowledgeMaintenanceCompletion completion = progressReporter.withRun(runId, () -> execute(request, runId));
-            completeRun(runId, completion, request);
-        } catch (CancelledMaintenanceRunException ex) {
-            runRepository.markCancelled(runId, ex.getMessage());
-            runRepository.findById(runId).map(KnowledgeFolderRunResponse::from)
-                    .ifPresent(response -> publisher.publishCancelled(runId, response));
-        } catch (RuntimeException ex) {
-            DocumentFailureResponse failure = classifyRunFailure(request, ex);
-            String message = failure.message();
-            runRepository.markFailed(runId, message, failure.stage(), failure.code(), failure.detail());
-            runRepository.findById(runId).map(KnowledgeFolderRunResponse::from)
-                    .ifPresent(response -> publisher.publishFailed(runId, response));
-            log.warn("knowledge_maintenance_run_failed runId={} operation={} scopeType={} scopeId={} reason={}",
-                    runId,
-                    request.operation(),
-                    request.scopeType(),
-                    request.scopeId(),
-                    message
-            );
-        } finally {
-            taskRequests.remove(runId);
-            publisher.clearCancellation(runId);
-            synchronized (this) {
-                workerRunning = false;
-            }
-            dispatchNext();
+            payload = decodeAndVerify(run);
+        } catch (UnsupportedMaintenancePayloadException decodeFailure) {
+            return DurableTaskFailure.interrupted("INVALID_PAYLOAD", decodeFailure.getMessage());
         }
+        DocumentFailureResponse failure = classifyRunFailure(payload, exception);
+        runRepository.updateFailure(run.id(), failure.stage(), failure.detail());
+        return DurableTaskFailure.failed(failure.code(), failure.message());
     }
 
-    private KnowledgeMaintenanceCompletion execute(MaintenanceTaskRequest request, String runId) {
-        return switch (request.operation()) {
-            case IMPORT -> importFolder(request);
-            case SYNC -> syncFolder(request);
-            case REPARSE -> reparseFolder(request);
-            case REPAIR_INDEX -> request.scopeType() == KnowledgeFolderRunScopeType.ALL
+    @Override
+    public void onStarted(DurableTaskRun run) {
+        publishSnapshot(run.id(), publisher::publishStarted);
+    }
+
+    @Override
+    public void onProgress(DurableTaskRun run) {
+        publishSnapshot(run.id(), publisher::publishProgress);
+    }
+
+    @Override
+    public void onCompleted(DurableTaskRun run) {
+        publishSnapshot(run.id(), publisher::publishCompleted);
+        publisher.publishQueueUpdated(queue());
+    }
+
+    @Override
+    public void onFailed(DurableTaskRun run) {
+        publishSnapshot(run.id(), publisher::publishFailed);
+        publisher.publishQueueUpdated(queue());
+    }
+
+    private void publishSnapshot(String runId, RunEventPublisher eventPublisher) {
+        runRepository.findById(runId).map(KnowledgeFolderRunResponse::from)
+                .ifPresent(response -> eventPublisher.publish(runId, response));
+    }
+
+    private MaintenanceTaskPayloadV1 decodeAndVerify(DurableTaskRun run) {
+        MaintenanceTaskPayloadV1 payload = payloadCodec.decode(run.payloadVersion(), run.payloadJson());
+        if (!payload.operation().name().equals(run.operation())) {
+            throw new UnsupportedMaintenancePayloadException("维护任务 operation 与 payload 不一致。");
+        }
+        return payload;
+    }
+
+    private KnowledgeMaintenanceCompletion executeOperation(MaintenanceTaskPayloadV1 payload, String runId) {
+        return switch (payload.operation()) {
+            case IMPORT -> importFolder(payload);
+            case SYNC -> syncFolder(payload);
+            case REPARSE -> reparseFolder(payload);
+            case REPAIR_INDEX -> payload.scopeType() == KnowledgeFolderRunScopeType.ALL
                     ? repairAllIndex()
-                    : repairFolderIndex(request);
-            case REBUILD_INDEX -> request.scopeType() == KnowledgeFolderRunScopeType.ALL
+                    : repairFolderIndex(payload);
+            case REBUILD_INDEX -> payload.scopeType() == KnowledgeFolderRunScopeType.ALL
                     ? rebuildAllIndex()
-                    : rebuildFolder(request);
-            case ENABLE, DISABLE -> setFolderEnabled(request);
-            case DELETE -> deleteFolder(request);
+                    : rebuildFolder(payload);
+            case ENABLE, DISABLE -> setFolderEnabled(payload);
+            case DELETE -> deleteFolder(payload, runId);
         };
     }
 
-    private record DispatchCandidate(String runId, MaintenanceTaskRequest request) {
-    }
-
-    private KnowledgeMaintenanceCompletion importFolder(MaintenanceTaskRequest request) {
+    private KnowledgeMaintenanceCompletion importFolder(MaintenanceTaskPayloadV1 payload) {
         IngestDocumentsResponse response = runService.withoutRecording(
-                () -> folderService.importFolder(request.folderPath(), request.recursive())
+                () -> folderService.importFolder(payload.folderPath(), payload.recursive())
         );
         return ingestCompletion(response);
     }
 
-    private KnowledgeMaintenanceCompletion syncFolder(MaintenanceTaskRequest request) {
-        IngestDocumentsResponse response = runService.withoutRecording(
-                () -> folderService.syncFolder(request.scopeId())
-        );
-        return ingestCompletion(response);
+    private KnowledgeMaintenanceCompletion syncFolder(MaintenanceTaskPayloadV1 payload) {
+        return ingestCompletion(runService.withoutRecording(() -> folderService.syncFolder(payload.scopeId())));
     }
 
-    private KnowledgeMaintenanceCompletion reparseFolder(MaintenanceTaskRequest request) {
-        IngestDocumentsResponse response = runService.withoutRecording(
-                () -> folderService.reparseFolder(request.scopeId())
-        );
-        return ingestCompletion(response);
+    private KnowledgeMaintenanceCompletion reparseFolder(MaintenanceTaskPayloadV1 payload) {
+        return ingestCompletion(runService.withoutRecording(() -> folderService.reparseFolder(payload.scopeId())));
     }
 
-    private KnowledgeMaintenanceCompletion rebuildFolder(MaintenanceTaskRequest request) {
+    private KnowledgeMaintenanceCompletion rebuildFolder(MaintenanceTaskPayloadV1 payload) {
         KnowledgeFolderRebuildResponse response = runService.withoutRecording(
-                () -> folderService.rebuildFolder(request.scopeId())
+                () -> folderService.rebuildFolder(payload.scopeId())
         );
         return new KnowledgeMaintenanceCompletion(
                 statusFor(response.failedCount(), response.failedDocumentCount()),
@@ -420,91 +432,42 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
         );
     }
 
-    private KnowledgeMaintenanceCompletion repairFolderIndex(MaintenanceTaskRequest request) {
-        RebuildIndexResponse response = runService.withoutRecording(
-                () -> folderService.repairFolderIndex(request.scopeId())
-        );
-        return indexCompletion(response);
+    private KnowledgeMaintenanceCompletion repairFolderIndex(MaintenanceTaskPayloadV1 payload) {
+        return indexCompletion(runService.withoutRecording(() -> folderService.repairFolderIndex(payload.scopeId())));
     }
 
     private KnowledgeMaintenanceCompletion rebuildAllIndex() {
-        RebuildIndexResponse response = runService.withoutRecording(indexService::rebuild);
-        return indexCompletion(response);
+        return indexCompletion(runService.withoutRecording(indexService::rebuild));
     }
 
     private KnowledgeMaintenanceCompletion repairAllIndex() {
-        RebuildIndexResponse response = runService.withoutRecording(indexService::repair);
-        return indexCompletion(response);
+        return indexCompletion(runService.withoutRecording(indexService::repair));
+    }
+
+    private KnowledgeMaintenanceCompletion setFolderEnabled(MaintenanceTaskPayloadV1 payload) {
+        runService.withoutRecording(() -> folderService.setEnabled(payload.scopeId(), Boolean.TRUE.equals(payload.enabled())));
+        return KnowledgeMaintenanceCompletion.simple();
+    }
+
+    private KnowledgeMaintenanceCompletion deleteFolder(MaintenanceTaskPayloadV1 payload, String runId) {
+        try {
+            runService.withoutRecording(() -> folderService.deleteFolder(payload.scopeId(), runId));
+        } catch (ResourceNotFoundException ex) {
+            // DELETE 重放时目标已不存在等价于副作用已经完成，当前 run 仍保留为审计记录。
+            runRepository.deleteByScopeExcept(payload.scopeType(), payload.scopeId(), runId);
+        }
+        return KnowledgeMaintenanceCompletion.simple();
     }
 
     private static KnowledgeMaintenanceCompletion indexCompletion(RebuildIndexResponse response) {
         return new KnowledgeMaintenanceCompletion(
                 statusFor(0, response.failedDocumentCount(), response.failures()),
-                0,
-                0,
-                0,
-                0,
+                0, 0, 0, 0,
                 response.indexedDocumentCount(),
                 response.indexedChunkCount(),
                 response.failedDocumentCount(),
                 response.failures(),
                 Math.max(1, response.indexedDocumentCount())
-        );
-    }
-    private KnowledgeMaintenanceCompletion setFolderEnabled(MaintenanceTaskRequest request) {
-        runService.withoutRecording(() -> folderService.setEnabled(request.scopeId(), Boolean.TRUE.equals(request.enabled())));
-        return KnowledgeMaintenanceCompletion.simple();
-    }
-
-    private KnowledgeMaintenanceCompletion deleteFolder(MaintenanceTaskRequest request) {
-        runService.withoutRecording(() -> folderService.deleteFolder(request.scopeId()));
-        return KnowledgeMaintenanceCompletion.simple();
-    }
-
-    private void completeRun(String runId, KnowledgeMaintenanceCompletion completion, MaintenanceTaskRequest request) {
-        runRepository.markCompleted(
-                runId,
-                completion.status(),
-                completion.scannedCount(),
-                completion.parsedCount(),
-                completion.skippedCount(),
-                completion.failedCount(),
-                completion.indexedDocumentCount(),
-                completion.indexedChunkCount(),
-                completion.failedDocumentCount(),
-                failureCodec.encodeFailures(completion.failures()),
-                completion.progressTotal(),
-                completion.progressTotal()
-        );
-        runRepository.findById(runId).map(KnowledgeFolderRunResponse::from)
-                .ifPresentOrElse(
-                        response -> publisher.publishCompleted(runId, response),
-                        () -> publisher.publishCompleted(runId, Map.of(
-                                "runId", runId,
-                                "operation", request.operation().name(),
-                                "status", completion.status().name()
-                        ))
-                );
-    }
-
-    private void ensureNotCancelledBeforeSideEffects(String runId) {
-        /*
-         * 这里只处理历史兼容或极短窗口内的取消标记。
-         * 用户入口只允许取消 QUEUED，避免运行中任务被误认为可以随时安全中断。
-         */
-        if (publisher.isCancelled(runId)) {
-            throw new CancelledMaintenanceRunException("用户取消维护任务。");
-        }
-    }
-
-    private static MaintenanceTaskRequest folderTask(String folderId, KnowledgeFolderRunOperation operation) {
-        return new MaintenanceTaskRequest(
-                KnowledgeFolderRunScopeType.KNOWLEDGE_FOLDER,
-                folderId,
-                operation,
-                null,
-                true,
-                null
         );
     }
 
@@ -515,12 +478,22 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
                 response.parsedCount(),
                 response.skippedCount(),
                 response.failedCount(),
-                0,
-                0,
-                0,
+                0, 0, 0,
                 response.failures(),
                 Math.max(1, response.scannedCount())
         );
+    }
+
+    private KnowledgeFolderRun requireRun(String runId) {
+        return runRepository.findById(runId)
+                .orElseThrow(() -> new ResourceNotFoundException("Knowledge maintenance run not found: " + runId));
+    }
+
+    private void wakeScheduler() {
+        DurableTaskScheduler scheduler = schedulerProvider.getIfAvailable();
+        if (scheduler != null) {
+            scheduler.wake();
+        }
     }
 
     private static KnowledgeFolderRunStatus statusFor(
@@ -528,10 +501,9 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
             long failedDocumentCount,
             List<DocumentFailureResponse> failures
     ) {
-        if (failedCount > 0 || failedDocumentCount > 0 || failures != null && !failures.isEmpty()) {
-            return KnowledgeFolderRunStatus.COMPLETED_WITH_WARNINGS;
-        }
-        return KnowledgeFolderRunStatus.COMPLETED;
+        return failedCount > 0 || failedDocumentCount > 0 || failures != null && !failures.isEmpty()
+                ? KnowledgeFolderRunStatus.COMPLETED_WITH_WARNINGS
+                : KnowledgeFolderRunStatus.COMPLETED;
     }
 
     private static KnowledgeFolderRunStatus statusFor(long failedCount, long failedDocumentCount) {
@@ -539,18 +511,33 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
     }
 
     private static DocumentFailureResponse classifyRunFailure(
-            MaintenanceTaskRequest request,
+            MaintenanceTaskPayloadV1 payload,
             RuntimeException exception
     ) {
-        DocumentFailureStage stage = switch (request.operation()) {
+        DocumentFailureStage stage = switch (payload.operation()) {
             case REBUILD_INDEX, REPAIR_INDEX -> DocumentFailureStage.INDEX;
             case IMPORT, SYNC, REPARSE -> DocumentFailureStage.SCAN;
             default -> DocumentFailureStage.UNKNOWN;
         };
-        Path path = request.folderPath() == null || request.folderPath().isBlank()
+        Path path = payload.folderPath() == null || payload.folderPath().isBlank()
                 ? null
-                : Path.of(request.folderPath()).toAbsolutePath().normalize();
+                : Path.of(payload.folderPath()).toAbsolutePath().normalize();
         return DocumentFailureClassifier.classify(path, stage, exception, System.currentTimeMillis());
+    }
+
+    private static MaintenanceTaskPayloadV1 allTask(KnowledgeFolderRunOperation operation) {
+        return new MaintenanceTaskPayloadV1(KnowledgeFolderRunScopeType.ALL, null, operation, null, true, null);
+    }
+
+    private static MaintenanceTaskPayloadV1 folderTask(String folderId, KnowledgeFolderRunOperation operation) {
+        return new MaintenanceTaskPayloadV1(
+                KnowledgeFolderRunScopeType.KNOWLEDGE_FOLDER,
+                folderId,
+                operation,
+                null,
+                true,
+                null
+        );
     }
 
     private static String phaseFor(KnowledgeFolderRunOperation operation) {
@@ -558,22 +545,18 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
             case IMPORT -> "IMPORTING";
             case SYNC -> "SYNCING";
             case REPARSE -> "REPARSING";
-            case REPAIR_INDEX -> "INDEXING";
-            case REBUILD_INDEX -> "INDEXING";
+            case REPAIR_INDEX, REBUILD_INDEX -> "INDEXING";
             case ENABLE -> "ENABLING";
             case DISABLE -> "DISABLING";
             case DELETE -> "DELETING";
         };
     }
 
-    private static String currentItem(MaintenanceTaskRequest request) {
-        if (request.folderPath() != null && !request.folderPath().isBlank()) {
-            return request.folderPath();
+    private static String currentItem(MaintenanceTaskPayloadV1 payload) {
+        if (payload.folderPath() != null && !payload.folderPath().isBlank()) {
+            return payload.folderPath();
         }
-        if (request.scopeType() == KnowledgeFolderRunScopeType.ALL) {
-            return "全库";
-        }
-        return request.scopeId();
+        return payload.scopeType() == KnowledgeFolderRunScopeType.ALL ? "全库" : payload.scopeId();
     }
 
     private static List<KnowledgeFolderRunResponse> withQueuePositions(List<KnowledgeFolderRun> runs) {
@@ -586,22 +569,12 @@ public class KnowledgeMaintenanceQueueService implements ApplicationListener<App
     private static boolean isTerminal(KnowledgeFolderRunStatus status) {
         return status != KnowledgeFolderRunStatus.QUEUED
                 && status != KnowledgeFolderRunStatus.RUNNING
+                && status != KnowledgeFolderRunStatus.RETRY_WAIT
                 && status != KnowledgeFolderRunStatus.CANCELLING;
     }
 
-    private record MaintenanceTaskRequest(
-            KnowledgeFolderRunScopeType scopeType,
-            String scopeId,
-            KnowledgeFolderRunOperation operation,
-            String folderPath,
-            boolean recursive,
-            Boolean enabled
-    ) {
-    }
-
-    private static final class CancelledMaintenanceRunException extends RuntimeException {
-        private CancelledMaintenanceRunException(String message) {
-            super(message);
-        }
+    @FunctionalInterface
+    private interface RunEventPublisher {
+        void publish(String runId, Object response);
     }
 }

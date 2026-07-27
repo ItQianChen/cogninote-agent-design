@@ -28,9 +28,11 @@ class DatabaseMigrationServiceTests {
 
         fixture.migrationService().migrateBeforeConnectionPool();
 
-        assertThat(fixture.migrationService().currentSchemaVersion()).isEqualTo(2);
+        assertThat(fixture.migrationService().currentSchemaVersion()).isEqualTo(3);
         assertThat(queryInt(fixture, "SELECT COUNT(*) FROM model_configs")).isEqualTo(3);
         assertThat(queryInt(fixture, "SELECT COUNT(*) FROM data_protection_events")).isZero();
+        assertThat(queryInt(fixture, "SELECT COUNT(*) FROM sqlite_master WHERE name='durable_task_runs'"))
+                .isEqualTo(1);
     }
 
     @Test
@@ -50,7 +52,7 @@ class DatabaseMigrationServiceTests {
 
         fixture.migrationService().migrateBeforeConnectionPool();
 
-        assertThat(fixture.migrationService().currentSchemaVersion()).isEqualTo(2);
+        assertThat(fixture.migrationService().currentSchemaVersion()).isEqualTo(3);
         assertThat(queryInt(fixture, "SELECT COUNT(*) FROM data_protection_events")).isZero();
         assertThat(fixture.storageInitializer().appStorage().internalBackupDir().toFile().listFiles())
                 .isNotNull()
@@ -78,6 +80,7 @@ class DatabaseMigrationServiceTests {
         Fixture fixture = fixture(tempDir.resolve("restore-success"));
         fixture.migrationService().migrateBeforeConnectionPool();
         execute(fixture, "INSERT INTO app_settings VALUES ('test.value', 'before', 1)");
+        insertQueuedDurableTask(fixture, "restored-active-run");
         String restoreId = java.util.UUID.randomUUID().toString();
         fixture.snapshotService().createSnapshot(
                 fixture.databasePath(),
@@ -100,6 +103,10 @@ class DatabaseMigrationServiceTests {
 
         assertThat(queryString(fixture, "SELECT setting_value FROM app_settings WHERE setting_key='test.value'"))
                 .isEqualTo("after");
+        assertThat(queryString(fixture, "SELECT status FROM durable_task_runs WHERE id='restored-active-run'"))
+                .isEqualTo("INTERRUPTED");
+        assertThat(queryString(fixture, "SELECT error_code FROM durable_task_runs WHERE id='restored-active-run'"))
+                .isEqualTo("RESTORE_BOUNDARY");
         assertThat(fixture.fileStore().readState(restoreId).phase()).isEqualTo(RestorePhase.REINDEXING);
         assertThat(fixture.fileStore().pendingReindex()).isPresent();
     }
@@ -226,6 +233,19 @@ class DatabaseMigrationServiceTests {
                 .exists();
     }
 
+    @Test
+    void restoreMarkerCanBeReplacedRepeatedly() {
+        Fixture fixture = fixture(tempDir.resolve("marker-replace"));
+        PendingRestoreState state = restoreState(java.util.UUID.randomUUID().toString());
+
+        for (int index = 0; index < 100; index++) {
+            state = state.withPhase(RestorePhase.SWAPPING, "replace-" + index, index + 1L);
+            fixture.fileStore().writePendingState(state);
+        }
+
+        assertThat(fixture.fileStore().pendingRestore()).contains(state);
+    }
+
     private static Fixture fixture(Path storageRoot) {
         AppStorageInitializer storageInitializer = new AppStorageInitializer(
                 new StorageProperties(storageRoot.toString(), null)
@@ -281,6 +301,19 @@ class DatabaseMigrationServiceTests {
         }
     }
 
+    private static void insertQueuedDurableTask(Fixture fixture, String id) throws Exception {
+        execute(fixture, """
+                INSERT INTO durable_task_runs (
+                    id, task_type, queue_name, operation, status, step,
+                    payload_version, payload_json, resumable, attempt, max_attempts,
+                    idempotency_key, available_at, queued_at, created_at, updated_at
+                ) VALUES (
+                    '%s', 'TEST', 'TEST_QUEUE', 'TEST', 'QUEUED', 'QUEUED',
+                    1, '{}', 1, 0, 3, '%s-key', 1, 1, 1, 1
+                )
+                """.formatted(id, id));
+    }
+
     private static String queryString(Fixture fixture, String sql) throws Exception {
         try (Connection connection = fixture.snapshotService().dataSource(fixture.databasePath(), true).getConnection();
              Statement statement = connection.createStatement();
@@ -292,7 +325,7 @@ class DatabaseMigrationServiceTests {
     private static PendingRestoreState restoreState(String restoreId) {
         long now = System.currentTimeMillis();
         return new PendingRestoreState(
-                restoreId, RestorePhase.SCHEDULED, "scheduled", "0.1.70", 2,
+                restoreId, RestorePhase.SCHEDULED, "scheduled", "0.1.70", 3,
                 now, now, true, 0, 0, 0
         );
     }

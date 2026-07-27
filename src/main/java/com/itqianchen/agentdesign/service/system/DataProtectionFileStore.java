@@ -24,6 +24,7 @@ public class DataProtectionFileStore {
     private static final String PENDING_RESTORE_FILE = "pending-restore.json";
     private static final String PENDING_REINDEX_FILE = "pending-reindex.json";
     private static final String STATE_FILE = "restore-state.json";
+    private static final int STATE_REPLACE_ATTEMPTS = 5;
 
     private final AppStorageInitializer storageInitializer;
     private final ObjectMapper objectMapper;
@@ -166,23 +167,65 @@ public class DataProtectionFileStore {
     }
 
     private void writeJson(Path path, PendingRestoreState state) {
-        Path temporary = path.resolveSibling(path.getFileName() + ".tmp");
+        Path temporary = null;
         try {
             Files.createDirectories(path.getParent());
+            temporary = Files.createTempFile(path.getParent(), path.getFileName() + ".", ".tmp");
             objectMapper.writeValue(temporary.toFile(), state);
-            try {
-                Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (java.nio.file.AtomicMoveNotSupportedException ex) {
-                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
-            }
+            replaceStateFile(temporary, path, state);
         } catch (IOException ex) {
             throw new DataProtectionException(Reason.IO_FAILURE, "Failed to persist restore state", ex);
         } finally {
-            try {
-                Files.deleteIfExists(temporary);
-            } catch (IOException ignored) {
-                // 原始写入异常比临时文件清理失败更有诊断价值。
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                    // 原始写入异常比临时文件清理失败更有诊断价值。
+                }
             }
+        }
+    }
+
+    private void replaceStateFile(Path temporary, Path target, PendingRestoreState expectedState) throws IOException {
+        IOException lastFailure = null;
+        for (int attempt = 1; attempt <= STATE_REPLACE_ATTEMPTS; attempt++) {
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                return;
+            } catch (java.nio.file.AtomicMoveNotSupportedException ex) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+                return;
+            } catch (IOException atomicFailure) {
+                try {
+                    Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+                    return;
+                } catch (IOException fallbackFailure) {
+                    atomicFailure.addSuppressed(fallbackFailure);
+                    lastFailure = atomicFailure;
+                }
+            }
+            if (stateMatches(target, expectedState)) {
+                return;
+            }
+            if (attempt < STATE_REPLACE_ATTEMPTS) {
+                // Windows 的索引器或杀毒软件可能短暂占用 marker；有限退避不改变恢复状态语义。
+                try {
+                    Thread.sleep(25L * attempt);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted while replacing restore state", ex);
+                }
+            }
+        }
+        throw lastFailure;
+    }
+
+    private boolean stateMatches(Path path, PendingRestoreState expectedState) {
+        try {
+            return Files.isRegularFile(path)
+                    && expectedState.equals(objectMapper.readValue(path.toFile(), PendingRestoreState.class));
+        } catch (IOException ex) {
+            return false;
         }
     }
 

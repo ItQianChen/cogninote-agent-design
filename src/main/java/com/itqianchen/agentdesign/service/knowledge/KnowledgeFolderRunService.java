@@ -269,8 +269,18 @@ public class KnowledgeFolderRunService {
      * @param folderId 目录 ID
      */
     public void deleteFolderRuns(String folderId) {
+        deleteFolderRuns(folderId, null);
+    }
+
+    public void deleteFolderRuns(String folderId, String retainedRunId) {
         try {
-            int deleted = runRepository.deleteByScope(KnowledgeFolderRunScopeType.KNOWLEDGE_FOLDER, folderId);
+            int deleted = retainedRunId == null
+                    ? runRepository.deleteByScope(KnowledgeFolderRunScopeType.KNOWLEDGE_FOLDER, folderId)
+                    : runRepository.deleteByScopeExcept(
+                            KnowledgeFolderRunScopeType.KNOWLEDGE_FOLDER,
+                            folderId,
+                            retainedRunId
+                    );
             log.info("knowledge_folder_runs_deleted folderId={} deleted={}", folderId, deleted);
         } catch (RuntimeException ex) {
             log.warn("knowledge_folder_runs_delete_failed folderId={}", folderId, ex);

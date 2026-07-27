@@ -47,7 +47,7 @@ const completionDialogOpen = computed({
 })
 const completionRun = computed(() => maintenanceStore.completionNoticeRun)
 const completionNoticeCount = computed(() => maintenanceStore.completionNoticeRuns.length)
-const completionFailed = computed(() => completionRun.value?.status === 'FAILED')
+const completionFailed = computed(() => completionRun.value?.status === 'FAILED' || completionRun.value?.status === 'INTERRUPTED')
 const completionWarning = computed(() => completionRun.value?.status === 'COMPLETED_WITH_WARNINGS')
 const completionIcon = computed(() => {
   if (completionFailed.value) {
@@ -60,7 +60,7 @@ const completionIcon = computed(() => {
 })
 const completionDialogTitle = computed(() => {
   if (completionFailed.value) {
-    return '维护任务失败'
+    return completionRun.value?.status === 'INTERRUPTED' ? '维护任务已中断' : '维护任务失败'
   }
   if (completionWarning.value) {
     return '完成，但有失败项'
@@ -187,6 +187,7 @@ function buildCompletionMetrics(run) {
 
 function hasRunFailure(run) {
   return run?.status === 'FAILED'
+    || run?.status === 'INTERRUPTED'
     || run?.status === 'COMPLETED_WITH_WARNINGS'
     || Boolean((run?.failedCount || 0) + (run?.failedDocumentCount || 0))
 }

@@ -72,6 +72,11 @@ app: # CogniNote 自定义业务配置入口。
   storage: # 本地存储配置。
     base-dir: ${COGNINOTE_DATA_DIR:} # 用户数据根目录；为空时由 AppStorageInitializer 按平台选择默认目录。
     database-path: ${COGNINOTE_DATABASE_PATH:} # SQLite 文件路径；为空时使用 base-dir/data/cogninote.db。
+  durable-tasks: # 本机耐久任务轮询和租约配置。
+    dispatch-enabled: ${COGNINOTE_DURABLE_TASK_DISPATCH_ENABLED:true} # smoke 可关闭 dispatcher 以验证排队任务跨重启恢复。
+    poll-interval: ${COGNINOTE_DURABLE_TASK_POLL_INTERVAL:2s} # 数据库队列轮询间隔。
+    heartbeat-interval: ${COGNINOTE_DURABLE_TASK_HEARTBEAT_INTERVAL:10s} # 活动租约续期间隔。
+    lease-duration: ${COGNINOTE_DURABLE_TASK_LEASE_DURATION:60s} # 进程退出后任务最长等待该时间进入恢复。
   search: # 知识库检索配置。
     top-k: ${COGNINOTE_SEARCH_TOP_K:8} # 默认返回片段数，用户请求未指定 topK 时使用。
     bm25-weight: ${COGNINOTE_BM25_WEIGHT:0.45} # HYBRID RRF 中 BM25 排名权重，第 20 阶段默认 0.45。

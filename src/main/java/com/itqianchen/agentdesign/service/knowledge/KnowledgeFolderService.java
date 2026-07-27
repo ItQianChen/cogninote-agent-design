@@ -365,6 +365,16 @@ public class KnowledgeFolderService {
      * @param id 知识库目录 ID
      */
     public void deleteFolder(String id) {
+        deleteFolder(id, null);
+    }
+
+    /**
+     * 删除目录并按调用边界决定是否保留当前耐久任务记录。
+     *
+     * @param id 知识库目录 ID
+     * @param retainedRunId 需要保留的当前 DELETE run；同步旧接口传空
+     */
+    public void deleteFolder(String id, String retainedRunId) {
         requireFolder(id);
         deleteFolderIndexEntries(id);
         knowledgeGraphRepository.deleteByKnowledgeFolderId(id);
@@ -376,7 +386,7 @@ public class KnowledgeFolderService {
          * 目录删除后不再保留该目录 scope 的维护历史。否则健康页和运行记录查询会继续暴露
          * 已不存在的目录 ID，让用户误以为还有可信状态数据需要处理。
          */
-        runService.deleteFolderRuns(id);
+        runService.deleteFolderRuns(id, retainedRunId);
         log.info("knowledge_folder_deleted folderId={} deletedDocuments={}", id, deletedDocuments);
     }
 

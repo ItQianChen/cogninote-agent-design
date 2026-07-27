@@ -15,7 +15,8 @@ import org.springframework.context.annotation.Configuration;
         "com.itqianchen.agentdesign.mapper.knowledge",
         "com.itqianchen.agentdesign.mapper.model",
         "com.itqianchen.agentdesign.mapper.schema",
-        "com.itqianchen.agentdesign.mapper.settings"
+        "com.itqianchen.agentdesign.mapper.settings",
+        "com.itqianchen.agentdesign.mapper.task"
 })
 public class MyBatisConfig {
 }

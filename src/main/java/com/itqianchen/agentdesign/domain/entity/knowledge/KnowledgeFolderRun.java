@@ -6,7 +6,7 @@ import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatu
 /**
  * 知识库维护任务记录。
  *
- * <p>该记录既是本地 FIFO 队列的恢复事实源，也是完成后的维护历史。未结束任务的
+ * <p>通用生命周期来自 durable_task_runs，本记录是其知识维护领域投影。未结束任务的
  * startedAt、completedAt 和 durationMs 可以为空；调用方必须以 status 判断任务生命周期。</p>
  */
 public record KnowledgeFolderRun(
@@ -36,7 +36,12 @@ public record KnowledgeFolderRun(
         String errorCode,
         String errorDetail,
         long createdAt,
-        long updatedAt
+        long updatedAt,
+        int attempt,
+        int maxAttempts,
+        boolean resumable,
+        String retryOfRunId,
+        long availableAt
 ) {
     /** 兼容不携带结构化失败诊断的既有构造调用。 */
     public KnowledgeFolderRun(
@@ -92,7 +97,12 @@ public record KnowledgeFolderRun(
                 null,
                 null,
                 createdAt,
-                updatedAt
+                updatedAt,
+                0,
+                1,
+                false,
+                null,
+                queuedAt == null ? createdAt : queuedAt
         );
     }
 }

@@ -52,6 +52,10 @@ export function cancelMaintenanceRun(runId) {
   return requestJson(`/api/knowledge-maintenance/runs/${encodeURIComponent(runId)}/cancel`, jsonOptions('POST', {}))
 }
 
+export function retryMaintenanceRun(runId) {
+  return requestJson(`/api/knowledge-maintenance/runs/${encodeURIComponent(runId)}/retry`, jsonOptions('POST', {}))
+}
+
 /**
  * 订阅维护任务进度。
  *

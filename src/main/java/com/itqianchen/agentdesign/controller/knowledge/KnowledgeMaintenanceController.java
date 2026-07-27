@@ -100,4 +100,9 @@ public class KnowledgeMaintenanceController {
     public ApiResponse<Boolean> cancel(@PathVariable String runId) {
         return ApiResponse.ok(queueService.cancel(runId));
     }
+
+    @PostMapping("/{runId}/retry")
+    public ApiResponse<KnowledgeFolderRunResponse> retry(@PathVariable String runId) {
+        return ApiResponse.ok(queueService.retry(runId));
+    }
 }

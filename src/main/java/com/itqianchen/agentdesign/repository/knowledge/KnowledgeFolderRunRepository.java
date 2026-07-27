@@ -4,9 +4,13 @@ import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunOpera
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunScopeType;
 import com.itqianchen.agentdesign.domain.enums.knowledge.KnowledgeFolderRunStatus;
 import com.itqianchen.agentdesign.mapper.knowledge.KnowledgeFolderRunMapper;
+import com.itqianchen.agentdesign.domain.entity.task.DurableTaskRun;
+import com.itqianchen.agentdesign.domain.enums.task.DurableTaskStatus;
+import com.itqianchen.agentdesign.repository.task.DurableTaskRunRepository;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 知识库维护运行记录仓储。
@@ -19,14 +23,19 @@ public class KnowledgeFolderRunRepository {
     private static final int DEFAULT_PAGE_SIZE = 10;
 
     private final KnowledgeFolderRunMapper mapper;
+    private final DurableTaskRunRepository taskRepository;
 
     /**
      * 注入维护运行记录 Mapper。
      *
      * @param mapper SQLite 运行记录访问接口
      */
-    public KnowledgeFolderRunRepository(KnowledgeFolderRunMapper mapper) {
+    public KnowledgeFolderRunRepository(
+            KnowledgeFolderRunMapper mapper,
+            DurableTaskRunRepository taskRepository
+    ) {
         this.mapper = mapper;
+        this.taskRepository = taskRepository;
     }
 
     /**
@@ -34,8 +43,24 @@ public class KnowledgeFolderRunRepository {
      *
      * @param run 运行记录
      */
+    @Transactional
     public void insert(KnowledgeFolderRun run) {
+        long queuedAt = run.queuedAt() == null ? run.createdAt() : run.queuedAt();
+        taskRepository.insert(new DurableTaskRun(
+                run.id(), "KNOWLEDGE_MAINTENANCE", "KNOWLEDGE_MUTATION", run.operation().name(),
+                DurableTaskStatus.valueOf(run.status().name()), run.phase(), 0, "{}", null, null,
+                false, run.attempt(), run.maxAttempts(), "history:" + run.id(), run.retryOfRunId(),
+                null, null, null, run.availableAt(), run.progressCurrent(), run.progressTotal(), run.currentItem(),
+                run.errorCode(), run.errorMessage(), queuedAt, run.startedAt(), run.completedAt(), run.durationMs(),
+                run.createdAt(), run.updatedAt()
+        ));
         mapper.insertRun(run);
+    }
+
+    @Transactional
+    public void insertDurable(DurableTaskRun task, KnowledgeFolderRun detail) {
+        taskRepository.insert(task);
+        mapper.insertRun(detail);
     }
 
     public Optional<KnowledgeFolderRun> findById(String id) {
@@ -155,25 +180,8 @@ public class KnowledgeFolderRunRepository {
         return Optional.ofNullable(mapper.findLatestRun());
     }
 
-    public int markStarted(String id, String phase, long progressTotal, String currentItem, long startedAt) {
-        return mapper.markStarted(id, phase, progressTotal, currentItem, startedAt);
-    }
-
-    public int updateProgress(String id, String phase, long progressCurrent, long progressTotal, String currentItem) {
-        return mapper.updateProgress(id, phase, progressCurrent, progressTotal, currentItem, System.currentTimeMillis());
-    }
-
-    public int markCancelling(String id) {
-        return mapper.markCancelling(id, System.currentTimeMillis());
-    }
-
-    public int markCancelled(String id, String message) {
-        return mapper.markCancelled(id, message, System.currentTimeMillis());
-    }
-
-    public int markCompleted(
+    public int updateCompletion(
             String id,
-            KnowledgeFolderRunStatus status,
             int scannedCount,
             int parsedCount,
             int skippedCount,
@@ -181,13 +189,10 @@ public class KnowledgeFolderRunRepository {
             long indexedDocumentCount,
             long indexedChunkCount,
             long failedDocumentCount,
-            String failuresJson,
-            long progressCurrent,
-            long progressTotal
+            String failuresJson
     ) {
-        return mapper.markCompleted(
+        return mapper.updateCompletion(
                 id,
-                status.name(),
                 scannedCount,
                 parsedCount,
                 skippedCount,
@@ -195,34 +200,12 @@ public class KnowledgeFolderRunRepository {
                 indexedDocumentCount,
                 indexedChunkCount,
                 failedDocumentCount,
-                failuresJson,
-                progressCurrent,
-                progressTotal,
-                System.currentTimeMillis()
+                failuresJson
         );
     }
 
-    public int markFailed(String id, String message) {
-        return markFailed(id, message, null, null, null);
-    }
-
-    public int markFailed(String id, String message, String errorStage, String errorCode, String errorDetail) {
-        return mapper.markFailed(
-                id,
-                message,
-                errorStage,
-                errorCode,
-                errorDetail,
-                System.currentTimeMillis()
-        );
-    }
-
-    public int cleanupInterruptedRuns() {
-        return mapper.cleanupInterruptedRuns(
-                System.currentTimeMillis(),
-                "应用重启，排队中的维护任务已取消。",
-                "应用重启，运行中的维护任务已中断。"
-        );
+    public int updateFailure(String id, String errorStage, String errorDetail) {
+        return mapper.updateFailure(id, errorStage, errorDetail);
     }
 
     /**
@@ -233,7 +216,11 @@ public class KnowledgeFolderRunRepository {
      * @return 删除的记录数量
      */
     public int deleteByScope(KnowledgeFolderRunScopeType scopeType, String scopeId) {
-        return mapper.deleteByScope(scopeType.name(), scopeId);
+        return taskRepository.deleteTerminalByScopeExcept(scopeType.name(), scopeId, "");
+    }
+
+    public int deleteByScopeExcept(KnowledgeFolderRunScopeType scopeType, String scopeId, String excludedId) {
+        return taskRepository.deleteTerminalByScopeExcept(scopeType.name(), scopeId, excludedId);
     }
 
     /**
@@ -245,14 +232,14 @@ public class KnowledgeFolderRunRepository {
      * @return 是否删除成功
      */
     public boolean deleteTerminalById(String id) {
-        return mapper.deleteTerminalById(id) > 0;
+        return taskRepository.deleteTerminalById(id);
     }
 
     public int deleteTerminalByIds(List<String> ids) {
         if (ids == null || ids.isEmpty()) {
             return 0;
         }
-        return mapper.deleteTerminalByIds(ids);
+        return taskRepository.deleteTerminalByIds(ids);
     }
 
     private static int normalizeLimit(Integer limit) {

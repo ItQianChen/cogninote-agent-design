@@ -53,7 +53,7 @@ public class DataProtectionService {
             "document_ocr_checkpoint_pages", "chunks", "model_configs", "chat_sessions", "chat_messages",
             "app_settings", "knowledge_folder_runs", "knowledge_graph_runs",
             "knowledge_graph_chunk_extractions", "knowledge_graph_nodes", "knowledge_graph_edges",
-            "knowledge_graph_evidence", "knowledge_graph_views", "data_protection_events"
+            "knowledge_graph_evidence", "knowledge_graph_views", "data_protection_events", "durable_task_runs"
     );
     private static final Set<String> REQUIRED_BASE_TABLES = Set.of(
             "flyway_schema_history", "knowledge_folders", "documents", "document_ocr_checkpoints",
@@ -373,7 +373,8 @@ public class DataProtectionService {
             }
             if (!ALLOWED_TABLES.containsAll(tables)
                     || !tables.containsAll(REQUIRED_BASE_TABLES)
-                    || (manifestSchemaVersion >= 2 && !tables.contains("data_protection_events"))) {
+                    || (manifestSchemaVersion >= 2 && !tables.contains("data_protection_events"))
+                    || (manifestSchemaVersion >= 3 && !tables.contains("durable_task_runs"))) {
                 throw invalidPackage("Backup database schema contains unsupported objects");
             }
             try (ResultSet resultSet = statement.executeQuery(

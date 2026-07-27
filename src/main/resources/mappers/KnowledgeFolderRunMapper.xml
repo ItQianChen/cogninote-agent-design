@@ -33,66 +33,81 @@
             <arg column="error_detail" javaType="java.lang.String"/>
             <arg column="created_at" javaType="_long"/>
             <arg column="updated_at" javaType="_long"/>
+            <arg column="attempt" javaType="_int"/>
+            <arg column="max_attempts" javaType="_int"/>
+            <arg column="resumable" javaType="_boolean"/>
+            <arg column="retry_of_run_id" javaType="java.lang.String"/>
+            <arg column="available_at" javaType="_long"/>
         </constructor>
     </resultMap>
 
     <sql id="RunColumns">
-        run.id AS id,
-        run.scope_type AS scope_type,
-        run.scope_id AS scope_id,
-        run.operation AS operation,
-        run.status AS status,
-        run.scanned_count AS scanned_count,
-        run.parsed_count AS parsed_count,
-        run.skipped_count AS skipped_count,
-        run.failed_count AS failed_count,
-        run.indexed_document_count AS indexed_document_count,
-        run.indexed_chunk_count AS indexed_chunk_count,
-        run.failed_document_count AS failed_document_count,
-        run.failures_json AS failures_json,
-        run.phase AS phase,
-        run.progress_current AS progress_current,
-        run.progress_total AS progress_total,
-        run.current_item AS current_item,
-        run.queued_at AS queued_at,
-        run.started_at AS started_at,
-        run.completed_at AS completed_at,
-        run.duration_ms AS duration_ms,
-        run.error_message AS error_message,
-        run.error_stage AS error_stage,
-        run.error_code AS error_code,
-        run.error_detail AS error_detail,
-        run.created_at AS created_at,
-        run.updated_at AS updated_at
+        task.id AS id,
+        detail.scope_type AS scope_type,
+        detail.scope_id AS scope_id,
+        task.operation AS operation,
+        task.status AS status,
+        detail.scanned_count AS scanned_count,
+        detail.parsed_count AS parsed_count,
+        detail.skipped_count AS skipped_count,
+        detail.failed_count AS failed_count,
+        detail.indexed_document_count AS indexed_document_count,
+        detail.indexed_chunk_count AS indexed_chunk_count,
+        detail.failed_document_count AS failed_document_count,
+        detail.failures_json AS failures_json,
+        task.step AS phase,
+        task.progress_current AS progress_current,
+        task.progress_total AS progress_total,
+        task.current_item AS current_item,
+        task.queued_at AS queued_at,
+        task.started_at AS started_at,
+        task.completed_at AS completed_at,
+        task.duration_ms AS duration_ms,
+        task.error_message AS error_message,
+        detail.error_stage AS error_stage,
+        task.error_code AS error_code,
+        detail.error_detail AS error_detail,
+        task.created_at AS created_at,
+        task.updated_at AS updated_at,
+        task.attempt AS attempt,
+        task.max_attempts AS max_attempts,
+        task.resumable AS resumable,
+        task.retry_of_run_id AS retry_of_run_id,
+        task.available_at AS available_at
+    </sql>
+
+    <sql id="RunFrom">
+        FROM durable_task_runs task
+        JOIN knowledge_folder_runs detail ON detail.id = task.id
     </sql>
 
     <sql id="RunFilters">
-        WHERE (#{scopeType} IS NULL OR run.scope_type = #{scopeType})
-          AND (#{scopeId} IS NULL OR run.scope_id = #{scopeId})
+        WHERE (#{scopeType} IS NULL OR detail.scope_type = #{scopeType})
+          AND (#{scopeId} IS NULL OR detail.scope_id = #{scopeId})
         <if test="operations != null and operations.size() > 0">
-          AND run.operation IN
+          AND task.operation IN
           <foreach collection="operations" item="operation" open="(" separator="," close=")">
               #{operation}
           </foreach>
         </if>
         <if test="statuses != null and statuses.size() > 0">
-          AND run.status IN
+          AND task.status IN
           <foreach collection="statuses" item="status" open="(" separator="," close=")">
               #{status}
           </foreach>
         </if>
         <if test="timeFrom != null">
-          AND COALESCE(run.completed_at, run.started_at, run.queued_at, run.created_at) &gt;= #{timeFrom}
+          AND COALESCE(task.completed_at, task.started_at, task.queued_at, task.created_at) &gt;= #{timeFrom}
         </if>
         <if test="timeTo != null">
-          AND COALESCE(run.completed_at, run.started_at, run.queued_at, run.created_at) &lt;= #{timeTo}
+          AND COALESCE(task.completed_at, task.started_at, task.queued_at, task.created_at) &lt;= #{timeTo}
         </if>
         <if test="keyword != null and keyword != ''">
           AND (
-              lower(run.id) LIKE '%' || #{keyword} || '%'
-              OR lower(COALESCE(run.scope_id, '')) LIKE '%' || #{keyword} || '%'
-              OR lower(COALESCE(run.current_item, '')) LIKE '%' || #{keyword} || '%'
-              OR lower(COALESCE(run.error_message, '')) LIKE '%' || #{keyword} || '%'
+              lower(task.id) LIKE '%' || #{keyword} || '%'
+              OR lower(COALESCE(detail.scope_id, '')) LIKE '%' || #{keyword} || '%'
+              OR lower(COALESCE(task.current_item, '')) LIKE '%' || #{keyword} || '%'
+              OR lower(COALESCE(task.error_message, '')) LIKE '%' || #{keyword} || '%'
               OR lower(COALESCE(folder.display_name, '')) LIKE '%' || #{keyword} || '%'
               OR lower(COALESCE(folder.folder_path, '')) LIKE '%' || #{keyword} || '%'
           )
@@ -101,163 +116,106 @@
 
     <insert id="insertRun">
         INSERT INTO knowledge_folder_runs (
-            id, scope_type, scope_id, operation, status,
-            scanned_count, parsed_count, skipped_count, failed_count,
+            id, scope_type, scope_id, scanned_count, parsed_count, skipped_count, failed_count,
             indexed_document_count, indexed_chunk_count, failed_document_count,
-            failures_json, phase, progress_current, progress_total, current_item,
-            queued_at, started_at, completed_at, duration_ms, error_message,
-            error_stage, error_code, error_detail, created_at, updated_at
-        )
-        VALUES (
-            #{id}, #{scopeType}, #{scopeId}, #{operation}, #{status},
-            #{scannedCount}, #{parsedCount}, #{skippedCount}, #{failedCount},
+            failures_json, error_stage, error_detail
+        ) VALUES (
+            #{id}, #{scopeType}, #{scopeId}, #{scannedCount}, #{parsedCount}, #{skippedCount}, #{failedCount},
             #{indexedDocumentCount}, #{indexedChunkCount}, #{failedDocumentCount},
-            #{failuresJson}, #{phase}, #{progressCurrent}, #{progressTotal}, #{currentItem},
-            #{queuedAt}, #{startedAt}, #{completedAt}, #{durationMs}, #{errorMessage},
-            #{errorStage}, #{errorCode}, #{errorDetail}, #{createdAt}, #{updatedAt}
+            #{failuresJson}, #{errorStage}, #{errorDetail}
         )
     </insert>
 
     <select id="findById" resultMap="KnowledgeFolderRunMap">
         SELECT <include refid="RunColumns"/>
-        FROM knowledge_folder_runs run
-        WHERE run.id = #{id}
+        <include refid="RunFrom"/>
+        WHERE task.id = #{id}
     </select>
 
     <select id="findActiveByScopeAndOperation" resultMap="KnowledgeFolderRunMap">
         SELECT <include refid="RunColumns"/>
-        FROM knowledge_folder_runs run
-        WHERE run.scope_type = #{scopeType}
-          AND ((#{scopeId} IS NULL AND run.scope_id IS NULL) OR run.scope_id = #{scopeId})
-          AND run.operation = #{operation}
-          AND run.status IN ('QUEUED', 'RUNNING', 'CANCELLING')
-        ORDER BY run.created_at ASC
+        <include refid="RunFrom"/>
+        WHERE detail.scope_type = #{scopeType}
+          AND ((#{scopeId} IS NULL AND detail.scope_id IS NULL) OR detail.scope_id = #{scopeId})
+          AND task.operation = #{operation}
+          AND task.status IN ('QUEUED', 'RUNNING', 'RETRY_WAIT', 'CANCELLING')
+        ORDER BY task.created_at ASC
         LIMIT 1
     </select>
 
     <select id="findActiveRuns" resultMap="KnowledgeFolderRunMap">
         SELECT <include refid="RunColumns"/>
-        FROM knowledge_folder_runs run
-        WHERE run.status IN ('RUNNING', 'CANCELLING')
-        ORDER BY run.started_at ASC, run.created_at ASC
+        <include refid="RunFrom"/>
+        WHERE task.status IN ('RUNNING', 'CANCELLING')
+        ORDER BY task.started_at ASC, task.created_at ASC
     </select>
 
     <select id="findQueuedRuns" resultMap="KnowledgeFolderRunMap">
         SELECT <include refid="RunColumns"/>
-        FROM knowledge_folder_runs run
-        WHERE run.status = 'QUEUED'
-        ORDER BY run.queued_at ASC, run.created_at ASC
+        <include refid="RunFrom"/>
+        WHERE task.status IN ('QUEUED', 'RETRY_WAIT')
+        ORDER BY task.available_at ASC, task.queued_at ASC, task.created_at ASC
     </select>
 
     <select id="findQueueRuns" resultMap="KnowledgeFolderRunMap">
         SELECT <include refid="RunColumns"/>
-        FROM knowledge_folder_runs run
-        WHERE run.status IN ('QUEUED', 'RUNNING', 'CANCELLING')
-        ORDER BY
-            CASE run.status WHEN 'RUNNING' THEN 0 WHEN 'CANCELLING' THEN 0 ELSE 1 END,
-            COALESCE(run.started_at, run.queued_at, run.created_at) ASC
+        <include refid="RunFrom"/>
+        WHERE task.status IN ('QUEUED', 'RUNNING', 'RETRY_WAIT', 'CANCELLING')
+        ORDER BY CASE task.status WHEN 'RUNNING' THEN 0 WHEN 'CANCELLING' THEN 0 ELSE 1 END,
+                 COALESCE(task.started_at, task.available_at, task.queued_at) ASC
     </select>
 
     <select id="findRuns" resultMap="KnowledgeFolderRunMap">
         SELECT <include refid="RunColumns"/>
-        FROM knowledge_folder_runs run
-        WHERE (#{scopeType} IS NULL OR run.scope_type = #{scopeType})
-          AND (#{scopeId} IS NULL OR run.scope_id = #{scopeId})
-        ORDER BY run.created_at DESC
+        <include refid="RunFrom"/>
+        WHERE (#{scopeType} IS NULL OR detail.scope_type = #{scopeType})
+          AND (#{scopeId} IS NULL OR detail.scope_id = #{scopeId})
+        ORDER BY task.created_at DESC
         LIMIT #{limit}
     </select>
 
     <select id="findRunsPage" resultMap="KnowledgeFolderRunMap">
         SELECT <include refid="RunColumns"/>
-        FROM knowledge_folder_runs run
+        <include refid="RunFrom"/>
         LEFT JOIN knowledge_folders folder
-          ON run.scope_type = 'KNOWLEDGE_FOLDER'
-         AND folder.id = run.scope_id
+          ON detail.scope_type = 'KNOWLEDGE_FOLDER' AND folder.id = detail.scope_id
         <include refid="RunFilters"/>
-        ORDER BY run.created_at DESC
-        LIMIT #{limit}
-        OFFSET #{offset}
+        ORDER BY task.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
     </select>
 
     <select id="countRuns" resultType="_long">
         SELECT COUNT(1)
-        FROM knowledge_folder_runs run
+        <include refid="RunFrom"/>
         LEFT JOIN knowledge_folders folder
-          ON run.scope_type = 'KNOWLEDGE_FOLDER'
-         AND folder.id = run.scope_id
+          ON detail.scope_type = 'KNOWLEDGE_FOLDER' AND folder.id = detail.scope_id
         <include refid="RunFilters"/>
     </select>
 
     <select id="findLatestRunsByScope" resultMap="KnowledgeFolderRunMap">
         SELECT <include refid="RunColumns"/>
-        FROM knowledge_folder_runs run
-        WHERE run.created_at = (
-            SELECT MAX(inner_run.created_at)
-            FROM knowledge_folder_runs inner_run
-            WHERE inner_run.scope_type = run.scope_type
-              AND ((inner_run.scope_id IS NULL AND run.scope_id IS NULL) OR inner_run.scope_id = run.scope_id)
+        <include refid="RunFrom"/>
+        WHERE task.created_at = (
+            SELECT MAX(inner_task.created_at)
+            FROM durable_task_runs inner_task
+            JOIN knowledge_folder_runs inner_detail ON inner_detail.id = inner_task.id
+            WHERE inner_detail.scope_type = detail.scope_type
+              AND ((inner_detail.scope_id IS NULL AND detail.scope_id IS NULL)
+                   OR inner_detail.scope_id = detail.scope_id)
         )
-        ORDER BY run.created_at DESC
+        ORDER BY task.created_at DESC
     </select>
 
     <select id="findLatestRun" resultMap="KnowledgeFolderRunMap">
         SELECT <include refid="RunColumns"/>
-        FROM knowledge_folder_runs run
-        ORDER BY run.created_at DESC
+        <include refid="RunFrom"/>
+        ORDER BY task.created_at DESC
         LIMIT 1
     </select>
 
-    <update id="markStarted">
+    <update id="updateCompletion">
         UPDATE knowledge_folder_runs
-        SET status = 'RUNNING',
-            phase = #{phase},
-            progress_current = 0,
-            progress_total = #{progressTotal},
-            current_item = #{currentItem},
-            started_at = #{startedAt},
-            updated_at = #{startedAt}
-        WHERE id = #{id}
-          AND status = 'QUEUED'
-    </update>
-
-    <update id="updateProgress">
-        UPDATE knowledge_folder_runs
-        SET phase = #{phase},
-            progress_current = #{progressCurrent},
-            progress_total = #{progressTotal},
-            current_item = #{currentItem},
-            updated_at = #{updatedAt}
-        WHERE id = #{id}
-          AND status IN ('RUNNING', 'CANCELLING')
-    </update>
-
-    <update id="markCancelling">
-        UPDATE knowledge_folder_runs
-        SET status = 'CANCELLING',
-            updated_at = #{updatedAt}
-        WHERE id = #{id}
-          AND status = 'RUNNING'
-    </update>
-
-    <update id="markCancelled">
-        UPDATE knowledge_folder_runs
-        SET status = 'CANCELLED',
-            phase = 'CANCELLED',
-            completed_at = #{completedAt},
-            duration_ms = CASE
-                WHEN started_at IS NULL THEN 0
-                ELSE MAX(0, #{completedAt} - started_at)
-            END,
-            error_message = #{message},
-            updated_at = #{completedAt}
-        WHERE id = #{id}
-          AND status IN ('QUEUED', 'RUNNING', 'CANCELLING')
-    </update>
-
-    <update id="markCompleted">
-        UPDATE knowledge_folder_runs
-        SET status = #{status},
-            scanned_count = #{scannedCount},
+        SET scanned_count = #{scannedCount},
             parsed_count = #{parsedCount},
             skipped_count = #{skippedCount},
             failed_count = #{failedCount},
@@ -265,81 +223,15 @@
             indexed_chunk_count = #{indexedChunkCount},
             failed_document_count = #{failedDocumentCount},
             failures_json = #{failuresJson},
-            phase = 'COMPLETED',
-            progress_current = #{progressCurrent},
-            progress_total = #{progressTotal},
-            current_item = NULL,
-            completed_at = #{completedAt},
-            duration_ms = CASE
-                WHEN started_at IS NULL THEN 0
-                ELSE MAX(0, #{completedAt} - started_at)
-            END,
-            error_message = NULL,
             error_stage = NULL,
-            error_code = NULL,
-            error_detail = NULL,
-            updated_at = #{completedAt}
+            error_detail = NULL
         WHERE id = #{id}
     </update>
 
-    <update id="markFailed">
+    <update id="updateFailure">
         UPDATE knowledge_folder_runs
-        SET status = 'FAILED',
-            phase = 'FAILED',
-            completed_at = #{completedAt},
-            duration_ms = CASE
-                WHEN started_at IS NULL THEN 0
-                ELSE MAX(0, #{completedAt} - started_at)
-            END,
-            error_message = #{message},
-            error_stage = #{errorStage},
-            error_code = #{errorCode},
-            error_detail = #{errorDetail},
-            updated_at = #{completedAt}
+        SET error_stage = #{errorStage},
+            error_detail = #{errorDetail}
         WHERE id = #{id}
     </update>
-
-    <update id="cleanupInterruptedRuns">
-        UPDATE knowledge_folder_runs
-        SET status = CASE
-                WHEN status = 'QUEUED' THEN 'CANCELLED'
-                ELSE 'FAILED'
-            END,
-            phase = CASE
-                WHEN status = 'QUEUED' THEN 'CANCELLED'
-                ELSE 'FAILED'
-            END,
-            completed_at = #{completedAt},
-            duration_ms = CASE
-                WHEN started_at IS NULL THEN 0
-                ELSE MAX(0, #{completedAt} - started_at)
-            END,
-            error_message = CASE
-                WHEN status = 'QUEUED' THEN #{queuedMessage}
-                ELSE #{runningMessage}
-            END,
-            updated_at = #{completedAt}
-        WHERE status IN ('QUEUED', 'RUNNING', 'CANCELLING')
-    </update>
-
-    <delete id="deleteByScope">
-        DELETE FROM knowledge_folder_runs
-        WHERE scope_type = #{scopeType}
-          AND ((#{scopeId} IS NULL AND scope_id IS NULL) OR scope_id = #{scopeId})
-    </delete>
-
-    <delete id="deleteTerminalById">
-        DELETE FROM knowledge_folder_runs
-        WHERE id = #{id}
-          AND status NOT IN ('QUEUED', 'RUNNING', 'CANCELLING')
-    </delete>
-
-    <delete id="deleteTerminalByIds">
-        DELETE FROM knowledge_folder_runs
-        WHERE status NOT IN ('QUEUED', 'RUNNING', 'CANCELLING')
-          AND id IN
-          <foreach collection="ids" item="id" open="(" separator="," close=")">
-              #{id}
-          </foreach>
-    </delete>
 </mapper>

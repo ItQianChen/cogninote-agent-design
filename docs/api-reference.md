@@ -285,11 +285,11 @@ DELETE /api/knowledge-folders/{id}
 
 删除目录记录、关联文档、chunks 和 Lucene 条目。不会删除用户本机原始文件。
 
-第 33 阶段后，前端删除目录优先调用维护队列接口 `POST /api/knowledge-maintenance/runs/folders/{id}/delete`。旧删除接口仍保留兼容。删除目录会清理该目录 scope 下的 `knowledge_folder_runs` 维护记录，避免删除后继续显示孤儿可信状态数据；`ALL` scope 和其他目录的运行记录不受影响。
+第 39 阶段后，前端删除目录优先调用维护队列接口 `POST /api/knowledge-maintenance/runs/folders/{id}/delete`。旧删除接口仍保留兼容。DELETE 会清理同目录 scope 的旧终态历史，但保留当前 DELETE run 作为审计记录；目标已不存在时重放仍视为完成。
 
 ## 知识库健康
 
-知识库健康接口只做诊断，不会自动同步、重建、启停或删除。状态由 SQLite 文档记录、目录配置、索引字段、Lucene reader 统计和本地文件元数据即时派生；维护任务队列与运行历史保存在 `knowledge_folder_runs` 中。
+知识库健康接口只做诊断，不会自动同步、重建、启停或删除。状态由 SQLite 文档记录、目录配置、索引字段、Lucene reader 统计和本地文件元数据即时派生；通用任务生命周期保存在 `durable_task_runs`，知识维护 scope 和统计保存在 `knowledge_folder_runs`。
 
 ### 查询全库健康
 
@@ -427,7 +427,7 @@ GET /api/knowledge-health/runs/page?scopeType=KNOWLEDGE_FOLDER&scopeId=folder-xx
 
 ## 知识库维护任务队列
 
-第 33 阶段后，前端所有知识库维护动作优先调用统一任务队列接口。旧目录接口和旧索引重建接口保留兼容，但不再作为前端状态事实源。
+第 39 阶段后，前端所有知识库维护动作通过 SQLite 耐久队列执行。旧目录接口和旧索引重建接口保留兼容，但不再作为前端状态事实源。
 
 ### 入队维护任务
 
@@ -460,7 +460,7 @@ POST /api/knowledge-maintenance/runs/folders/{id}/delete
 }
 ```
 
-入队成功返回 `KnowledgeFolderRunResponse`。如果同一 scope、同一 operation 已有 `QUEUED/RUNNING/CANCELLING` 任务，后端返回已有任务，避免重复入队。
+入队成功返回 `KnowledgeFolderRunResponse`。相同版本化 payload 已有 `QUEUED/RUNNING/RETRY_WAIT/CANCELLING` 任务时，后端按活动幂等键返回已有任务。响应包含 `attempt/maxAttempts/resumable/retryOfRunId/nextAttemptAt`；旧客户端可以忽略这些新增字段。
 
 `repair-index` 只处理 `status=PARSED AND indexed_at IS NULL` 的文档，SQLite chunks 是事实来源；它不扫描文件系统、不重新解析 PDF，也不重建已经索引成功的文档。该接口主要用于 Embedding 供应商限流后补写少量缺失 Lucene 条目。全库补写使用 `POST /api/knowledge-maintenance/runs/repair-index`，目录补写使用 `POST /api/knowledge-maintenance/runs/folders/{id}/repair-index`。
 
@@ -482,7 +482,7 @@ GET /api/knowledge-maintenance/runs/queue
 }
 ```
 
-队列为单机 FIFO，同一时间最多一个 `RUNNING`。应用启动时会把遗留 `QUEUED` 标记为 `CANCELLED`，把遗留 `RUNNING/CANCELLING` 标记为 `FAILED`。
+队列为单机 FIFO，通过 SQLite 原子 claim 保证同一队列最多一个有效 `RUNNING` 租约。重启后 `QUEUED` 会继续执行；过期 `RUNNING/CANCELLING` 最多自动恢复三次，等待恢复时状态为 `RETRY_WAIT`，耗尽后转为 `INTERRUPTED`。普通业务失败直接进入 `FAILED`，不会自动重试。备份恢复属于历史边界，恢复库中的活动任务统一转为 `INTERRUPTED`，不会自动重放。
 
 ### 查询单个任务
 
@@ -509,7 +509,7 @@ GET /api/knowledge-maintenance/runs/{runId}/events
 | `maintenance-run-cancelling` | 收到取消请求；当前只作为历史兼容事件 |
 | `maintenance-run-cancelled` | 等待任务已取消 |
 | `maintenance-run-completed` | 任务完成 |
-| `maintenance-run-failed` | 任务失败 |
+| `maintenance-run-failed` | 任务失败或中断 |
 | `maintenance-queue-updated` | 队列顺序或当前任务发生变化 |
 
 维护任务是服务端单向状态推送场景，因此使用项目已有 SSE 通道，不新增 WebSocket 技术栈。
@@ -520,7 +520,7 @@ GET /api/knowledge-maintenance/runs/{runId}/events
 POST /api/knowledge-maintenance/runs/{runId}/cancel
 ```
 
-只允许取消 `QUEUED` 任务。`RUNNING` 任务已经开始修改 SQLite、Lucene 或派生数据，接口会返回业务错误：
+只允许取消 `QUEUED` 或 `RETRY_WAIT` 任务。`RUNNING` 任务已经开始修改 SQLite、Lucene 或派生数据，接口会返回业务错误：
 
 ```json
 {
@@ -528,6 +528,14 @@ POST /api/knowledge-maintenance/runs/{runId}/cancel
   "message": "只能取消等待中的维护任务；正在运行的任务会自动执行到安全完成点。"
 }
 ```
+
+### 手动重试
+
+```text
+POST /api/knowledge-maintenance/runs/{runId}/retry
+```
+
+只接受 `FAILED` 或 `INTERRUPTED` 且 payload 版本仍受支持的任务。成功后创建新 run，并通过 `retryOfRunId` 关联旧历史；旧 run 不会被改写。
 
 ## 检索与索引
 

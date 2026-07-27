@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     enqueueSyncFolder: vi.fn(),
     getMaintenanceQueue: vi.fn(),
     getMaintenanceRun: vi.fn(),
+    retryMaintenanceRun: vi.fn(),
     streamMaintenanceRun: vi.fn()
   },
   folders: { fetchFolders: vi.fn() },
@@ -108,5 +109,84 @@ describe('knowledge maintenance state transitions', () => {
     await Promise.resolve()
 
     expect(store.error).not.toContain('进度连接已断开')
+  })
+
+  it('keeps retry wait runs active and allows cancelling them', async () => {
+    const waitingRun = { id: 'run-retry-wait', status: 'RETRY_WAIT', operation: 'SYNC' }
+    mocks.api.getMaintenanceQueue
+      .mockResolvedValueOnce({ currentRuns: [], queuedRuns: [waitingRun], latestRun: null })
+      .mockResolvedValueOnce({ currentRuns: [], queuedRuns: [], latestRun: { ...waitingRun, status: 'CANCELLED' } })
+    mocks.api.cancelMaintenanceRun.mockResolvedValue(true)
+    const store = useKnowledgeMaintenanceStore()
+
+    await store.fetchQueue()
+    expect(store.queuedRuns).toEqual([waitingRun])
+    await store.cancelRun(waitingRun.id)
+
+    expect(mocks.api.cancelMaintenanceRun).toHaveBeenCalledWith(waitingRun.id)
+  })
+
+  it('creates a new run through the manual retry endpoint', async () => {
+    const retriedRun = { id: 'run-new', status: 'QUEUED', operation: 'SYNC', retryOfRunId: 'run-old' }
+    mocks.api.retryMaintenanceRun.mockResolvedValue(retriedRun)
+    mocks.api.getMaintenanceQueue.mockResolvedValue({ currentRuns: [], queuedRuns: [retriedRun], latestRun: null })
+    const store = useKnowledgeMaintenanceStore()
+
+    const result = await store.retryRun('run-old')
+
+    expect(result).toEqual(retriedRun)
+    expect(mocks.api.retryMaintenanceRun).toHaveBeenCalledWith('run-old')
+  })
+
+  it('treats interrupted SSE payloads as terminal and refreshes snapshots', async () => {
+    let onEvent
+    mocks.api.getMaintenanceQueue.mockResolvedValue({
+      currentRuns: [{ id: 'run-1', status: 'RUNNING', operation: 'SYNC' }],
+      queuedRuns: [],
+      latestRun: null
+    })
+    mocks.api.streamMaintenanceRun.mockImplementation((_runId, options) => {
+      onEvent = options.onEvent
+      return new Promise(() => {})
+    })
+    const store = useKnowledgeMaintenanceStore()
+    await store.fetchQueue()
+    vi.clearAllMocks()
+    mocks.api.getMaintenanceQueue.mockResolvedValue({
+      currentRuns: [],
+      queuedRuns: [],
+      latestRun: { id: 'run-1', status: 'INTERRUPTED', operation: 'SYNC' }
+    })
+
+    onEvent('maintenance-run-failed', { id: 'run-1', status: 'INTERRUPTED', operation: 'SYNC' })
+
+    await vi.waitFor(() => expect(mocks.api.getMaintenanceQueue).toHaveBeenCalledTimes(1))
+    expect(store.latestRun.status).toBe('INTERRUPTED')
+  })
+
+  it('refreshes the snapshot and reconnects SSE after an unexpected disconnect', async () => {
+    const activeRun = { id: 'run-reconnect', status: 'RUNNING', operation: 'SYNC' }
+    mocks.api.getMaintenanceQueue.mockResolvedValue({ currentRuns: [activeRun], queuedRuns: [], latestRun: null })
+    mocks.api.streamMaintenanceRun
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockImplementationOnce(() => new Promise(() => {}))
+    const store = useKnowledgeMaintenanceStore()
+
+    await store.fetchQueue()
+
+    await vi.waitFor(() => expect(mocks.api.streamMaintenanceRun).toHaveBeenCalledTimes(2), { timeout: 2500 })
+    expect(mocks.api.getMaintenanceQueue).toHaveBeenCalledTimes(2)
+    expect(store.currentRun).toEqual(activeRun)
+  })
+
+  it('accepts legacy run snapshots without durability metadata', async () => {
+    const legacyRun = { id: 'legacy-run', status: 'QUEUED', operation: 'SYNC' }
+    mocks.api.getMaintenanceQueue.mockResolvedValue({ currentRuns: [], queuedRuns: [legacyRun], latestRun: null })
+    const store = useKnowledgeMaintenanceStore()
+
+    await store.fetchQueue()
+
+    expect(store.queuedRuns).toEqual([legacyRun])
+    expect(store.error).toBe('')
   })
 })

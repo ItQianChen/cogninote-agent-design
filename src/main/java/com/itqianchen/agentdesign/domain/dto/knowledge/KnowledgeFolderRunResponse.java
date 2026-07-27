@@ -34,6 +34,11 @@ public record KnowledgeFolderRunResponse(
         String errorDetail,
         long createdAt,
         long updatedAt,
+        int attempt,
+        int maxAttempts,
+        boolean resumable,
+        String retryOfRunId,
+        Long nextAttemptAt,
         Integer queuePosition
 ) {
     /**
@@ -70,6 +75,11 @@ public record KnowledgeFolderRunResponse(
                 run.errorDetail(),
                 run.createdAt(),
                 run.updatedAt(),
+                run.attempt(),
+                run.maxAttempts(),
+                run.resumable(),
+                run.retryOfRunId(),
+                run.status() == KnowledgeFolderRunStatus.RETRY_WAIT ? run.availableAt() : null,
                 null
         );
     }
@@ -102,6 +112,11 @@ public record KnowledgeFolderRunResponse(
                 errorDetail,
                 createdAt,
                 updatedAt,
+                attempt,
+                maxAttempts,
+                resumable,
+                retryOfRunId,
+                nextAttemptAt,
                 queuePosition
         );
     }

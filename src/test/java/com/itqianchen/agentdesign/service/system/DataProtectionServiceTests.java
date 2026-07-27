@@ -59,7 +59,7 @@ class DataProtectionServiceTests {
     @Test
     @Order(1)
     void emptyHistoryReturnsStatusWithoutUnboxingNullTimestamp() {
-        assertThat(dataProtectionService.status().schemaVersion()).isEqualTo(2);
+        assertThat(dataProtectionService.status().schemaVersion()).isEqualTo(3);
         assertThat(dataProtectionService.status().lastOperation()).isNull();
         assertThat(dataProtectionService.status().lastCompletedAt()).isNull();
     }
@@ -71,7 +71,7 @@ class DataProtectionServiceTests {
 
         BackupCreateResponse backup = dataProtectionService.createBackup();
         assertThat(backup.containsSecrets()).isTrue();
-        assertThat(backup.schemaVersion()).isEqualTo(2);
+        assertThat(backup.schemaVersion()).isEqualTo(3);
 
         String importId = UUID.randomUUID().toString();
         Files.copy(fileStore.exportPath(backup.backupId()), fileStore.inboxPath(importId));

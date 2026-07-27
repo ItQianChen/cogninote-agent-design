@@ -818,7 +818,7 @@ CREATE TABLE knowledge_graph_views (
 
 `knowledge_folders` 是第十阶段新增的知识库目录表。`documents.knowledge_folder_id` 只记录明确通过目录导入产生的归属；历史散落文档不自动猜测目录，继续作为未归属文档保留。
 
-`knowledge_folder_runs` 是知识库维护队列和历史记录的事实源。第 31 阶段它只保存完成后的导入、同步、重建索引、启用、停用和删除结果；第 33 阶段升级为本地 FIFO 队列，`status` 覆盖 `QUEUED`、`RUNNING`、`CANCELLING`、`CANCELLED`、`COMPLETED`、`COMPLETED_WITH_WARNINGS`、`FAILED`，`phase/current_item/progress_*` 用于表达当前阶段和当前处理对象。运行记录的 `failed_count` 表示本次维护操作失败的文件数，即使保留旧 `PARSED` 结果也会计数；健康快照的 `failedCount` 则只统计当前不可检索的 `FAILED` 和 `OCR_REQUIRED` 文档。`failures_json` 保存单文件结构化失败列表；`error_stage/error_code/error_detail` 保存目录扫描、索引初始化等任务整体失败。旧版两字段 `failures_json` 读取时归一化为 `UNKNOWN/LEGACY_FAILURE`。`started_at`、`completed_at` 和 `duration_ms` 对等待中或未结束任务可以为空，调用方必须以 `status` 判断生命周期。健康快照不落表，而是由 `knowledge_folders`、`documents.status`、`documents.indexed_at`、最近失败信息、文件大小、修改时间、本地路径存在性和 Lucene reader 统计即时派生；这样能避免用户在应用外移动或修改文件后，持久化健康状态立刻变成过期副本。删除知识库目录时会清理该目录 scope 下的维护记录，`ALL` scope 和其他目录运行记录不受影响。
+第 39 阶段起，`durable_task_runs` 是通用任务生命周期事实源，保存状态、版本化 payload、租约、恢复次数、进度和错误；`knowledge_folder_runs` 通过相同 ID 关联，只保存知识维护 scope、统计、失败列表和领域错误。运行记录的 `failed_count` 表示本次维护操作失败的文件数，即使保留旧 `PARSED` 结果也会计数；健康快照的 `failedCount` 则只统计当前不可检索的 `FAILED` 和 `OCR_REQUIRED` 文档。`failures_json` 保存单文件结构化失败列表；`error_stage/error_detail` 保存目录扫描、索引初始化等任务整体失败诊断，通用 `error_code/error_message` 位于耐久任务表。健康快照不落表，而是由 `knowledge_folders`、`documents.status`、`documents.indexed_at`、最近失败信息、文件大小、修改时间、本地路径存在性和 Lucene reader 统计即时派生。DELETE 清理同目录 scope 的旧终态历史，但保留当前 DELETE run 作为审计记录。
 
 `documents.last_failure_*` 保存最近一次文档处理诊断，阶段覆盖扫描、读取、解析、OCR、模型配置、模型调用、切块、SQLite 持久化和 Lucene 索引。文档成功完成解析和索引后会清空这些字段。维护同步失败但旧解析结果仍可用时，文档继续保持 `PARSED`，同时保留最近失败信息；前端以黄色警告提示“当前仍使用旧索引”。因此 `failed_count` 只统计当前不可检索的 `FAILED` 和 `OCR_REQUIRED`，不会把保留旧结果的警告计入不可用文档数。
 
@@ -905,7 +905,7 @@ CogninoteMemoryAdvisor 注入会话摘要和最近原文消息
 
 `KnowledgeHealthService` 比较文件是否存在、是否为普通文件、文件大小和修改时间，并轻量扫描目录中新出现但尚未入库的本地文件；它不重新计算内容 hash，也不自动把新文件导入 SQLite。单个文档路径不可读、权限异常或外置盘不可用时会转成“本地文件不可访问”问题，不让整个健康诊断请求失败。文档处理问题统一使用 `DOCUMENT_PROCESSING_FAILED`，并优先展示 `documents.last_failure_*` 中的实际阶段、友好摘要和建议；旧 `PARSE_FAILED` 问题码只保留前端兼容。新增、修改和删除文件的真实收敛由维护队列中的“同步目录”任务显式触发；`PARSED AND indexed_at IS NULL` 的少量缺失索引优先由“补写索引”任务从 SQLite chunks 恢复；索引损坏或 Analyzer/Embedding 变化后的修复由维护队列中的目录重建或全量重建索引触发。停用目录直接返回 `DISABLED` 且问题列表为空，它表达用户主动排除检索范围，不是需要修复的健康错误。维护任务状态和历史写入失败只记录 warning，不反向破坏已经完成的导入、同步或重建主流程。
 
-第 33 阶段后，维护动作不再由前端局部 `busy` 标记推断。`KnowledgeMaintenanceQueueService` 负责把导入、同步、重建、启停和删除目录写入 `knowledge_folder_runs`，再串行派发到后台 worker。前端通过 `/api/knowledge-maintenance/runs/{runId}/events` 接收 SSE 状态事件，并在任务终态后统一刷新健康快照、目录列表和索引状态。等待中的任务可以取消；运行中的任务会执行到安全完成点。
+第 39 阶段后，维护动作不再由前端局部 `busy` 标记推断。`KnowledgeMaintenanceQueueService` 把版本化参数写入 `durable_task_runs`，`DurableTaskScheduler` 通过 SQLite claim 和租约串行派发 `KNOWLEDGE_MUTATION` 队列。前端通过 `/api/knowledge-maintenance/runs/{runId}/events` 接收兼容 SSE 事件，并在任务终态后统一刷新健康快照、目录列表和索引状态。`QUEUED/RETRY_WAIT` 可以取消；进程中断任务最多恢复三次；运行中的任务会执行到安全完成点。
 
 ### 8.5 知识图谱派生流程
 
@@ -1110,7 +1110,7 @@ POST   /api/chat/stream/{requestId}/cancel
 
 `GET /api/knowledge-health`、`GET /api/knowledge-health/folders/{id}`、`GET /api/knowledge-health/runs` 和 `GET /api/knowledge-health/runs/page` 用于知识库问答可用性诊断和维护历史查询。它们只读当前 SQLite、Lucene 索引字段、本地文件元数据和图谱派生视图时间，不会自动同步、重建、启停或删除。`issues[].action` 只表达建议动作，前端需要继续调用 `/api/knowledge-maintenance/runs/**`、图谱接口或设置页入口执行用户确认后的修复动作。
 
-`/api/knowledge-maintenance/runs/**` 是知识库维护任务队列接口。导入目录、同步目录、重新解析目录、补写索引、重建目录索引、重建全部索引、启用、停用和删除目录都通过该接口入队。`GET /queue` 用于页面刷新后恢复当前任务和等待队列；`GET /{runId}/events` 使用 SSE 推送 `maintenance-run-snapshot`、`maintenance-run-started`、`maintenance-run-progress`、`maintenance-run-completed`、`maintenance-run-failed` 和 `maintenance-queue-updated` 等事件；`POST /{runId}/cancel` 只允许取消 `QUEUED` 任务，运行中的任务执行到安全完成点。
+`/api/knowledge-maintenance/runs/**` 是知识库维护任务队列接口。第 39 阶段起，`durable_task_runs` 保存通用生命周期、版本化 payload、租约和恢复次数，`knowledge_folder_runs` 只保存知识维护 scope 和统计。`GET /queue` 用于页面刷新后恢复当前任务和等待队列；`GET /{runId}/events` 保持既有 SSE 事件兼容；`POST /{runId}/cancel` 允许取消 `QUEUED/RETRY_WAIT`，`POST /{runId}/retry` 为受支持的 `FAILED/INTERRUPTED` 任务创建关联的新 run，运行中的任务执行到安全完成点。
 
 ## 11. 开发里程碑
 

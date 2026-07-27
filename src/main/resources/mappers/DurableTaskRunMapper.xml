@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.itqianchen.agentdesign.mapper.task.DurableTaskRunMapper">
+
+    <resultMap id="DurableTaskRunMap" type="com.itqianchen.agentdesign.domain.entity.task.DurableTaskRun">
+        <constructor>
+            <arg column="id" javaType="java.lang.String"/>
+            <arg column="task_type" javaType="java.lang.String"/>
+            <arg column="queue_name" javaType="java.lang.String"/>
+            <arg column="operation" javaType="java.lang.String"/>
+            <arg column="status" javaType="com.itqianchen.agentdesign.domain.enums.task.DurableTaskStatus"/>
+            <arg column="step" javaType="java.lang.String"/>
+            <arg column="payload_version" javaType="_int"/>
+            <arg column="payload_json" javaType="java.lang.String"/>
+            <arg column="checkpoint_json" javaType="java.lang.String"/>
+            <arg column="result_json" javaType="java.lang.String"/>
+            <arg column="resumable" javaType="_boolean"/>
+            <arg column="attempt" javaType="_int"/>
+            <arg column="max_attempts" javaType="_int"/>
+            <arg column="idempotency_key" javaType="java.lang.String"/>
+            <arg column="retry_of_run_id" javaType="java.lang.String"/>
+            <arg column="lease_owner" javaType="java.lang.String"/>
+            <arg column="lease_expires_at" javaType="java.lang.Long"/>
+            <arg column="heartbeat_at" javaType="java.lang.Long"/>
+            <arg column="available_at" javaType="_long"/>
+            <arg column="progress_current" javaType="_long"/>
+            <arg column="progress_total" javaType="_long"/>
+            <arg column="current_item" javaType="java.lang.String"/>
+            <arg column="error_code" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="queued_at" javaType="_long"/>
+            <arg column="started_at" javaType="java.lang.Long"/>
+            <arg column="completed_at" javaType="java.lang.Long"/>
+            <arg column="duration_ms" javaType="java.lang.Long"/>
+            <arg column="created_at" javaType="_long"/>
+            <arg column="updated_at" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert">
+        INSERT INTO durable_task_runs (
+            id, task_type, queue_name, operation, status, step,
+            payload_version, payload_json, checkpoint_json, result_json,
+            resumable, attempt, max_attempts, idempotency_key, retry_of_run_id,
+            lease_owner, lease_expires_at, heartbeat_at, available_at,
+            progress_current, progress_total, current_item, error_code, error_message,
+            queued_at, started_at, completed_at, duration_ms, created_at, updated_at
+        ) VALUES (
+            #{id}, #{taskType}, #{queueName}, #{operation}, #{status}, #{step},
+            #{payloadVersion}, #{payloadJson}, #{checkpointJson}, #{resultJson},
+            #{resumable}, #{attempt}, #{maxAttempts}, #{idempotencyKey}, #{retryOfRunId},
+            #{leaseOwner}, #{leaseExpiresAt}, #{heartbeatAt}, #{availableAt},
+            #{progressCurrent}, #{progressTotal}, #{currentItem}, #{errorCode}, #{errorMessage},
+            #{queuedAt}, #{startedAt}, #{completedAt}, #{durationMs}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <select id="findById" resultMap="DurableTaskRunMap">
+        SELECT * FROM durable_task_runs WHERE id = #{id}
+    </select>
+
+    <select id="findActiveByIdempotency" resultMap="DurableTaskRunMap">
+        SELECT *
+        FROM durable_task_runs
+        WHERE task_type = #{taskType}
+          AND idempotency_key = #{idempotencyKey}
+          AND status IN ('QUEUED', 'RUNNING', 'RETRY_WAIT', 'CANCELLING')
+        ORDER BY created_at ASC
+        LIMIT 1
+    </select>
+
+    <select id="findNextClaimable" resultMap="DurableTaskRunMap">
+        SELECT *
+        FROM durable_task_runs
+        WHERE queue_name = #{queueName}
+          AND status IN ('QUEUED', 'RETRY_WAIT')
+          AND available_at &lt;= #{now}
+        ORDER BY available_at ASC, queued_at ASC, created_at ASC
+        LIMIT 1
+    </select>
+
+    <!-- 过期任务必须先完成恢复转换；任何活动行都阻止同一 SQLite 队列产生第二个 worker。 -->
+    <update id="claim">
+        UPDATE durable_task_runs
+        SET status = 'RUNNING',
+            step = CASE WHEN status = 'RETRY_WAIT' THEN 'RESUMING' ELSE operation END,
+            attempt = attempt + 1,
+            lease_owner = #{leaseOwner},
+            lease_expires_at = #{leaseExpiresAt},
+            heartbeat_at = #{now},
+            started_at = COALESCE(started_at, #{now}),
+            completed_at = NULL,
+            duration_ms = NULL,
+            error_code = NULL,
+            error_message = NULL,
+            updated_at = #{now}
+        WHERE id = #{id}
+          AND queue_name = #{queueName}
+          AND status IN ('QUEUED', 'RETRY_WAIT')
+          AND available_at &lt;= #{now}
+          AND NOT EXISTS (
+              SELECT 1 FROM durable_task_runs active
+              WHERE active.queue_name = #{queueName}
+                AND active.status IN ('RUNNING', 'CANCELLING')
+          )
+    </update>
+
+    <update id="renewLease">
+        UPDATE durable_task_runs
+        SET heartbeat_at = #{heartbeatAt},
+            lease_expires_at = #{leaseExpiresAt},
+            updated_at = #{heartbeatAt}
+        WHERE id = #{id}
+          AND lease_owner = #{leaseOwner}
+          AND status IN ('RUNNING', 'CANCELLING')
+    </update>
+
+    <update id="requeueExpired">
+        UPDATE durable_task_runs
+        SET status = 'RETRY_WAIT',
+            step = 'RETRY_WAIT',
+            available_at = #{now},
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            heartbeat_at = NULL,
+            error_code = 'PROCESS_INTERRUPTED',
+            error_message = '上次执行因进程中断，正在从安全点恢复。',
+            updated_at = #{now}
+        WHERE status IN ('RUNNING', 'CANCELLING')
+          AND lease_expires_at &lt;= #{now}
+          AND resumable = 1
+          AND attempt &lt; max_attempts
+          <if test="excludedLeaseOwners != null and !excludedLeaseOwners.isEmpty()">
+              AND lease_owner NOT IN
+              <foreach collection="excludedLeaseOwners" item="excludedLeaseOwner" open="(" separator="," close=")">
+                  #{excludedLeaseOwner}
+              </foreach>
+          </if>
+    </update>
+
+    <update id="interruptExpired">
+        UPDATE durable_task_runs
+        SET status = 'INTERRUPTED',
+            step = 'INTERRUPTED',
+            completed_at = #{now},
+            duration_ms = CASE WHEN started_at IS NULL THEN 0 ELSE MAX(0, #{now} - started_at) END,
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            heartbeat_at = NULL,
+            error_code = 'RECOVERY_EXHAUSTED',
+            error_message = #{message},
+            updated_at = #{now}
+        WHERE status IN ('RUNNING', 'CANCELLING')
+          AND lease_expires_at &lt;= #{now}
+          AND (resumable = 0 OR attempt &gt;= max_attempts)
+          <if test="excludedLeaseOwners != null and !excludedLeaseOwners.isEmpty()">
+              AND lease_owner NOT IN
+              <foreach collection="excludedLeaseOwners" item="excludedLeaseOwner" open="(" separator="," close=")">
+                  #{excludedLeaseOwner}
+              </foreach>
+          </if>
+    </update>
+
+    <update id="updateProgress">
+        UPDATE durable_task_runs
+        SET step = #{step},
+            progress_current = #{progressCurrent},
+            progress_total = #{progressTotal},
+            current_item = #{currentItem},
+            checkpoint_json = #{checkpointJson},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+          AND lease_owner = #{leaseOwner}
+          AND status IN ('RUNNING', 'CANCELLING')
+    </update>
+
+    <update id="markCompleted">
+        UPDATE durable_task_runs
+        SET status = #{status},
+            step = 'COMPLETED',
+            result_json = #{resultJson},
+            progress_current = #{progressCurrent},
+            progress_total = #{progressTotal},
+            current_item = NULL,
+            completed_at = #{completedAt},
+            duration_ms = CASE WHEN started_at IS NULL THEN 0 ELSE MAX(0, #{completedAt} - started_at) END,
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            heartbeat_at = NULL,
+            error_code = NULL,
+            error_message = NULL,
+            updated_at = #{completedAt}
+        WHERE id = #{id}
+          AND lease_owner = #{leaseOwner}
+          AND status IN ('RUNNING', 'CANCELLING')
+    </update>
+
+    <update id="markFailed">
+        UPDATE durable_task_runs
+        SET status = 'FAILED',
+            step = 'FAILED',
+            completed_at = #{completedAt},
+            duration_ms = CASE WHEN started_at IS NULL THEN 0 ELSE MAX(0, #{completedAt} - started_at) END,
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            heartbeat_at = NULL,
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            updated_at = #{completedAt}
+        WHERE id = #{id}
+          AND lease_owner = #{leaseOwner}
+          AND status IN ('RUNNING', 'CANCELLING')
+    </update>
+
+    <update id="markInterrupted">
+        UPDATE durable_task_runs
+        SET status = 'INTERRUPTED',
+            step = 'INTERRUPTED',
+            completed_at = #{completedAt},
+            duration_ms = CASE WHEN started_at IS NULL THEN 0 ELSE MAX(0, #{completedAt} - started_at) END,
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            heartbeat_at = NULL,
+            error_code = #{errorCode},
+            error_message = #{errorMessage},
+            updated_at = #{completedAt}
+        WHERE id = #{id}
+          AND lease_owner = #{leaseOwner}
+          AND status IN ('RUNNING', 'CANCELLING')
+    </update>
+
+    <update id="markCancelled">
+        UPDATE durable_task_runs
+        SET status = 'CANCELLED',
+            step = 'CANCELLED',
+            completed_at = #{completedAt},
+            duration_ms = CASE WHEN started_at IS NULL THEN 0 ELSE MAX(0, #{completedAt} - started_at) END,
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            heartbeat_at = NULL,
+            error_message = #{message},
+            updated_at = #{completedAt}
+        WHERE id = #{id}
+          AND status IN ('QUEUED', 'RETRY_WAIT')
+    </update>
+
+    <delete id="deleteTerminalById">
+        DELETE FROM durable_task_runs
+        WHERE id = #{id}
+          AND status NOT IN ('QUEUED', 'RUNNING', 'RETRY_WAIT', 'CANCELLING')
+    </delete>
+
+    <delete id="deleteTerminalByIds">
+        DELETE FROM durable_task_runs
+        WHERE status NOT IN ('QUEUED', 'RUNNING', 'RETRY_WAIT', 'CANCELLING')
+          AND id IN
+          <foreach collection="ids" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </delete>
+
+    <delete id="deleteTerminalByScopeExcept">
+        DELETE FROM durable_task_runs
+        WHERE id IN (
+            SELECT id FROM knowledge_folder_runs
+            WHERE scope_type = #{scopeType}
+              AND ((#{scopeId} IS NULL AND scope_id IS NULL) OR scope_id = #{scopeId})
+              AND id != #{excludedId}
+        )
+          AND status NOT IN ('QUEUED', 'RUNNING', 'RETRY_WAIT', 'CANCELLING')
+    </delete>
+</mapper>
