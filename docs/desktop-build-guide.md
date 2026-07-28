@@ -38,7 +38,7 @@ $ErrorActionPreference = 'Stop'
 - 包内容泄漏检查和桌面产物体积预算。
 - signed 模式原有 Authenticode 或 codesign/notary/stapler/Gatekeeper 检查。
 
-完整命令、required checks、重复性记录和体积基线更新规则见 [测试与发布门禁](testing-and-release-gates.md)。
+完整命令、required checks、按需重复测试和体积基线更新规则见 [测试与发布门禁](testing-and-release-gates.md)。
 
 ## Windows 产物说明
 

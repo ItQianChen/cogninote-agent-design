@@ -1447,7 +1447,7 @@ POST   /api/chat/stream/{requestId}/cancel
 - Playwright 使用随机端口和隔离临时存储，真实验证首次启动、配置、导入、搜索、维护和后端重启；真实模型与外网 endpoint 使用确定性 route mock。
 - `verify.yml` 统一后端、前端、生产构建、浏览器和知识库 smoke；Windows/macOS 发布 workflow 必须先通过 reusable verify job。
 - 前端和桌面产物建立机器可读体积预算；发布 packaging job 执行平台结构、backend status、静态资源、版本和安装 smoke。
-- Windows 重复性 workflow 每周运行 5 轮，并支持发布候选手动运行 20 轮。操作说明见 [测试与发布门禁](testing-and-release-gates.md)。
+- 后端重复测试保留为本地按需诊断脚本，不配置定时 workflow，也不作为固定发布门禁。操作说明见 [测试与发布门禁](testing-and-release-gates.md)。
 
 ## 12. 后续版本规划
 

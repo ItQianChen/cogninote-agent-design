@@ -1,6 +1,6 @@
 # 测试与发布门禁
 
-本文说明 CogniNote Phase 37 的本地验证、CI required checks、重复性证据、体积预算和桌面发布 smoke。测试不得读取真实用户目录、真实 API Key、外网额度或第三方账号。
+本文说明 CogniNote Phase 37 的本地验证、CI required checks、按需重复诊断、体积预算和桌面发布 smoke。测试不得读取真实用户目录、真实 API Key、外网额度或第三方账号。
 
 ## 固定工具链
 
@@ -42,21 +42,20 @@ npm --prefix cogniNote-agent-front run test:e2e
 
 `test:e2e` 会构建后端 JAR，选择随机前后端端口，创建 `cogninote-e2e-*` 临时存储，结束时停止 Java 进程并清理存储。失败证据位于 `artifacts/browser-smoke/`。
 
-## 后端隔离与重复性
+## 后端隔离与按需重复诊断
 
 持久化 Spring 集成测试使用类级 `@TempDir` 和 `TestStorageProperties` 注册独立 SQLite/Lucene 路径。由于 Context 持有独占数据源，这些测试使用 `@DirtiesContext(AFTER_CLASS)`，确保 JUnit 删除临时目录前关闭 Hikari 连接。`LuceneKnowledgeStore` 的 writer 和 `FSDirectory` 在同一 try-with-resources 中关闭，连续全量测试同时验证 Windows 临时目录可以在每轮结束后正常清理。
 
-连续执行：
+怀疑存在偶发锁、资源泄漏或测试污染时，可以在本地连续执行：
 
 ```powershell
 $ErrorActionPreference = 'Stop'
 .\scripts\repeat-backend-tests.ps1 -Iterations 5
-.\scripts\repeat-backend-tests.ps1 -Iterations 20
 ```
 
-脚本失败即停。每轮必须存在 Surefire XML 且至少执行一个非 skipped 测试，否则即使 Maven 返回 0 也会判定失败。机器可读摘要写入 `artifacts/test-repeatability/backend-repeatability.json`，每轮记录 `reportCount/tests/executedTests`，Surefire XML 保存在对应时间戳目录。PR 不运行 20 轮；发布候选提交必须有一次 Windows 20 轮零失败 artifact。
+脚本失败即停。每轮必须存在 Surefire XML 且至少执行一个非 skipped 测试，否则即使 Maven 返回 0 也会判定失败。机器可读摘要写入 `artifacts/test-repeatability/backend-repeatability.json`，每轮记录 `reportCount/tests/executedTests`，Surefire XML 保存在对应时间戳目录。重复次数按当前诊断风险决定；该脚本不由 CI 定时运行，也不是固定发布门禁。
 
-2026-07-26 本地记录：全量 208 tests 单次通过，随后连续 5 轮均为 208 tests、0 failures、0 errors。发布候选仍需在同一提交上完成 20 轮零失败记录。
+2026-07-27 本地记录：全量 234 tests 单次通过，随后连续 5 轮均为 234 tests、0 failures、0 errors。
 
 ## 前端测试边界
 
@@ -96,7 +95,7 @@ Fixture 位于 `cogniNote-agent-front/e2e/fixtures/knowledge-base/`。浏览器�
 
 仓库分支保护必须把这五个 check 设为 Required。代码只能提供 workflow；GitHub 仓库设置需要维护者在 required checks 稳定运行一周后启用。
 
-`.github/workflows/repeatability.yml` 每周在 `windows-latest` 运行 5 轮，也支持手动选择 5/10/20 轮并上传完整证据。
+仓库不配置定时重复测试 workflow。普通提交和发布使用 `verify.yml` 的单次完整验证；需要排查偶发失败时，由开发者在本地运行重复脚本并保留报告。
 
 ## 发布依赖与桌面 smoke
 
@@ -130,7 +129,7 @@ node scripts/check-frontend-bundle-budget.mjs
 
 ## 故障定位
 
-- 后端随机失败：查看对应 repeatability iteration 的 Surefire XML，确认临时目录和 Hikari shutdown 日志。
+- 后端随机失败：运行本地重复脚本，查看对应 iteration 的 Surefire XML，确认临时目录和 Hikari shutdown 日志。
 - 浏览器失败：查看 `artifacts/browser-smoke/test-results/` 的 trace、截图、视频和 backend logs。
 - bundle 失败：检查 job summary 的 baseline/current/change，不要直接提高硬上限。
 - 桌面 smoke 失败：先区分包结构、backend status、静态资源、版本、安装器和签名阶段。

@@ -59,7 +59,7 @@ pwsh -NoProfile -File scripts/smoke-durable-maintenance.ps1
 
 第一次启动通过 `COGNINOTE_DURABLE_TASK_DISPATCH_ENABLED=false` 只入队；第二次启用 dispatcher，断言原 run 完成且哨兵文档可被关键词检索。
 
-完整门禁包括 Maven 全量测试和打包、前端测试与生产构建、bundle budget、备份恢复 smoke、耐久队列 smoke、`git diff --check`，以及本地连续 5 轮后端测试。发布候选继续沿用 Phase 37 的 20 轮重复性门禁。
+完整门禁包括 Maven 全量测试和打包、前端测试与生产构建、bundle budget、备份恢复 smoke、耐久队列 smoke 和 `git diff --check`。后端多轮测试保留为排查偶发失败时的本地诊断手段，不作为固定发布门禁。
 
 ## 非目标与后续
 

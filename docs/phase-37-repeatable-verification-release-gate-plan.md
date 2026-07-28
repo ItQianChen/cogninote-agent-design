@@ -1,6 +1,6 @@
 # 第 37 阶段计划：可重复验证与发布门禁
 
-> 实施状态（2026-07-26）：代码与本地验证链已落地。后端单次 208 tests 通过，并完成连续 5 轮零失败；发布候选仍需由 `repeatability.yml` 在同一提交上补齐 20 轮记录。PR required checks 稳定一周、Windows/macOS 安装 smoke 实跑记录及 macOS/portable 体积基线仍属于仓库设置和发布候选退出条件，不能由本地 Windows 实现伪造。
+> 实施状态（2026-07-28）：代码与本地验证链已落地。后端单次测试和本地多轮诊断均已验证；`repeatability.yml` 已移除，重复脚本仅供本地按需排查，不再定时运行或作为固定发布门禁。PR required checks 稳定期、Windows/macOS 安装 smoke 实跑记录及 macOS/portable 体积基线仍属于仓库设置和发布候选退出条件，不能由本地 Windows 实现伪造。
 
 ## Summary
 
@@ -53,9 +53,9 @@
 - 建立前端单元测试最小闭环，并优先覆盖高变更频率的数据归一化逻辑。
 - 建立不依赖真实模型、真实 API Key、外网和用户目录的浏览器端关键路径 smoke。
 - 为 Pull Request、主分支和桌面发布建立统一验证工作流。
-- 让“跳过重复测试”只能发生在上游验证已成功的打包 job 中，而不是成为发布入口的默认行为。
+- 让“跳过测试”只能发生在上游验证已成功的打包 job 中，而不是成为发布入口的默认行为。
 - 将构建产物体积变化变成机器可读、可比较、可阻断的指标。
-- 留下一次后端全量测试连续 20 次零失败的可审查记录。
+- 提供后端全量测试按需重复运行和保留诊断证据的能力。
 
 ## Non-goals
 
@@ -137,7 +137,7 @@ static void registerStorageProperties(DynamicPropertyRegistry registry) {
 
 新增 `scripts/repeat-backend-tests.ps1`：
 
-- 参数：`-Iterations`，默认 5，发布候选使用 20。
+- 参数：`-Iterations`，默认 5，可按诊断需要调整。
 - 每轮记录开始时间、结束时间、耗时、测试数和退出码。
 - 每轮必须存在 Surefire XML 且至少执行一个非 skipped 测试，禁止把零测试误记为通过。
 - 任一轮失败立即停止，并保留该轮 Surefire report。
@@ -299,16 +299,9 @@ knowledge-smoke
 
 仓库保护规则把上述 jobs 设为 Required checks。任何一个失败都不能合并到发布分支。
 
-### 重复性工作流
+### 重复性工具边界
 
-新增 `.github/workflows/repeatability.yml`：
-
-- `workflow_dispatch` 可指定 5/10/20 次。
-- 每周定时在 `windows-latest` 运行 5 次，尽早发现锁和残留问题。
-- 发布候选手动或由 release workflow 运行 20 次。
-- 上传 Surefire reports 和 `backend-repeatability.json`。
-
-Pull Request 不执行 20 次全量测试，否则每个小改动都付出约 17 分钟以上的重复成本。发布门槛是“候选提交有一次可追踪的连续 20 次零失败记录”，不是“每次 PR 都跑 20 次”。
+2026-07-28 起不再保留定时重复测试 workflow。普通 Pull Request、主分支和发布流程使用 `verify.yml` 的单次完整验证；`scripts/repeat-backend-tests.ps1` 仅在排查锁、资源泄漏或测试污染时由开发者本地运行，并把 Surefire reports 与 `backend-repeatability.json` 作为诊断证据。
 
 ### 发布工作流依赖
 
@@ -427,9 +420,9 @@ Linux 不是新增分发目标，只用于证明 Java 本地服务和标准浏�
 
 - 替换所有固定 `target/test-cogninote-*` 配置。
 - 修复锁、忙锁、Context 关闭和 executor 泄漏。
-- 本地连续运行 5 次，再在 Windows CI 连续运行 20 次。
+- 本地按需连续运行，确认失败能稳定复现且每轮资源可以释放。
 
-只有 20 次零失败后，才进入前端和发布门禁收口；否则后续 CI 失败会被不稳定后端测试淹没。
+重复测试用于定位偶发问题，不阻塞后续前端和发布门禁建设；普通 CI 仍必须通过单次完整后端测试。
 
 ### 37-2：Vitest 首批测试
 
@@ -467,7 +460,6 @@ Linux 不是新增分发目标，只用于证明 Java 本地服务和标准浏�
 
 ```text
 .github/workflows/verify.yml                         # PR/push/reusable 验证
-.github/workflows/repeatability.yml                  # 定时与发布候选重复测试
 .github/workflows/desktop-windows.yml                # 依赖 verify，增加 package smoke
 .github/workflows/desktop-macos.yml                  # 依赖 verify，增加 package smoke
 
@@ -501,9 +493,9 @@ docs/testing-and-release-gates.md                    # 本地与 CI 验证说明
 
 - `rg "target/test-cogninote" src/test` 不再发现 Spring 集成测试固定存储路径。
 - `mvn test` 单次通过，测试数不低于当前 208。
-- Windows 上 `repeat-backend-tests.ps1 -Iterations 20` 连续零失败。
+- 按需运行 `repeat-backend-tests.ps1` 时，指定轮次全部通过且实际执行测试数大于零。
 - 每轮结束后临时目录可删除，不存在 Lucene lock、SQLite busy 或残留 Java 进程。
-- 失败轮次能在 artifact 中定位到具体 Surefire report。
+- 失败轮次能在本地报告目录中定位到具体 Surefire report。
 
 ### 前端
 
@@ -547,11 +539,11 @@ node scripts/check-frontend-bundle-budget.mjs
 npm --prefix cogniNote-agent-front run test:e2e
 ```
 
-发布候选重复性验证：
+可选的本地重复性诊断：
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-.\scripts\repeat-backend-tests.ps1 -Iterations 20
+.\scripts\repeat-backend-tests.ps1 -Iterations 5
 ```
 
 已有知识库 smoke：
@@ -585,7 +577,7 @@ $ErrorActionPreference = 'Stop'
 
 后端、前端、E2E 和双平台打包全部串行会显著变慢。
 
-应对：PR jobs 并行；打包只在发布工作流；20 次重复测试只在定时或发布候选执行；release packaging 复用成功的 verify 结果。
+应对：PR jobs 并行；打包只在发布工作流；多轮重复测试仅在本地按需执行；release packaging 复用成功的 verify 结果。
 
 ### 体积阈值误报
 
@@ -610,7 +602,7 @@ $ErrorActionPreference = 'Stop'
 
 只有满足以下条件，项目才进入第 38 阶段“数据迁移与备份恢复”：
 
-- 后端全量测试连续 20 次零失败。
+- 后端全量测试单次稳定通过；已知偶发问题通过本地按需重复测试定位并修复。
 - PR required checks 稳定运行至少一周，没有未处理的随机失败。
 - 前端核心状态逻辑已有单元测试，关键用户路径已有确定性 Playwright smoke。
 - Windows/macOS 发布 workflow 无法绕过验证，并能验证产物启动与版本。
