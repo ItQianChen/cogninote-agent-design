@@ -115,8 +115,12 @@ try {
     $backendProcess = $null
 
     $installer = Start-Process -FilePath $installerFullPath -ArgumentList @('/S', "/D=$installRoot") -PassThru -Wait -WindowStyle Hidden
-    if ($installer.ExitCode -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $installRoot 'CogniNote.exe'))) {
+    if ($installer.ExitCode -ne 0) {
         throw "NSIS silent install failed with exit code $($installer.ExitCode)."
+    }
+    $installedLauncher = Join-Path $installRoot 'cogninote-agent.exe'
+    if (-not (Test-Path -LiteralPath $installedLauncher -PathType Leaf)) {
+        throw "NSIS install completed but launcher is missing: $installedLauncher"
     }
     $uninstallerPath = Get-ChildItem -LiteralPath $installRoot -Filter 'uninstall*.exe' -File | Select-Object -First 1
     if (-not $uninstallerPath) {

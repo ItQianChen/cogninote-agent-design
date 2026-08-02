@@ -19,8 +19,24 @@ cleanup() {
     kill "$BACKEND_PID" 2>/dev/null || true
     wait "$BACKEND_PID" 2>/dev/null || true
   fi
+
+  # A DMG mount is read-only; remove the temporary tree only after detaching it.
   if mount | grep -Fq " on $MOUNT_PATH "; then
-    hdiutil detach "$MOUNT_PATH" -quiet || true
+    detached=false
+    for _ in 1 2 3; do
+      if hdiutil detach "$MOUNT_PATH" -quiet; then
+        detached=true
+        break
+      fi
+      sleep 1
+    done
+    if [[ "$detached" != true ]] && hdiutil detach "$MOUNT_PATH" -force; then
+      detached=true
+    fi
+    if [[ "$detached" != true ]] || mount | grep -Fq " on $MOUNT_PATH "; then
+      echo "Failed to detach DMG mount; preserving smoke directory: $TEMP_ROOT" >&2
+      return 1
+    fi
   fi
   rm -rf "$TEMP_ROOT"
 }
