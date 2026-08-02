@@ -13,6 +13,7 @@ TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/cogninote-desktop-smoke.XXXXXX")"
 MOUNT_PATH="$TEMP_ROOT/mounted"
 INSTALLED_APP="$TEMP_ROOT/Applications/CogniNote.app"
 BACKEND_PID=""
+MOUNT_ATTACHED=false
 
 cleanup() {
   if [[ -n "$BACKEND_PID" ]] && kill -0 "$BACKEND_PID" 2>/dev/null; then
@@ -20,8 +21,8 @@ cleanup() {
     wait "$BACKEND_PID" 2>/dev/null || true
   fi
 
-  # A DMG mount is read-only; remove the temporary tree only after detaching it.
-  if mount | grep -Fq " on $MOUNT_PATH "; then
+  # Track attach state instead of parsing mount output; macOS may canonicalize /var to /private/var.
+  if [[ "$MOUNT_ATTACHED" == true ]]; then
     detached=false
     for _ in 1 2 3; do
       if hdiutil detach "$MOUNT_PATH" -quiet; then
@@ -33,10 +34,11 @@ cleanup() {
     if [[ "$detached" != true ]] && hdiutil detach "$MOUNT_PATH" -force; then
       detached=true
     fi
-    if [[ "$detached" != true ]] || mount | grep -Fq " on $MOUNT_PATH "; then
+    if [[ "$detached" != true ]]; then
       echo "Failed to detach DMG mount; preserving smoke directory: $TEMP_ROOT" >&2
       return 1
     fi
+    MOUNT_ATTACHED=false
   fi
   rm -rf "$TEMP_ROOT"
 }
@@ -60,6 +62,7 @@ fi
 
 mkdir -p "$MOUNT_PATH" "$(dirname "$INSTALLED_APP")" "$TEMP_ROOT/home" "$TEMP_ROOT/storage"
 hdiutil attach "$DMG_PATH" -mountpoint "$MOUNT_PATH" -nobrowse -quiet
+MOUNT_ATTACHED=true
 MOUNTED_APP="$(find "$MOUNT_PATH" -maxdepth 1 -name '*.app' -type d | head -n 1)"
 if [[ -z "$MOUNTED_APP" ]]; then
   echo "DMG does not contain an app bundle." >&2
