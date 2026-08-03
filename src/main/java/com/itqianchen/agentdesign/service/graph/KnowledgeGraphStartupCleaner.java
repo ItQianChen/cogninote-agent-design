@@ -1,6 +1,7 @@
 package com.itqianchen.agentdesign.service.graph;
 
 import com.itqianchen.agentdesign.repository.graph.KnowledgeGraphRepository;
+import com.itqianchen.agentdesign.service.system.DatabaseMigrationService;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.core.Ordered;
@@ -15,14 +16,19 @@ import org.springframework.stereotype.Component;
 public class KnowledgeGraphStartupCleaner implements ApplicationListener<ApplicationReadyEvent>, Ordered {
 
     private final KnowledgeGraphRepository repository;
+    private final DatabaseMigrationService migrationService;
 
     /**
      * 注入图谱仓储。
      *
      * @param repository 图谱仓储
      */
-    public KnowledgeGraphStartupCleaner(KnowledgeGraphRepository repository) {
+    public KnowledgeGraphStartupCleaner(
+            KnowledgeGraphRepository repository,
+            DatabaseMigrationService migrationService
+    ) {
         this.repository = repository;
+        this.migrationService = migrationService;
     }
 
     /**
@@ -32,6 +38,9 @@ public class KnowledgeGraphStartupCleaner implements ApplicationListener<Applica
      */
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
+        if (migrationService.isRecoveryMode()) {
+            return;
+        }
         long now = System.currentTimeMillis();
         repository.failOrphanRuns("上次知识图谱生成因应用重启被中断，请重新生成。", now);
     }

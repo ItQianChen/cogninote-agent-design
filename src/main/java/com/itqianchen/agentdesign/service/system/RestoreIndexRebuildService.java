@@ -36,6 +36,9 @@ public class RestoreIndexRebuildService implements ApplicationListener<Applicati
 
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
+        if (dataProtectionService.migrationStatusRecoveryMode()) {
+            return;
+        }
         fileStore.pendingReindex().ifPresent(this::rebuild);
     }
 

@@ -9,6 +9,22 @@ export function getSystemStatus() {
   return requestJson('/api/system/status')
 }
 
+export function getMigrationStatus() {
+  return requestJson('/api/system/migration/status')
+}
+
+export function createMigrationBackup() {
+  return requestJson('/api/system/migration/backup', jsonOptions('POST', {}))
+}
+
+export function exportMigrationDiagnostics() {
+  return requestJson('/api/system/migration/export', jsonOptions('POST', {}))
+}
+
+export function retryMigration() {
+  return requestJson('/api/system/migration/retry', jsonOptions('POST', {}))
+}
+
 export function getDataProtectionStatus() {
   return requestJson('/api/system/data-protection/status')
 }

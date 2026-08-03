@@ -4,6 +4,7 @@ import com.itqianchen.agentdesign.domain.entity.task.DurableTaskRun;
 import com.itqianchen.agentdesign.domain.enums.task.DurableTaskStatus;
 import com.itqianchen.agentdesign.domain.properties.task.DurableTaskProperties;
 import com.itqianchen.agentdesign.repository.task.DurableTaskRunRepository;
+import com.itqianchen.agentdesign.service.system.DatabaseMigrationService;
 import jakarta.annotation.PreDestroy;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationListener;
 import org.springframework.core.Ordered;
 import org.springframework.core.task.TaskExecutor;
@@ -33,6 +35,7 @@ public class DurableTaskScheduler implements ApplicationListener<ApplicationRead
     private final DurableTaskRunRepository repository;
     private final DurableTaskProperties properties;
     private final TaskExecutor taskExecutor;
+    private final DatabaseMigrationService migrationService;
     private final Map<String, DurableTaskHandler> handlers;
     private final List<String> queueNames;
     private final AtomicBoolean closing = new AtomicBoolean();
@@ -42,15 +45,18 @@ public class DurableTaskScheduler implements ApplicationListener<ApplicationRead
         return thread;
     });
 
+    @Autowired
     public DurableTaskScheduler(
             DurableTaskRunRepository repository,
             DurableTaskProperties properties,
             TaskExecutor taskExecutor,
-            List<DurableTaskHandler> handlerList
+            List<DurableTaskHandler> handlerList,
+            DatabaseMigrationService migrationService
     ) {
         this.repository = repository;
         this.properties = properties;
         this.taskExecutor = taskExecutor;
+        this.migrationService = migrationService;
         LinkedHashMap<String, DurableTaskHandler> byType = new LinkedHashMap<>();
         for (DurableTaskHandler handler : handlerList) {
             if (byType.putIfAbsent(handler.taskType(), handler) != null) {
@@ -61,8 +67,22 @@ public class DurableTaskScheduler implements ApplicationListener<ApplicationRead
         this.queueNames = handlerList.stream().map(DurableTaskHandler::queueName).distinct().toList();
     }
 
+    /** 保留调度器单元测试和离线工具的旧构造入口。 */
+    public DurableTaskScheduler(
+            DurableTaskRunRepository repository,
+            DurableTaskProperties properties,
+            TaskExecutor taskExecutor,
+            List<DurableTaskHandler> handlerList
+    ) {
+        this(repository, properties, taskExecutor, handlerList, null);
+    }
+
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
+        if (migrationService != null && migrationService.isRecoveryMode()) {
+            log.warn("durable_task_dispatch_skipped_migration_recovery");
+            return;
+        }
         if (!properties.dispatchEnabled()) {
             log.info("durable_task_dispatch_disabled");
             return;

@@ -60,7 +60,33 @@ class DatabaseMigrationServiceTests {
     }
 
     @Test
-    void unknownUnversionedDatabaseIsRejectedWithoutBaselining() throws Exception {
+    void unversionedBaselineWithHistoricalExtraTablesIsAccepted() throws Exception {
+        Fixture fixture = fixture(tempDir.resolve("baseline-with-history"));
+        fixture.storageInitializer().ensureInitialized();
+        Flyway.configure()
+                .dataSource(fixture.snapshotService().dataSource(fixture.databasePath(), false))
+                .locations("classpath:db/migration")
+                .target("1")
+                .load()
+                .migrate();
+        try (Connection connection = fixture.snapshotService().dataSource(fixture.databasePath(), false).getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE model_config (id TEXT PRIMARY KEY, api_key TEXT)");
+            statement.execute("CREATE TABLE knowledge_folder_runs_migration (id TEXT PRIMARY KEY)");
+            statement.execute("DROP TABLE flyway_schema_history");
+        }
+
+        fixture.migrationService().migrateBeforeConnectionPool();
+
+        assertThat(fixture.migrationService().currentSchemaVersion()).isEqualTo(3);
+        assertThat(queryInt(fixture, "SELECT COUNT(*) FROM sqlite_master WHERE name='model_config'"))
+                .isEqualTo(1);
+        assertThat(queryInt(fixture, "SELECT COUNT(*) FROM sqlite_master WHERE name='knowledge_folder_runs_migration'"))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void unknownUnversionedDatabaseEntersRecoveryWithoutBaselining() throws Exception {
         Fixture fixture = fixture(tempDir.resolve("unknown"));
         fixture.storageInitializer().ensureInitialized();
         try (Connection connection = fixture.snapshotService().dataSource(fixture.databasePath(), false).getConnection();
@@ -68,9 +94,10 @@ class DatabaseMigrationServiceTests {
             statement.execute("CREATE TABLE legacy_notes (id TEXT PRIMARY KEY)");
         }
 
-        assertThatThrownBy(fixture.migrationService()::migrateBeforeConnectionPool)
-                .isInstanceOf(DatabaseMigrationException.class)
-                .hasMessageContaining("original data was preserved");
+        fixture.migrationService().migrateBeforeConnectionPool();
+        assertThat(fixture.migrationService().isRecoveryMode()).isTrue();
+        assertThat(fixture.migrationService().inspection().mode()).isEqualTo("MIGRATION_RECOVERY");
+        assertThat(fixture.migrationService().businessDatabasePath()).isNotEqualTo(fixture.databasePath());
         assertThat(queryInt(fixture, "SELECT COUNT(*) FROM sqlite_master WHERE name='flyway_schema_history'"))
                 .isZero();
     }

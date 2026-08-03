@@ -20,6 +20,7 @@ public class SystemStatusService {
     private static final String FALLBACK_VERSION = "dev";
 
     private final AppStorageInitializer storageInitializer;
+    private final DatabaseMigrationService migrationService;
     private final String version;
     private final boolean desktopMode;
 
@@ -32,11 +33,13 @@ public class SystemStatusService {
      */
     public SystemStatusService(
             AppStorageInitializer storageInitializer,
+            DatabaseMigrationService migrationService,
             @Value("${app.version:}") String configuredVersion,
             @Value("${app.desktop.enabled:false}") boolean desktopMode,
             ObjectProvider<BuildProperties> buildPropertiesProvider
     ) {
         this.storageInitializer = storageInitializer;
+        this.migrationService = migrationService;
         this.version = resolveVersion(configuredVersion, buildPropertiesProvider.getIfAvailable());
         this.desktopMode = desktopMode;
     }
@@ -47,12 +50,17 @@ public class SystemStatusService {
      * @return 系统状态响应
      */
     public SystemStatusResponse status() {
+        MigrationInspectionResult migration = migrationService.inspection();
+        String status = migrationService.isRecoveryMode() ? "RECOVERY" : STATUS_UP;
         return new SystemStatusResponse(
                 DISPLAY_APP_NAME,
                 version,
-                STATUS_UP,
+                status,
                 storageInitializer.appStorage().baseDir().toString(),
-                desktopMode
+                desktopMode,
+                migration.mode(), migration.databaseStatus(), migration.detectedSchemaVersion(),
+                migration.latestSchemaVersion(), migration.detectedSchemaFamily().name(),
+                migration.pendingMigrations(), migration.migrationErrorCode(), migration.migrationErrorMessage()
         );
     }
 
@@ -73,5 +81,9 @@ public class SystemStatusService {
             return buildProperties.getVersion();
         }
         return FALLBACK_VERSION;
+    }
+
+    public MigrationInspectionResult migrationStatus() {
+        return migrationService.inspection();
     }
 }

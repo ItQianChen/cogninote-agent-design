@@ -9,7 +9,15 @@ public record SystemStatusResponse(
         String version,
         String status,
         String dataDir,
-        boolean desktopMode
+        boolean desktopMode,
+        String mode,
+        String databaseStatus,
+        int detectedSchemaVersion,
+        int latestSchemaVersion,
+        String detectedSchemaFamily,
+        java.util.List<String> pendingMigrations,
+        String migrationErrorCode,
+        String migrationErrorMessage
 ) {
 }
 

@@ -2,8 +2,12 @@ package com.itqianchen.agentdesign.controller.system;
 
 import com.itqianchen.agentdesign.common.api.ApiResponse;
 import com.itqianchen.agentdesign.domain.dto.system.SystemStatusResponse;
+import com.itqianchen.agentdesign.domain.dto.system.MigrationRecoveryFileResponse;
+import com.itqianchen.agentdesign.service.system.MigrationInspectionResult;
+import com.itqianchen.agentdesign.service.system.MigrationRecoveryService;
 import com.itqianchen.agentdesign.service.system.SystemStatusService;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -16,14 +20,19 @@ import org.springframework.web.bind.annotation.RestController;
 public class SystemStatusController {
 
     private final SystemStatusService systemStatusService;
+    private final MigrationRecoveryService migrationRecoveryService;
 
     /**
      * 注入系统状态服务。
      *
      * @param systemStatusService 系统状态聚合服务
      */
-    public SystemStatusController(SystemStatusService systemStatusService) {
+    public SystemStatusController(
+            SystemStatusService systemStatusService,
+            MigrationRecoveryService migrationRecoveryService
+    ) {
         this.systemStatusService = systemStatusService;
+        this.migrationRecoveryService = migrationRecoveryService;
     }
 
     /**
@@ -36,6 +45,26 @@ public class SystemStatusController {
     @GetMapping("/status")
     public ApiResponse<SystemStatusResponse> status() {
         return ApiResponse.ok(systemStatusService.status());
+    }
+
+    @GetMapping("/migration/status")
+    public ApiResponse<MigrationInspectionResult> migrationStatus() {
+        return ApiResponse.ok(migrationRecoveryService.status());
+    }
+
+    @PostMapping("/migration/backup")
+    public ApiResponse<MigrationRecoveryFileResponse> migrationBackup() {
+        return ApiResponse.ok(migrationRecoveryService.backup());
+    }
+
+    @PostMapping("/migration/export")
+    public ApiResponse<MigrationRecoveryFileResponse> migrationExport() {
+        return ApiResponse.ok(migrationRecoveryService.exportDiagnostics());
+    }
+
+    @PostMapping("/migration/retry")
+    public ApiResponse<MigrationInspectionResult> migrationRetry() {
+        return ApiResponse.ok(migrationRecoveryService.retry());
     }
 }
 

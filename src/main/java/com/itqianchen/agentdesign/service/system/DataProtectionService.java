@@ -93,6 +93,10 @@ public class DataProtectionService {
      * 创建保留明文 API Key 的完整 SQLite 便携备份。
      */
     public synchronized BackupCreateResponse createBackup() {
+        if (migrationService.isRecoveryMode()) {
+            throw new DataProtectionException(Reason.CONFLICT,
+                    "Database migration recovery is active; use the migration backup endpoint instead");
+        }
         fileStore.cleanupStaleTransientFiles();
         String backupId = UUID.randomUUID().toString();
         Instant now = Instant.now();
@@ -253,6 +257,10 @@ public class DataProtectionService {
                 lastStatus,
                 lastCompletedAt
         );
+    }
+
+    boolean migrationStatusRecoveryMode() {
+        return migrationService.isRecoveryMode();
     }
 
     void recordRestoreResult(PendingRestoreState state, String status, String message) {

@@ -1,6 +1,12 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { getSystemStatus } from '../api/system-api'
+import {
+  createMigrationBackup,
+  exportMigrationDiagnostics,
+  getMigrationStatus,
+  getSystemStatus,
+  retryMigration as retryMigrationRequest
+} from '../api/system-api'
 
 /**
  * 管理后端连接状态。
@@ -32,6 +38,24 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  async function fetchMigrationStatus() {
+    status.value = await getMigrationStatus()
+    return status.value
+  }
+
+  async function retryMigration() {
+    status.value = await retryMigrationRequest()
+    return status.value
+  }
+
+  async function backupMigrationDatabase() {
+    return createMigrationBackup()
+  }
+
+  async function exportMigrationDiagnosticsFile() {
+    return exportMigrationDiagnostics()
+  }
+
   function ensureStatusLoaded() {
     if (status.value || isLoading.value) {
       return Promise.resolve()
@@ -45,6 +69,10 @@ export const useSystemStore = defineStore('system', () => {
     error,
     connectionLabel,
     fetchStatus,
+    fetchMigrationStatus,
+    retryMigration,
+    backupMigrationDatabase,
+    exportMigrationDiagnosticsFile,
     ensureStatusLoaded
   }
 })

@@ -48,7 +48,7 @@ public class SQLiteDataSourceConfig {
         migrationService.migrateBeforeConnectionPool();
 
         HikariDataSource dataSource = new HikariDataSource();
-        dataSource.setJdbcUrl("jdbc:sqlite:" + storageInitializer.appStorage().databasePath());
+        dataSource.setJdbcUrl("jdbc:sqlite:" + migrationService.businessDatabasePath());
         dataSource.setDriverClassName("org.sqlite.JDBC");
         dataSource.setDataSourceProperties(sqliteProperties());
         dataSource.setMaximumPoolSize(SQLITE_POOL_SIZE);

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ChevronUp } from 'lucide-vue-next'
 import DesktopUpdateSettingsPanel from '../components/desktop-update-settings-panel.vue'
 import DataProtectionSettingsPanel from '../components/data-protection-settings-panel.vue'
+import MigrationRecoveryPanel from '../components/migration-recovery-panel.vue'
 import OcrSettingsPanel from '../components/ocr-settings-panel.vue'
 import QueryContextualizerSettingsPanel from '../components/query-contextualizer-settings-panel.vue'
 import SystemStatusCard from '../components/system-status-card.vue'
@@ -192,7 +193,7 @@ function readRouteItem(item = route.query.item) {
           <p class="eyebrow">系统</p>
           <h3>系统信息</h3>
         </header>
-        <SystemStatusCard
+      <SystemStatusCard
           :descriptions="systemDescriptions"
           :github-url="GITHUB_URL"
           :is-system-loading="systemStore.isLoading"
@@ -222,6 +223,7 @@ function readRouteItem(item = route.query.item) {
         key="model-vision"
         :initial-role="modelConfigStore.ROLES.VISION"
       />
+      <MigrationRecoveryPanel />
 
       <button
         v-show="showBackToTop"
