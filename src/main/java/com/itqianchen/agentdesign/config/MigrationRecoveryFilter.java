@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -15,10 +16,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class MigrationRecoveryFilter extends OncePerRequestFilter {
-    private final DatabaseMigrationService migrationService;
+    private final ObjectProvider<DatabaseMigrationService> migrationServiceProvider;
 
-    public MigrationRecoveryFilter(DatabaseMigrationService migrationService) {
-        this.migrationService = migrationService;
+    public MigrationRecoveryFilter(ObjectProvider<DatabaseMigrationService> migrationServiceProvider) {
+        this.migrationServiceProvider = migrationServiceProvider;
     }
 
     @Override
@@ -27,7 +28,8 @@ public class MigrationRecoveryFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        if (!migrationService.isRecoveryMode() || isRecoveryEndpoint(request)) {
+        DatabaseMigrationService migrationService = migrationServiceProvider.getIfAvailable();
+        if (migrationService == null || !migrationService.isRecoveryMode() || isRecoveryEndpoint(request)) {
             filterChain.doFilter(request, response);
             return;
         }
