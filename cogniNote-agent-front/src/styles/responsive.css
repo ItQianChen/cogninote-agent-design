@@ -306,6 +306,14 @@
     padding: 18px 14px 132px;
   }
 
+  .message-bubble--user {
+    max-width: 88%;
+  }
+
+  .conversation-timeline-marker__preview {
+    box-shadow: var(--shadow-soft);
+  }
+
   .composer-bar {
     padding: 12px 14px;
   }

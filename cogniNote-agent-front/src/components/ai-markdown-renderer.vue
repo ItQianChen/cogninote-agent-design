@@ -29,6 +29,7 @@ const props = defineProps({
 
 const themeStore = useThemeStore()
 const markdownRoot = ref(null)
+const renderedContent = computed(() => sanitizeMermaidFences(props.content || props.emptyText || ''))
 const isStreaming = computed(() => !props.final)
 const codeBlockProps = computed(() => ({
   // 代码块固定使用暗色背景，避免日间/夜间主题覆盖后削弱语法高亮对比度。
@@ -84,13 +85,27 @@ watch(
   },
   { flush: 'post' }
 )
+
+function sanitizeMermaidFences(content) {
+  return String(content).replace(
+    /```(mermaid)\s*\r?\n([\s\S]*?)```/gi,
+    (_, language, source) => `\`\`\`${language}\n${sanitizeMermaidNodeLabels(source)}\`\`\``
+  )
+}
+
+function sanitizeMermaidNodeLabels(source) {
+  return source.replace(
+    /([A-Za-z_][\w-]*)\[([^\]\r\n]*)\]/g,
+    (_, nodeId, label) => `${nodeId}[${label.replaceAll('"', '#quot;')}]`
+  )
+}
 </script>
 
 <template>
   <div ref="markdownRoot" class="ai-markdown-content">
     <MarkdownRender
       custom-id="cogninote-chat"
-      :content="props.content || props.emptyText || ''"
+      :content="renderedContent"
       :final="props.final"
       :is-dark="themeStore.isDark"
       code-renderer="shiki"

@@ -469,6 +469,11 @@
 
 .conversation-page {
   --conversation-track-width: min(920px, calc(100% - 36px));
+  --source-inspector-width: 0px;
+}
+
+.conversation-page--inspector-open {
+  --source-inspector-width: 380px;
 }
 
 .conversation-header,
@@ -487,14 +492,10 @@
 
 .conversation-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 0;
+  grid-template-columns: minmax(0, 1fr) var(--source-inspector-width);
   min-width: 0;
   min-height: 0;
   transition: grid-template-columns var(--motion-slow) var(--ease-standard);
-}
-
-.conversation-page--inspector-open .conversation-body {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
 }
 
 .message-stream-shell {
@@ -504,8 +505,123 @@
 
 .message-stream {
   min-height: 0;
-  padding: 28px clamp(18px, 5vw, 72px) 28px;
+  padding: 28px max(18px, calc((100% - var(--conversation-track-width)) / 2));
   background: var(--color-bg);
+}
+
+.message-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
+.message-row--user {
+  justify-content: flex-end;
+}
+
+.message-row--assistant {
+  justify-content: flex-start;
+}
+
+.conversation-timeline {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 8px;
+  z-index: 12;
+  width: 32px;
+  pointer-events: none;
+}
+
+.conversation-timeline-marker {
+  position: absolute;
+  left: 0;
+  display: flex;
+  align-items: center;
+  width: 42px;
+  height: 12px;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: translateY(-50%);
+}
+
+.conversation-timeline-marker__line {
+  display: block;
+  width: 8px;
+  height: 2px;
+  margin-left: 6px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+  opacity: 0.72;
+  transition:
+    width var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    opacity var(--motion-fast) var(--ease-standard);
+}
+
+.conversation-timeline-marker:hover,
+.conversation-timeline-marker:focus-visible {
+  color: var(--color-action-strong);
+}
+
+.conversation-timeline-marker:hover .conversation-timeline-marker__line,
+.conversation-timeline-marker:focus-visible .conversation-timeline-marker__line {
+  opacity: 1;
+}
+
+.conversation-timeline-marker__preview {
+  position: absolute;
+  top: 50%;
+  left: 36px;
+  display: grid;
+  width: min(320px, calc(100vw - 48px));
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text);
+  background: var(--color-surface-strong);
+  box-shadow: var(--shadow-panel);
+  opacity: 0;
+  pointer-events: none;
+  text-align: left;
+  transform: translateY(-50%) translateX(-8px);
+  transition:
+    opacity var(--motion-base) var(--ease-standard),
+    transform var(--motion-base) var(--ease-standard);
+}
+
+.conversation-timeline-marker__preview strong,
+.conversation-timeline-marker__preview span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.conversation-timeline-marker__preview strong {
+  color: var(--color-text-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.conversation-timeline-marker__preview span {
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.conversation-timeline-marker:hover .conversation-timeline-marker__preview,
+.conversation-timeline-marker:focus-visible .conversation-timeline-marker__preview {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) translateX(0);
 }
 
 .empty-chat,
@@ -523,7 +639,16 @@
 }
 
 .message-bubble {
-  width: min(780px, 100%);
+  width: 100%;
+}
+
+.message-bubble--user {
+  width: fit-content;
+  max-width: min(72%, 640px);
+}
+
+.message-bubble--user .message-label {
+  display: none;
 }
 
 .message-bubble--assistant .message-content,
@@ -534,6 +659,14 @@
 .message-bubble--user .message-content {
   color: #ffffff;
   background: var(--color-info);
+}
+
+.message-bubble--assistant:not(.message-bubble--error):not(.message-bubble--stopped) .message-content {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .message-source-strip {
@@ -760,6 +893,8 @@
 
 .composer-bar {
   position: sticky;
+  /* Inspector 占用独立列时，composer 只在剩余对话列内居中。 */
+  width: calc(100% - var(--source-inspector-width));
   padding: 10px max(18px, calc((100% - var(--conversation-track-width)) / 2)) 18px;
   border-top: 0;
   background: transparent;
@@ -2019,8 +2154,8 @@
     --context-width: 284px;
   }
 
-  .conversation-page--inspector-open .conversation-body {
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+  .conversation-page--inspector-open {
+    --source-inspector-width: 340px;
   }
 
   .knowledge-workbench__panel {
@@ -2047,6 +2182,10 @@
 }
 
 @media (max-width: 820px) {
+  .conversation-page--inspector-open {
+    --source-inspector-width: 0px;
+  }
+
   .workspace-shell,
   .workspace-shell--context-collapsed {
     grid-template-columns: 1fr;
@@ -2081,6 +2220,26 @@
   .conversation-body,
   .conversation-page--inspector-open .conversation-body {
     grid-template-columns: 1fr;
+  }
+
+  .conversation-timeline {
+    top: 10px;
+    bottom: 10px;
+    left: 0;
+  }
+
+  .conversation-timeline-marker__line {
+    width: 7px;
+  }
+
+  .conversation-timeline-marker:hover .conversation-timeline-marker__line,
+  .conversation-timeline-marker:focus-visible .conversation-timeline-marker__line {
+    width: 22px;
+  }
+
+  .conversation-timeline-marker__preview {
+    left: calc(100% + 8px);
+    width: min(280px, calc(100vw - 36px));
   }
 
   .source-inspector {

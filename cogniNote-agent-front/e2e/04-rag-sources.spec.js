@@ -66,12 +66,90 @@ test('mocked RAG SSE merges sources and restores them after a page reload', asyn
   const answerSources = page.getByLabel('回答来源')
   await expect(answerSources.getByRole('button', { name: '2 个来源' })).toBeVisible()
   await expect(answerSources.getByRole('button', { name: /release-gate\.md/ })).toBeVisible()
+  await expectCenteredConversationLayout(page)
+
+  await answerSources.getByRole('button', { name: '2 个来源' }).click()
+  const sourceInspector = page.getByLabel('来源证据面板')
+  await expect(sourceInspector).toBeVisible()
+  await expect.poll(async () => inspectorComposerGap(page, sourceInspector)).toBeGreaterThanOrEqual(18)
+  await expectCenteredConversationLayout(page)
 
   await page.reload()
   await page.getByText('Phase 37 RAG source question', { exact: true }).first().click()
   await expect(page.getByText('The repeatable gate blocks packaging when verification fails.')).toBeVisible()
   await expect(page.getByLabel('回答来源').getByRole('button', { name: '2 个来源' })).toBeVisible()
 })
+
+async function expectCenteredConversationLayout(page) {
+  const composer = page.locator('.composer-input-row')
+  const userMessage = page.locator('.message-bubble--user')
+  const assistantMessage = page.locator('.message-bubble--assistant')
+  await expect.poll(async () => {
+    const metrics = await conversationLayoutMetrics(composer, userMessage, assistantMessage)
+    return Math.max(metrics.assistantLeftDelta, metrics.assistantRightDelta, metrics.userRightDelta)
+  }).toBeLessThanOrEqual(2)
+
+  const [composerBox, userBox, assistantBox] = await Promise.all([
+    composer.boundingBox(),
+    userMessage.boundingBox(),
+    assistantMessage.boundingBox()
+  ])
+
+  expect(composerBox).not.toBeNull()
+  expect(userBox).not.toBeNull()
+  expect(assistantBox).not.toBeNull()
+  expect(userBox.width).toBeLessThan(composerBox.width * 0.72)
+  await expect(userMessage.locator('.message-label')).toBeHidden()
+
+  const assistantStyle = await assistantMessage.locator('.message-content').evaluate((element) => {
+    const style = window.getComputedStyle(element)
+    return {
+      backgroundColor: style.backgroundColor,
+      borderTopWidth: style.borderTopWidth,
+      boxShadow: style.boxShadow
+    }
+  })
+  expect(assistantStyle).toEqual({
+    backgroundColor: 'rgba(0, 0, 0, 0)',
+    borderTopWidth: '0px',
+    boxShadow: 'none'
+  })
+}
+
+async function conversationLayoutMetrics(composer, userMessage, assistantMessage) {
+  const [composerBox, userBox, assistantBox] = await Promise.all([
+    composer.boundingBox(),
+    userMessage.boundingBox(),
+    assistantMessage.boundingBox()
+  ])
+  if (!composerBox || !userBox || !assistantBox) {
+    return {
+      assistantLeftDelta: Number.POSITIVE_INFINITY,
+      assistantRightDelta: Number.POSITIVE_INFINITY,
+      userRightDelta: Number.POSITIVE_INFINITY
+    }
+  }
+  return {
+    assistantLeftDelta: Math.abs(assistantBox.x - composerBox.x),
+    assistantRightDelta: Math.abs(rightEdge(assistantBox) - rightEdge(composerBox)),
+    userRightDelta: Math.abs(rightEdge(userBox) - rightEdge(composerBox))
+  }
+}
+
+async function inspectorComposerGap(page, sourceInspector) {
+  const [composerBox, inspectorBox] = await Promise.all([
+    page.locator('.composer-input-row').boundingBox(),
+    sourceInspector.boundingBox()
+  ])
+  if (!composerBox || !inspectorBox) {
+    return Number.NEGATIVE_INFINITY
+  }
+  return Math.round(inspectorBox.x - rightEdge(composerBox))
+}
+
+function rightEdge(box) {
+  return box.x + box.width
+}
 
 function createSession(payload) {
   const now = Date.now()

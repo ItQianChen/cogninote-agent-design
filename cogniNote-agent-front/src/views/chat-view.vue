@@ -29,16 +29,24 @@ const AiMarkdownRenderer = defineAsyncComponent(() => import('../components/ai-m
 const isComposerSettingsOpen = ref(false)
 const composerSettingsButtonRef = ref(null)
 const composerSettingsPopoverRef = ref(null)
+const messageStreamShellRef = ref(null)
 const messageStreamRef = ref(null)
 const isRestoringScroll = ref(false)
 const shouldFollowBottom = ref(true)
 const showScrollToBottomButton = ref(false)
+const activeTimelineMessageId = ref('')
+const hoveredTimelineIndex = ref(-1)
+const isTimelineVisible = ref(false)
 const BOTTOM_THRESHOLD_PX = 80
 const ANCHOR_VIEWPORT_RATIO = 0.35
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 128000
 const COMPOSER_MIN_HEIGHT = 76
 const COMPOSER_MAX_HEIGHT = 220
+const TIMELINE_USER_PREVIEW_LENGTH = 52
+const TIMELINE_ASSISTANT_PREVIEW_LENGTH = 86
+const TIMELINE_MIN_MESSAGE_AREA_WIDTH_PX = 1032
 let restoreRunId = 0
+let timelineVisibilityObserver = null
 let composerResizeState = null
 const composerTextareaHeight = ref(COMPOSER_MIN_HEIGHT)
 const composerActionTitle = computed(() => (chatStore.isStreaming ? '停止对话' : '发送信息'))
@@ -135,6 +143,7 @@ const contextUsageStyle = computed(() => ({
 const composerTextareaStyle = computed(() => ({
   height: `${composerTextareaHeight.value}px`
 }))
+const timelineTurns = computed(() => buildTimelineTurns(chatStore.activeMessages))
 
 function referenceCountLabel(references) {
   const count = Array.isArray(references) ? references.length : 0
@@ -144,6 +153,109 @@ function referenceCountLabel(references) {
 function compactReferenceSnippet(snippet) {
   const text = String(snippet || '').replace(/\s+/g, ' ').trim()
   return text.length <= 160 ? text : `${text.slice(0, 160)}...`
+}
+
+function buildTimelineTurns(messages) {
+  const turns = []
+  for (let index = 0; index < messages.length; index += 1) {
+    const user = messages[index]
+    if (user.role !== 'user') {
+      continue
+    }
+
+    let assistant = null
+    for (let nextIndex = index + 1; nextIndex < messages.length; nextIndex += 1) {
+      const nextMessage = messages[nextIndex]
+      if (nextMessage.role === 'user') {
+        break
+      }
+      if (nextMessage.role === 'assistant') {
+        assistant = nextMessage
+        break
+      }
+    }
+
+    const userPreview = compactTimelinePreview(user.content, TIMELINE_USER_PREVIEW_LENGTH)
+    const assistantPreview = timelineAssistantPreview(assistant)
+    turns.push({
+      user,
+      assistant,
+      userPreview,
+      assistantPreview,
+      ariaLabel: `跳转到提问：${userPreview}；模型回答：${assistantPreview}`
+    })
+  }
+  return turns
+}
+
+function timelineAssistantPreview(assistant) {
+  if (!assistant) {
+    return '等待模型回复...'
+  }
+  if (assistant.status === 'streaming') {
+    return assistant.content
+      ? `${compactTimelinePreview(assistant.content, TIMELINE_ASSISTANT_PREVIEW_LENGTH)}（生成中）`
+      : '生成中...'
+  }
+  if (assistant.status === 'error') {
+    return '模型回答失败'
+  }
+  if (assistant.status === 'stopped') {
+    return '回答已停止'
+  }
+  return compactTimelinePreview(assistant.content, TIMELINE_ASSISTANT_PREVIEW_LENGTH)
+}
+
+function compactTimelinePreview(content, maxLength) {
+  const text = String(content || '')
+    .replace(/```[\s\S]*?```/g, '代码片段')
+    .replace(/!\[.*?\]\(.*?\)/g, '')
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+    .replace(/[#>*_`~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) {
+    return '暂无内容'
+  }
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength)}...`
+}
+
+function timelineMarkerStyle(turn, index) {
+  const groupOffset = (index - (timelineTurns.value.length - 1) / 2) * 12
+  return { top: `calc(50% + ${groupOffset}px)` }
+}
+
+function timelineLineStyle(index) {
+  const distance = hoveredTimelineIndex.value < 0
+    ? Number.POSITIVE_INFINITY
+    : Math.abs(index - hoveredTimelineIndex.value)
+  const width = distance === 0
+    ? 30
+    : distance === 1
+      ? 24
+      : distance === 2
+        ? 18
+        : distance === 3
+          ? 13
+          : 8
+  return { width: `${width}px` }
+}
+
+function handleTimelineMarkerEnter(index) {
+  hoveredTimelineIndex.value = index
+}
+
+function handleTimelineMarkerLeave() {
+  hoveredTimelineIndex.value = -1
+}
+
+function updateTimelineVisibility() {
+  const streamShell = messageStreamShellRef.value
+  if (!streamShell) {
+    isTimelineVisible.value = false
+    return
+  }
+  isTimelineVisible.value = streamShell.clientWidth >= TIMELINE_MIN_MESSAGE_AREA_WIDTH_PX
 }
 
 /**
@@ -433,6 +545,7 @@ function applyMessageScrollBottom(saveAfterScroll = false) {
     stream.scrollTop = Math.max(0, stream.scrollHeight - stream.clientHeight)
     shouldFollowBottom.value = true
     showScrollToBottomButton.value = false
+    updateActiveTimelineMessage(stream)
     if (saveAfterScroll) {
       saveCurrentSessionScrollPosition()
     }
@@ -457,6 +570,32 @@ function updateScrollToBottomButton(stream = messageStreamRef.value) {
 
 function handleScrollToBottomClick() {
   scrollMessagesToBottom()
+}
+
+function jumpToMessage(messageId) {
+  const stream = messageStreamRef.value
+  if (!stream || !messageId) {
+    return
+  }
+  const target = stream.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`)
+  if (!target) {
+    return
+  }
+
+  const targetRect = target.getBoundingClientRect()
+  const targetTop = getMessageScrollTargetTop(stream, targetRect)
+  const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+  activeTimelineMessageId.value = messageId
+  stream.scrollTo({ top: targetTop, behavior })
+}
+
+function getMessageScrollTargetTop(stream, targetRect) {
+  const streamRect = stream.getBoundingClientRect()
+  return Math.min(
+    Math.max(0, stream.scrollHeight - stream.clientHeight),
+    Math.max(0, stream.scrollTop + targetRect.top - streamRect.top
+      - (stream.clientHeight - targetRect.height) / 2)
+  )
 }
 
 function saveCurrentSessionScrollPosition(sessionId = chatStore.activeSessionId) {
@@ -538,7 +677,30 @@ function handleMessageStreamScroll() {
   const stream = messageStreamRef.value
   shouldFollowBottom.value = stream ? isNearBottom(stream) : true
   updateScrollToBottomButton(stream)
+  updateActiveTimelineMessage(stream)
   saveCurrentSessionScrollPosition()
+}
+
+function updateActiveTimelineMessage(stream = messageStreamRef.value) {
+  if (!stream || !chatStore.activeMessages.length) {
+    activeTimelineMessageId.value = ''
+    return
+  }
+  let closestTurn = null
+  let closestDistance = Number.POSITIVE_INFINITY
+  for (const turn of timelineTurns.value) {
+    const target = stream.querySelector(`[data-message-id="${CSS.escape(turn.user.id)}"]`)
+    if (!target) {
+      continue
+    }
+    const targetTop = getMessageScrollTargetTop(stream, target.getBoundingClientRect())
+    const distance = Math.abs(stream.scrollTop - targetTop)
+    if (distance < closestDistance) {
+      closestDistance = distance
+      closestTurn = turn
+    }
+  }
+  activeTimelineMessageId.value = closestTurn?.user.id || ''
 }
 
 /**
@@ -626,6 +788,7 @@ async function restoreSessionScroll(sessionId) {
       if (restored && messageStreamRef.value) {
         shouldFollowBottom.value = isNearBottom(messageStreamRef.value)
         updateScrollToBottomButton(messageStreamRef.value)
+        updateActiveTimelineMessage(messageStreamRef.value)
         saveCurrentSessionScrollPosition(sessionId)
       }
       if (runId === restoreRunId) {
@@ -656,6 +819,7 @@ watch(
     }
     shouldFollowBottom.value = true
     showScrollToBottomButton.value = false
+    activeTimelineMessageId.value = ''
   }
 )
 
@@ -702,12 +866,23 @@ watch(
 
 onMounted(() => {
   webSearchSettingsStore.fetchSettings()
+  timelineVisibilityObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(updateTimelineVisibility)
+    : null
+  if (messageStreamShellRef.value) {
+    timelineVisibilityObserver?.observe(messageStreamShellRef.value)
+  }
+  window.addEventListener('resize', updateTimelineVisibility)
   window.addEventListener('keydown', handlePageKeydown)
   window.addEventListener('pointerdown', handleComposerSettingsPointerDown)
   document.addEventListener('selectionchange', handleDocumentSelectionChange)
+  updateTimelineVisibility()
 })
 
 onBeforeUnmount(() => {
+  timelineVisibilityObserver?.disconnect()
+  timelineVisibilityObserver = null
+  window.removeEventListener('resize', updateTimelineVisibility)
   window.removeEventListener('keydown', handlePageKeydown)
   window.removeEventListener('pointerdown', handleComposerSettingsPointerDown)
   document.removeEventListener('selectionchange', handleDocumentSelectionChange)
@@ -776,7 +951,38 @@ onBeforeUnmount(() => {
     </button>
 
     <div class="conversation-body">
-      <div class="message-stream-shell">
+      <div ref="messageStreamShellRef" class="message-stream-shell">
+        <nav
+          v-if="timelineTurns.length && isTimelineVisible"
+          class="conversation-timeline"
+          aria-label="对话回合时间轴"
+        >
+          <button
+            v-for="(turn, index) in timelineTurns"
+            :key="turn.user.id"
+            class="conversation-timeline-marker"
+            :style="timelineMarkerStyle(turn, index)"
+            type="button"
+            :aria-label="turn.ariaLabel"
+            :aria-current="activeTimelineMessageId === turn.user.id ? 'true' : null"
+            @pointerenter="handleTimelineMarkerEnter(index)"
+            @pointerleave="handleTimelineMarkerLeave"
+            @focus="handleTimelineMarkerEnter(index)"
+            @blur="handleTimelineMarkerLeave"
+            @click="jumpToMessage(turn.user.id)"
+          >
+            <span
+              class="conversation-timeline-marker__line"
+              :style="timelineLineStyle(index)"
+              aria-hidden="true"
+            ></span>
+            <span class="conversation-timeline-marker__preview" aria-hidden="true">
+              <strong>{{ turn.userPreview }}</strong>
+              <span>{{ turn.assistantPreview }}</span>
+            </span>
+          </button>
+        </nav>
+
         <section
           ref="messageStreamRef"
           class="message-stream"
@@ -790,64 +996,69 @@ onBeforeUnmount(() => {
             <p>会话和消息会保存到本地 SQLite。开启知识库时，回答会附带检索来源；关闭后就是纯模型对话。</p>
           </div>
 
-          <article
+          <div
             v-for="message in chatStore.activeMessages"
             :key="message.id"
-            :data-message-id="message.id"
-            class="message-bubble"
-            :class="[`message-bubble--${message.role}`, `message-bubble--${message.status}`]"
+            class="message-row"
+            :class="`message-row--${message.role}`"
           >
-            <div class="message-label">
-              <span>{{ message.role === 'user' ? '你' : APP_DISPLAY_NAME }}</span>
-              <em v-if="message.retrievalMode">{{ formatRetrievalModeLabel(message.retrievalMode) }}</em>
-              <em v-else-if="message.status === 'streaming'">生成中</em>
-              <em v-else-if="message.status === 'error'">未完成</em>
-              <em v-else-if="message.status === 'stopped'">已停止</em>
-            </div>
-            <AiMarkdownRenderer
-              v-if="message.role === 'assistant'"
-              class="message-content"
-              :content="message.content"
-              empty-text="正在等待模型返回..."
-              :final="message.status !== 'streaming'"
-            />
-            <template v-else>
-              <div
-                v-if="message.references?.length"
-                class="reference-chip reference-chip--message"
-                tabindex="0"
-                :aria-label="referenceCountLabel(message.references)"
-              >
-                <MessageSquareQuote aria-hidden="true" />
-                <span>{{ referenceCountLabel(message.references) }}</span>
-                <div class="reference-preview" role="tooltip">
-                  <strong>{{ referenceCountLabel(message.references) }}</strong>
-                  <ol>
-                    <li v-for="reference in message.references" :key="reference.id">
-                      {{ compactReferenceSnippet(reference.snippet) }}
-                    </li>
-                  </ol>
-                </div>
+            <article
+              :data-message-id="message.id"
+              class="message-bubble"
+              :class="[`message-bubble--${message.role}`, `message-bubble--${message.status}`]"
+            >
+              <div class="message-label">
+                <span>{{ message.role === 'user' ? '你' : APP_DISPLAY_NAME }}</span>
+                <em v-if="message.retrievalMode">{{ formatRetrievalModeLabel(message.retrievalMode) }}</em>
+                <em v-else-if="message.status === 'streaming'">生成中</em>
+                <em v-else-if="message.status === 'error'">未完成</em>
+                <em v-else-if="message.status === 'stopped'">已停止</em>
               </div>
-              <p class="message-content">{{ message.content || '正在等待模型返回...' }}</p>
-            </template>
+              <AiMarkdownRenderer
+                v-if="message.role === 'assistant'"
+                class="message-content"
+                :content="message.content"
+                empty-text="正在等待模型返回..."
+                :final="message.status !== 'streaming'"
+              />
+              <template v-else>
+                <div
+                  v-if="message.references?.length"
+                  class="reference-chip reference-chip--message"
+                  tabindex="0"
+                  :aria-label="referenceCountLabel(message.references)"
+                >
+                  <MessageSquareQuote aria-hidden="true" />
+                  <span>{{ referenceCountLabel(message.references) }}</span>
+                  <div class="reference-preview" role="tooltip">
+                    <strong>{{ referenceCountLabel(message.references) }}</strong>
+                    <ol>
+                      <li v-for="reference in message.references" :key="reference.id">
+                        {{ compactReferenceSnippet(reference.snippet) }}
+                      </li>
+                    </ol>
+                  </div>
+                </div>
+                <p class="message-content">{{ message.content || '正在等待模型返回...' }}</p>
+              </template>
 
-            <div v-if="message.sources?.length" class="message-source-strip" aria-label="回答来源">
-              <button class="message-source-summary" type="button" @click="openMessageSources(message)">
-                {{ message.sources.length }} 个来源
-              </button>
-              <button
-                v-for="source in message.sources.slice(0, 3)"
-                :key="source.chunkId"
-                class="message-source-chip"
-                type="button"
-                :title="sourceDisplayName(source)"
-                @click="openMessageSources(message, source)"
-              >
-                [{{ source.index }}] {{ sourceDisplayName(source) }}
-              </button>
-            </div>
-          </article>
+              <div v-if="message.sources?.length" class="message-source-strip" aria-label="回答来源">
+                <button class="message-source-summary" type="button" @click="openMessageSources(message)">
+                  {{ message.sources.length }} 个来源
+                </button>
+                <button
+                  v-for="source in message.sources.slice(0, 3)"
+                  :key="source.chunkId"
+                  class="message-source-chip"
+                  type="button"
+                  :title="sourceDisplayName(source)"
+                  @click="openMessageSources(message, source)"
+                >
+                  [{{ source.index }}] {{ sourceDisplayName(source) }}
+                </button>
+              </div>
+            </article>
+          </div>
         </section>
 
         <button
