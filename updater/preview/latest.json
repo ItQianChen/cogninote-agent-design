@@ -1,15 +1,11 @@
 {
-  "version": "0.1.75",
-  "notes": "## 知记空间 0.1.75 更新内容\r\n\r\n### 新增与改进\r\n\r\n- 数据库：建立持续历史数据库迁移与恢复模式。\r\n- Task：引入耐久任务核心并恢复知识维护队列。\r\n- Storage：新增数据迁移与备份恢复机制。\r\n- Ocr：新增 PDF 页级检查点与断点续传。\r\n- Ingestion：新增结构化文档处理失败诊断。\r\n- Ocr：改用视觉模型识别扫描型 PDF。\r\n- Ocr：接入百度 OCR 并支持 PDF 重新解析。\r\n- Ingestion：新增 PDF 需 OCR 诊断状态。\r\n- Ingestion：支持 Word 97-2003 DOC 导入。\r\n- Ingestion：支持 HTML 本地文档导入。\r\n- Ingestion：支持文档格式多扩展名识别。\r\n\r\n### 问题修复\r\n\r\n- Ci：修复 WebMvc 测试上下文。\r\n- Ci：修复 macOS DMG 挂载状态判断。\r\n- Ci：修复 Windows 和 macOS 桌面包 smoke。\r\n- Ocr：修复提高单页识别超时上限至 10 分钟。",
-  "pub_date": "2026-08-02T13:40:51.405Z",
+  "version": "0.1.78",
+  "notes": "## 知记空间 0.1.78 更新内容\n\n### 新增与改进\n\n- Model：新增模型概览与本地创建草稿。\n- Chat：新增居中对话流与消息时间轴导航。\n- 数据库：建立持续历史数据库迁移与恢复模式。\n\n### 问题修复\n\n- Desktop：修复外部链接无法在默认浏览器打开。\n- Frontend：修复移除不稳定测试。\n- Ci：修复 WebMvc 测试上下文。\n- Ci：修复 macOS DMG 挂载状态判断。",
+  "pub_date": "2026-08-18T03:46:11.565Z",
   "platforms": {
-    "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUwxRWc4d2JmTWRJZE1rci9kU3lFeE1DOHIvMHcrYkNHMU9mdytSMlF3a1VQay8rblFuZzZtMHVVcEpOUlZaT3FlM2IyRExXb0RUbDZhR3p0RjRLd2dnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg1NzMxMjAxCWZpbGU6Q29nbmlOb3RlLTAuMS43NS13aW5kb3dzLXg2NC11bnNpZ25lZC1pbnN0YWxsZXIuZXhlCitrUWVFWlk2QzlZbm1NVnZuZkJ0SUxCVDJtYlFZUGdGd1cxall3M1lZY3g2Z28zUW9sTWk5cWQwY3B1VFFsZGlHK1FNQWp2T0tKbTYyUWNHS3FkNkJRPT0K",
-      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.75-test.1/CogniNote-0.1.75-windows-x64-unsigned-installer.exe"
-    },
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUtkcW16U1BrU1laU00xN1F0R1Z6dU1xdTNPZjJjaDdpMFR1ZEtmWkFTTWY2ekZrblpPbk1RNkhDMVRQYVBNTjVOaXZ3S0tCZTMxSXBaQVVRS1d4RlFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg1NzMxMDAyCWZpbGU6Q29nbmlOb3RlLTAuMS43NS1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6CklKWUlyYVFKL2xQdENHQ3Rsc2J6MHVzYU1BWEE3OXBrYmM3aUx1SmVZa2dZaktKWnlQQnVmM00yWnF3ek1kZng5T2tlZjd3TDA3UGRnbmlkNVdIbkRBPT0K",
-      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.75-test.1/CogniNote-0.1.75-macos-arm64-unsigned.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUNFQmVINTJqejBXYk82Q2hmeDczSlp1SmJJQm90d2J5a0I2YkRzZmFyYjZWRjM1L1plZklUTmR2eHlZemlsNUJLUS9Bak9zMW02c2xkZjhsTzdCWGdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MDI0NzY5CWZpbGU6Q29nbmlOb3RlLTAuMS43OC1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6CjRMbnpwUkhleGZ3L1hUUXAwaUJISmh2QW56UEVWanMxVWRkTFVvY3d1UXZQTFg4SkZWNWZDRXNlUnFWNTVlcVQ3dE1meUxCUDBLYzNxNDNNVkFReEF3PT0K",
+      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.78-test.1/CogniNote-0.1.78-macos-arm64-unsigned.app.tar.gz"
     }
   }
 }
