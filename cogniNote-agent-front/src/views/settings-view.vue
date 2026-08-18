@@ -11,6 +11,7 @@ import SystemStatusCard from '../components/system-status-card.vue'
 import WebSearchSettingsPanel from '../components/web-search-settings-panel.vue'
 import { DEFAULT_SETTINGS_ITEM, SETTINGS_NAV_GROUPS, normalizeSettingsItem } from '../config/settings-navigation'
 import ModelConfigView from './model-config-view.vue'
+import ModelOverviewView from './model-overview-view.vue'
 import { useChatSettingsStore } from '../stores/chat-settings'
 import { useModelConfigStore } from '../stores/model-config'
 import { useOcrSettingsStore } from '../stores/ocr-settings'
@@ -138,6 +139,11 @@ async function loadActiveItemData(item) {
     return
   }
 
+  if (item === 'model-overview') {
+    await modelConfigStore.fetchModelConfig()
+    return
+  }
+
   if (item === 'model-embedding') {
     await modelConfigStore.switchRole(modelConfigStore.ROLES.EMBEDDING)
     return
@@ -208,6 +214,7 @@ function readRouteItem(item = route.query.item) {
       <QueryContextualizerSettingsPanel v-else-if="activeItem === 'chat-retrieval'" />
       <WebSearchSettingsPanel v-else-if="activeItem === 'web-search'" />
       <OcrSettingsPanel v-else-if="activeItem === 'ocr'" />
+      <ModelOverviewView v-else-if="activeItem === 'model-overview'" />
       <ModelConfigView
         v-else-if="activeItem === 'model-chat'"
         key="model-chat"

@@ -40,6 +40,56 @@ function snapshot(displayName = 'Remote chat') {
   }
 }
 
+function embeddingSnapshot(displayName = 'Remote embedding') {
+  const selectedConfig = {
+    id: 'embedding-1',
+    role: 'EMBEDDING',
+    provider: 'DASHSCOPE',
+    displayName,
+    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+    modelName: 'text-embedding-v4',
+    apiKeyConfigured: true,
+    embeddingDimensions: 1024,
+    embeddingRequestsPerMinute: 300,
+    embeddingTokensPerMinute: 300000,
+    embeddingBatchSize: 16
+  }
+  return {
+    role: 'EMBEDDING',
+    active: { chat: null, embedding: selectedConfig, vision: null },
+    configs: [selectedConfig],
+    selectedConfig
+  }
+}
+
+function createdSnapshot(displayName = 'New local chat') {
+  const createdConfig = {
+    id: 'chat-created',
+    role: 'CHAT',
+    provider: 'DASHSCOPE',
+    displayName,
+    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+    modelName: 'qwen-plus',
+    apiKeyConfigured: true,
+    defaultTopK: 8,
+    contextWindowTokens: 128000,
+    temperature: 0.7,
+    active: false
+  }
+  const activeConfig = {
+    ...createdConfig,
+    id: 'chat-1',
+    displayName: 'Remote chat',
+    active: true
+  }
+  return {
+    role: 'CHAT',
+    active: { chat: activeConfig, embedding: null, vision: null },
+    configs: [createdConfig, activeConfig],
+    selectedConfig: createdConfig
+  }
+}
+
 function createDeferred() {
   let resolve
   const promise = new Promise((resolvePromise) => {
@@ -138,5 +188,72 @@ describe('model config editor state', () => {
 
     expect(store.isTestingModelConfig).toBe(false)
     expect(store.error).toContain('provider unavailable')
+  })
+
+  it('shows a local draft before creating it and replaces it with the server snapshot on confirm', async () => {
+    mocks.api.getModelConfigSettings.mockResolvedValue(snapshot())
+    mocks.api.createSettingsModelConfig.mockResolvedValue(createdSnapshot())
+    const store = useModelConfigStore()
+    await store.enterModelSettings()
+
+    store.startCreate()
+
+    expect(store.activeList[0]).toMatchObject({
+      isDraft: true,
+      displayName: 'DashScope Chat'
+    })
+    expect(store.isCreatingDraft).toBe(true)
+    expect(mocks.api.createSettingsModelConfig).not.toHaveBeenCalled()
+
+    store.form.displayName = 'New local chat'
+    store.form.modelName = 'qwen-plus'
+    store.markFormTouched()
+
+    await store.saveModelConfig()
+
+    expect(mocks.api.createSettingsModelConfig).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'CHAT',
+      displayName: 'New local chat',
+      modelName: 'qwen-plus'
+    }))
+    expect(store.activeList.some(config => config.isDraft)).toBe(false)
+    expect(store.selectedConfig).toMatchObject({ id: 'chat-created', active: false })
+    expect(store.isCreatingDraft).toBe(false)
+  })
+
+  it('keeps a failed draft locally until the user cancels it', async () => {
+    mocks.api.getModelConfigSettings.mockResolvedValue(snapshot())
+    mocks.api.createSettingsModelConfig.mockRejectedValue(new Error('save unavailable'))
+    const store = useModelConfigStore()
+    await store.enterModelSettings()
+    store.startCreate()
+    store.form.modelName = 'qwen-plus'
+    store.markFormTouched()
+
+    await store.saveModelConfig()
+
+    expect(store.activeList[0].isDraft).toBe(true)
+    expect(store.error).toContain('save unavailable')
+    store.cancelDraft()
+    expect(store.activeList.some(config => config.isDraft)).toBe(false)
+    expect(mocks.api.createSettingsModelConfig).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a role draft when the user changes roles and returns', async () => {
+    mocks.api.getModelConfigSettings
+      .mockResolvedValueOnce(snapshot())
+      .mockResolvedValueOnce(embeddingSnapshot())
+      .mockResolvedValueOnce(snapshot())
+    const store = useModelConfigStore()
+    await store.enterModelSettings()
+    store.startCreate()
+    store.form.displayName = 'Unfinished chat'
+    store.markFormTouched()
+
+    await store.switchRole(store.ROLES.EMBEDDING)
+    await store.switchRole(store.ROLES.CHAT)
+
+    expect(store.isCreatingDraft).toBe(true)
+    expect(store.activeList[0]).toMatchObject({ isDraft: true, displayName: 'Unfinished chat' })
   })
 })

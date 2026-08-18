@@ -33,8 +33,7 @@
 }
 
 .model-config-list,
-.model-config-editor,
-.model-active-summary article {
+.model-config-editor {
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.06);
@@ -101,6 +100,11 @@
   font-size: 11px;
   font-style: normal;
   font-weight: 900;
+}
+
+.model-config-item em.model-config-item__draft {
+  color: var(--color-action-strong);
+  background: var(--color-action-soft);
 }
 
 .model-config-item small {
@@ -444,41 +448,6 @@
 
 .embedding-rate-limit-notes li::marker {
   color: var(--color-action);
-}
-
-.model-active-summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.model-active-summary article {
-  display: grid;
-  gap: 6px;
-  padding: 16px;
-}
-
-.model-active-summary h3,
-.model-active-summary p,
-.model-active-summary small {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.model-active-summary h3 {
-  color: #f8fafc;
-}
-
-.model-active-summary p {
-  color: var(--color-success);
-  font-weight: 800;
-}
-
-.model-active-summary small {
-  color: #8fa1b5;
 }
 
 .danger-button {

@@ -54,6 +54,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
 
   const activeRole = ref(ROLES.CHAT)
   const activeSummary = ref({ chat: null, embedding: null, vision: null })
+  const isLoadingActiveSummary = ref(false)
+  const activeSummaryError = ref('')
   const roleState = ref({
     CHAT: emptyRoleState(ROLES.CHAT),
     EMBEDDING: emptyRoleState(ROLES.EMBEDDING),
@@ -88,7 +90,12 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   const modelConfig = computed(() => activeChatConfig.value)
   const currentState = computed(() => roleState.value[activeRole.value])
   const form = computed(() => currentState.value.form)
-  const activeList = computed(() => currentState.value.configs)
+  const activeList = computed(() => {
+    const state = currentState.value
+    return state.draft
+      ? [draftListItem(state.draft, activeRole.value), ...state.configs]
+      : state.configs
+  })
   const selectedConfig = computed(() => currentState.value.selectedConfig)
   const activeConfigForRole = computed(() => activeRole.value === ROLES.CHAT
     ? activeChatConfig.value
@@ -96,11 +103,12 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       ? activeEmbeddingConfig.value
       : activeVisionConfig.value)
   const editingIdByRole = computed(() => ({
-    CHAT: roleState.value.CHAT.selectedConfig?.id || null,
-    EMBEDDING: roleState.value.EMBEDDING.selectedConfig?.id || null,
-    VISION: roleState.value.VISION.selectedConfig?.id || null
+    CHAT: selectedListItemId(roleState.value.CHAT),
+    EMBEDDING: selectedListItemId(roleState.value.EMBEDDING),
+    VISION: selectedListItemId(roleState.value.VISION)
   }))
   const isEditingExisting = computed(() => Boolean(selectedConfig.value?.id))
+  const isCreatingDraft = computed(() => Boolean(currentState.value.draft && currentState.value.isDraftSelected))
   const roleLabel = computed(() => roleDisplayName(activeRole.value))
   const isOpenAiCompatible = computed(() => form.value.provider === 'OPENAI_COMPATIBLE')
   const providerLabel = computed(() => {
@@ -129,12 +137,22 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   const error = computed(() => currentState.value.error)
 
   async function fetchModelConfig() {
-    await refreshActiveSummary()
+    isLoadingActiveSummary.value = true
+    activeSummaryError.value = ''
+    try {
+      await refreshActiveSummary()
+      return activeSummary.value
+    } catch (err) {
+      activeSummaryError.value = `模型摘要读取失败：${err.message}`
+      return null
+    } finally {
+      isLoadingActiveSummary.value = false
+    }
   }
 
   async function ensureModelConfigLoaded() {
     if (!activeSummary.value.chat || !activeSummary.value.embedding || !activeSummary.value.vision) {
-      await refreshActiveSummary()
+      await fetchModelConfig()
     }
   }
 
@@ -170,14 +188,14 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     const normalizedRole = normalizeRoleValue(role)
     activeRole.value = normalizedRole
     const state = roleState.value[normalizedRole]
-    state.selectedConfig = null
-    replaceEditorForm(normalizedRole, defaultForm(normalizedRole))
-    invalidateModelOptionsIfStale(normalizedRole)
-    state.error = ''
-    state.dirty = false
-    state.revision += 1
-    visibleApiKeyByRole.value[normalizedRole] = false
-    message.value = ''
+    if (!state.draft) {
+      // 草稿只存在前端内存，绝不能作为更新接口的配置 ID 使用。
+      state.draft = {
+        id: createDraftId(normalizedRole),
+        form: defaultForm(normalizedRole)
+      }
+    }
+    selectDraft(normalizedRole)
   }
 
   function editConfig(config) {
@@ -186,6 +204,10 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     }
     const role = normalizeRoleValue(config.role)
     activeRole.value = role
+    if (config.isDraft) {
+      selectDraft(role)
+      return
+    }
     applySelectedConfig(role, normalizeConfigForRole(config, role))
     roleState.value[role].error = ''
     visibleApiKeyByRole.value[role] = false
@@ -197,6 +219,20 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     currentState.value.revision += 1
   }
 
+  function cancelDraft(role = activeRole.value) {
+    const normalizedRole = normalizeRoleValue(role)
+    const state = roleState.value[normalizedRole]
+    if (!state.draft) {
+      return
+    }
+    state.draft = null
+    state.isDraftSelected = false
+    const fallback = state.configs.find(config => config.active) || state.configs[0] || null
+    applySelectedConfig(normalizedRole, fallback)
+    state.error = ''
+    message.value = '已取消未保存配置'
+  }
+
   async function saveModelConfig(formOverride = null) {
     const role = activeRole.value
     const state = roleState.value[role]
@@ -206,12 +242,17 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     message.value = ''
     const submittedRevision = state.revision
     const submittedApiKeyRevision = state.apiKeyRevision
+    const isSavingDraft = state.isDraftSelected && Boolean(state.draft)
 
     try {
       const payload = formPayload(role, formOverride)
       const snapshot = state.selectedConfig?.id
         ? await updateSettingsModelConfig(state.selectedConfig.id, payload)
         : await createSettingsModelConfig(payload)
+      if (isSavingDraft && state.revision === submittedRevision) {
+        state.draft = null
+        state.isDraftSelected = false
+      }
       applySnapshot(snapshot, {
         preserveDraftRole: state.revision === submittedRevision ? null : role
       })
@@ -456,18 +497,24 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     const role = normalizeRoleValue(snapshot.role || activeRole.value)
     activeRole.value = role
     const state = roleState.value[role]
-    const preserveDraft = preserveDraftRole === role && state.dirty
+    const isDraftSelected = state.isDraftSelected && Boolean(state.draft)
+    const preserveLocalForm = preserveDraftRole === role && state.dirty
+    const selectedConfigId = state.selectedConfig?.id
     state.configs = (snapshot.configs || []).map(config => normalizeConfigForRole(config, role))
-    state.selectedConfig = snapshot.selectedConfig ? normalizeConfigForRole(snapshot.selectedConfig, role) : null
-    if (!preserveDraft) {
-      replaceEditorForm(role, snapshot.selectedConfig
-        ? formFromConfig(state.selectedConfig)
-        : defaultForm(role))
+    if (!isDraftSelected) {
+      state.selectedConfig = state.configs.find(config => config.id === selectedConfigId)
+        || (snapshot.selectedConfig ? normalizeConfigForRole(snapshot.selectedConfig, role) : null)
+      state.isDraftSelected = false
+      if (!preserveLocalForm) {
+        replaceEditorForm(role, state.selectedConfig
+          ? formFromConfig(state.selectedConfig)
+          : defaultForm(role))
+      }
     }
     invalidateModelOptionsIfStale(role)
     state.loaded = true
     state.error = ''
-    state.dirty = preserveDraft
+    state.dirty = isDraftSelected || preserveLocalForm
     state.revision += 1
   }
 
@@ -476,6 +523,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     const state = roleState.value[normalizedRole]
     const normalizedConfig = config ? normalizeConfigForRole(config, normalizedRole) : null
     state.selectedConfig = normalizedConfig
+    state.isDraftSelected = false
     replaceEditorForm(normalizedRole, normalizedConfig ? formFromConfig(normalizedConfig) : defaultForm(normalizedRole))
     invalidateModelOptionsIfStale(normalizedRole)
     state.dirty = false
@@ -588,7 +636,27 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     // 每个 role 只保留一份编辑表单。组件通过 computed form 读取当前 role，
     // 避免“全局表单”和“role 表单”互相覆盖导致 Provider select 停在旧值。
     const normalizedForm = normalizeFormForRole(nextForm, role)
-    roleState.value[role].form = { ...normalizedForm }
+    const state = roleState.value[role]
+    state.form = { ...normalizedForm }
+    if (state.isDraftSelected && state.draft) {
+      state.draft.form = state.form
+    }
+  }
+
+  function selectDraft(role) {
+    const state = roleState.value[role]
+    if (!state.draft) {
+      return
+    }
+    state.selectedConfig = null
+    state.isDraftSelected = true
+    replaceEditorForm(role, state.draft.form)
+    invalidateModelOptionsIfStale(role)
+    state.error = ''
+    state.dirty = true
+    state.revision += 1
+    visibleApiKeyByRole.value[role] = false
+    message.value = ''
   }
 
   function invalidateModelOptions(role) {
@@ -617,6 +685,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     ROLES,
     activeRole,
     activeSummary,
+    isLoadingActiveSummary,
+    activeSummaryError,
     roleState,
     chatConfigs,
     embeddingConfigs,
@@ -653,6 +723,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     activeConfigFor,
     activeConfigForRole,
     isEditingExisting,
+    isCreatingDraft,
     roleLabel,
     chatModelOptions,
     embeddingModelOptions,
@@ -666,6 +737,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     switchRole,
     startCreate,
     editConfig,
+    cancelDraft,
     markFormTouched,
     toggleApiKeyVisible,
     updateApiKey,
@@ -688,6 +760,8 @@ function emptyRoleState(role) {
   return {
     configs: [],
     selectedConfig: null,
+    draft: null,
+    isDraftSelected: false,
     form: defaultForm(role),
     loaded: false,
     loading: false,
@@ -698,6 +772,30 @@ function emptyRoleState(role) {
     dirty: false,
     revision: 0,
     apiKeyRevision: 0
+  }
+}
+
+function selectedListItemId(state) {
+  return state.isDraftSelected && state.draft
+    ? state.draft.id
+    : state.selectedConfig?.id || null
+}
+
+function createDraftId(role) {
+  return `draft:${role}:${Date.now()}:${Math.random().toString(36).slice(2)}`
+}
+
+function draftListItem(draft, role) {
+  const form = draft.form
+  return {
+    id: draft.id,
+    role,
+    isDraft: true,
+    active: false,
+    displayName: String(form.displayName || '').trim() || '未命名模型',
+    provider: form.provider || 'DASHSCOPE',
+    modelName: String(form.modelName || '').trim() || '未填写模型 ID',
+    baseUrl: String(form.baseUrl || '').trim() || '-'
   }
 }
 

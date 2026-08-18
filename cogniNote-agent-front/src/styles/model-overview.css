@@ -1,0 +1,193 @@
+/* 模型概览只展示当前运行配置；编辑和草稿状态仍归 model-config.css 管理。 */
+
+.model-overview {
+  display: grid;
+  max-width: 1280px;
+  gap: 20px;
+}
+
+.model-overview__header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.model-overview__header h3 {
+  margin: 0;
+  color: var(--color-text-strong);
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.model-overview__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+}
+
+.model-overview-card {
+  display: grid;
+  min-width: 0;
+  min-height: 302px;
+  gap: 12px;
+  align-content: start;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.model-overview-card:hover,
+.model-overview-card:focus-visible {
+  border-color: var(--color-action-border);
+  background: color-mix(in srgb, var(--color-action-soft) 56%, var(--color-surface));
+  box-shadow: var(--shadow-focus);
+  outline: 0;
+}
+
+.model-overview-card--loading {
+  cursor: progress;
+}
+
+.model-overview-card__topline,
+.model-overview-card__role,
+.model-overview-card__action {
+  display: inline-flex;
+  min-width: 0;
+  gap: 8px;
+  align-items: center;
+}
+
+.model-overview-card__topline {
+  justify-content: space-between;
+}
+
+.model-overview-card__role {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.model-overview-card__role svg {
+  width: 18px;
+  height: 18px;
+  color: var(--color-action-strong);
+}
+
+.model-overview-card__status {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--color-success);
+  background: var(--color-success-soft);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.model-overview-card__status--empty {
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+}
+
+.model-overview-card > strong,
+.model-overview-card > code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.model-overview-card > strong {
+  color: var(--color-text-strong);
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.model-overview-card > code {
+  color: var(--color-action-strong);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.model-overview-card dl {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  margin: 2px 0 0;
+}
+
+.model-overview-card dl div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.model-overview-card dt,
+.model-overview-card dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.model-overview-card dt {
+  color: var(--color-text-muted);
+}
+
+.model-overview-card dd {
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.model-overview-card__url {
+  font-family: var(--font-mono);
+}
+
+.model-overview-card__action {
+  margin-top: auto;
+  justify-self: end;
+  color: var(--color-link);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.model-overview-card__action svg {
+  width: 16px;
+  height: 16px;
+}
+
+.model-overview__feedback {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 40%, var(--color-border));
+  border-radius: 8px;
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface));
+}
+
+.model-overview__feedback p {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .model-overview__header h3 {
+    font-size: 20px;
+  }
+
+  .model-overview-card {
+    min-height: 0;
+  }
+}

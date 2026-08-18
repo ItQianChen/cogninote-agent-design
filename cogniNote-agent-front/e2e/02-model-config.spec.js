@@ -51,3 +51,66 @@ test('model config can be saved, reloaded, and connection-tested without a provi
   await page.getByRole('button', { name: '测试连接' }).click()
   await expect(page.getByText(/E2E mock connection failed/)).toBeVisible()
 })
+
+test('model overview opens the matching editor and new configurations stay local until confirmed', async ({ page }) => {
+  let createRequestCount = 0
+  const activeChat = {
+    id: 'chat-active-e2e',
+    role: 'CHAT',
+    provider: 'DASHSCOPE',
+    displayName: 'DashScope Chat',
+    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+    modelName: 'qwen-plus',
+    apiKeyConfigured: true,
+    temperature: 0.7,
+    defaultTopK: 8,
+    contextWindowTokens: 128000,
+    active: true
+  }
+  const createdChat = {
+    ...activeChat,
+    id: 'chat-created-e2e',
+    displayName: 'New E2E Chat',
+    active: false
+  }
+  await page.route('**/api/model-configs/settings/configs', async (route) => {
+    if (route.request().method() === 'POST') {
+      createRequestCount += 1
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            role: 'CHAT',
+            active: { chat: activeChat, embedding: null, vision: null },
+            configs: [createdChat, activeChat],
+            selectedConfig: createdChat
+          }
+        })
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  await page.goto('/settings?item=model-overview')
+  await expect(page.getByRole('heading', { name: '当前启用模型' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /编辑对话模型/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /编辑向量模型/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /编辑视觉识别模型/ })).toBeVisible()
+
+  await page.getByRole('button', { name: /编辑对话模型/ }).click()
+  await expect(page).toHaveURL(/\/settings\?item=model-chat/)
+
+  await page.getByRole('button', { name: '新建对话模型' }).click()
+  await expect(page.getByText('未保存')).toBeVisible()
+  await expect(page.getByRole('button', { name: '确认创建' })).toBeVisible()
+  expect(createRequestCount).toBe(0)
+
+  await page.getByRole('button', { name: '确认创建' }).click()
+
+  await expect.poll(() => createRequestCount).toBe(1)
+  await expect(page.getByText('未保存')).not.toBeVisible()
+  await expect(page.getByRole('button', { name: 'New E2E Chat' })).toBeVisible()
+})

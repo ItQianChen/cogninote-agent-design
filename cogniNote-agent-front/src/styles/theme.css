@@ -61,8 +61,7 @@ body {
 
 .brand-panel .eyebrow,
 .conversation-header .eyebrow,
-.settings-header .eyebrow,
-.model-active-summary .eyebrow {
+.settings-header .eyebrow {
   color: var(--color-action-strong);
 }
 
@@ -203,7 +202,6 @@ body {
 .source-row,
 .model-config-list,
 .model-config-editor,
-.model-active-summary article,
 .model-options-panel,
 .stat-grid div {
   border-color: var(--color-border);
@@ -510,7 +508,6 @@ body {
 
 .path-text,
 .path-text--index,
-.model-active-summary small,
 .model-config-item small {
   overflow-wrap: anywhere;
   font-family: var(--font-mono);
@@ -627,39 +624,6 @@ body {
   background: var(--color-success-soft);
 }
 
-.model-active-summary {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.model-active-summary article {
-  align-content: start;
-  min-height: 116px;
-}
-
-.model-active-summary h3,
-.model-active-summary p,
-.model-active-summary small {
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
-}
-
-.model-active-summary h3 {
-  color: var(--color-text-strong);
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.model-active-summary p {
-  color: var(--color-action-strong);
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.model-active-summary small {
-  color: var(--color-text-muted);
-}
-
 .model-options-panel,
 .model-option-chip {
   border-color: var(--color-border);
@@ -704,7 +668,6 @@ body {
 .settings-center-page .knowledge-folder-card,
 .settings-center-page .model-config-list,
 .settings-center-page .model-config-editor,
-.settings-center-page .model-active-summary article,
 .settings-center-page .model-options-panel,
 .settings-center-page .stat-grid div {
   border-color: var(--color-border);
@@ -828,8 +791,7 @@ textarea:focus-visible,
 }
 
 @media (max-width: 980px) {
-  .model-config-layout,
-  .model-active-summary {
+  .model-config-layout {
     grid-template-columns: 1fr;
   }
 }

@@ -51,10 +51,6 @@ watch(
   }
 )
 
-function roleActiveConfig(role) {
-  return modelConfigStore.activeConfigFor(role)
-}
-
 async function loadInitialSettings() {
   const role = normalizeInitialRole(props.initialRole)
   if (role) {
@@ -65,6 +61,10 @@ async function loadInitialSettings() {
 
 function handleStartCreate() {
   modelConfigStore.startCreate()
+}
+
+function handleCancelDraft() {
+  modelConfigStore.cancelDraft()
 }
 
 function handleEditConfig(config) {
@@ -223,14 +223,6 @@ function normalizeInitialRole(role) {
     : ''
 }
 
-function roleSummaryLabel(role) {
-  return {
-    [modelConfigStore.ROLES.CHAT]: '当前对话模型',
-    [modelConfigStore.ROLES.EMBEDDING]: '当前向量模型',
-    [modelConfigStore.ROLES.VISION]: '当前视觉模型'
-  }[role]
-}
-
 function modelIdPlaceholder() {
   return {
     [modelConfigStore.ROLES.CHAT]: '例如 qwen-plus 或 gpt-4.1-mini',
@@ -259,21 +251,6 @@ function showTemperatureField() {
       </button>
     </header>
 
-    <section class="model-active-summary">
-      <article
-        v-for="role in [modelConfigStore.ROLES.CHAT, modelConfigStore.ROLES.EMBEDDING, modelConfigStore.ROLES.VISION]"
-        :key="role"
-      >
-        <p class="eyebrow">{{ roleSummaryLabel(role) }}</p>
-        <h3>{{ roleActiveConfig(role)?.displayName || '-' }}</h3>
-        <p>{{ roleActiveConfig(role)?.modelName || '-' }}</p>
-          <small>{{ roleActiveConfig(role)?.baseUrl || '-' }}</small>
-          <small v-if="role === modelConfigStore.ROLES.CHAT">
-            上下文 {{ modelConfigStore.formatContextWindowTokens(roleActiveConfig(role)?.contextWindowTokens) }}
-          </small>
-      </article>
-    </section>
-
     <div class="model-config-layout">
       <aside class="model-config-list" aria-label="模型配置列表">
         <button
@@ -287,6 +264,7 @@ function showTemperatureField() {
           <span class="model-config-item__title">
             <strong>{{ config.displayName }}</strong>
             <em v-if="config.active">ACTIVE</em>
+            <em v-else-if="config.isDraft" class="model-config-item__draft">未保存</em>
           </span>
           <span>{{ config.provider }} · {{ config.modelName }}</span>
           <small>{{ config.baseUrl }}</small>
@@ -549,7 +527,10 @@ function showTemperatureField() {
 
           <div class="model-form__actions">
             <el-button type="primary" native-type="submit" :loading="modelConfigStore.isSavingModelConfig">
-              {{ modelConfigStore.isEditingExisting ? '保存配置' : '创建配置' }}
+              {{ modelConfigStore.isEditingExisting ? '保存配置' : '确认创建' }}
+            </el-button>
+            <el-button v-if="modelConfigStore.isCreatingDraft" @click="handleCancelDraft">
+              取消
             </el-button>
             <el-button
               :disabled="modelConfigStore.isTestingModelConfig"
