@@ -1,11 +1,15 @@
 {
   "version": "0.1.78",
-  "notes": "## 知记空间 0.1.78 更新内容\n\n### 新增与改进\n\n- Model：新增模型概览与本地创建草稿。\n- Chat：新增居中对话流与消息时间轴导航。\n- 数据库：建立持续历史数据库迁移与恢复模式。\n\n### 问题修复\n\n- Desktop：修复外部链接无法在默认浏览器打开。\n- Frontend：修复移除不稳定测试。\n- Ci：修复 WebMvc 测试上下文。\n- Ci：修复 macOS DMG 挂载状态判断。",
+  "notes": "## 知记空间 0.1.78 更新内容\r\n\r\n### 新增与改进\r\n\r\n- Model：新增模型概览与本地创建草稿。\r\n- Chat：新增居中对话流与消息时间轴导航。\r\n- 数据库：建立持续历史数据库迁移与恢复模式。\r\n\r\n### 问题修复\r\n\r\n- Desktop：修复外部链接无法在默认浏览器打开。\r\n- Frontend：修复移除不稳定测试。\r\n- Ci：修复 WebMvc 测试上下文。\r\n- Ci：修复 macOS DMG 挂载状态判断。",
   "pub_date": "2026-08-18T03:46:11.565Z",
   "platforms": {
     "darwin-aarch64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUNFQmVINTJqejBXYk82Q2hmeDczSlp1SmJJQm90d2J5a0I2YkRzZmFyYjZWRjM1L1plZklUTmR2eHlZemlsNUJLUS9Bak9zMW02c2xkZjhsTzdCWGdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MDI0NzY5CWZpbGU6Q29nbmlOb3RlLTAuMS43OC1tYWNvcy1hcm02NC11bnNpZ25lZC5hcHAudGFyLmd6CjRMbnpwUkhleGZ3L1hUUXAwaUJISmh2QW56UEVWanMxVWRkTFVvY3d1UXZQTFg4SkZWNWZDRXNlUnFWNTVlcVQ3dE1meUxCUDBLYzNxNDNNVkFReEF3PT0K",
       "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.78-test.1/CogniNote-0.1.78-macos-arm64-unsigned.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUY2SHBOSEFFeUUvUWVCazhWZGYrS3NUaW9CaE9Nd2tzc1l6dFB2TnJFYjJsdXRhT2lEdEpNM2paeDk0ZjdzUjd1SjU0QzBpSnR0dUx4U041QWV2dHdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MDI1MDAzCWZpbGU6Q29nbmlOb3RlLTAuMS43OC13aW5kb3dzLXg2NC11bnNpZ25lZC1pbnN0YWxsZXIuZXhlCjdld0NYd0hDMlpxTGhzUzM3TktSbkpCTHJMZHhQUUhVK3NGNkFlUnc1cEZjS2taRlJKbnpQZXNRWnZ1SWtvVDlEUGpzbStwTFJJaFFCMXpodERWckN3PT0K",
+      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.1.78-test.1/CogniNote-0.1.78-windows-x64-unsigned-installer.exe"
     }
   }
 }
