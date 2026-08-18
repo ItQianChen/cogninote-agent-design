@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { ExternalLink, FileText, MessageSquareQuote, X } from 'lucide-vue-next'
 import { getDocumentChunk } from '../api/documents-api'
 import { useLayoutStore } from '../stores/layout'
+import { openExternalUrl } from '../utils/external-links'
 import { formatScore } from '../utils/formatters'
 
 const props = defineProps({
@@ -134,7 +135,7 @@ function openExternalSource(source) {
   if (!url) {
     return
   }
-  window.open(url, '_blank', 'noopener,noreferrer')
+  void openExternalUrl(url)
 }
 
 function closeSourceDialog() {
