@@ -287,7 +287,7 @@ public abstract class AbstractChatAgent implements ChatAgent {
             KnowledgeContext knowledgeContext,
             ToolExecutionCollector toolExecutionCollector
     ) {
-        if (content.isBlank() || !saved.compareAndSet(false, true)) {
+        if (!hasAssistantOutput(content, reasoningContent) || !saved.compareAndSet(false, true)) {
             return;
         }
         chatSessionService.appendAssistantDone(
@@ -319,7 +319,7 @@ public abstract class AbstractChatAgent implements ChatAgent {
             KnowledgeContext knowledgeContext,
             ToolExecutionCollector toolExecutionCollector
     ) {
-        if (content.isBlank() || !saved.compareAndSet(false, true)) {
+        if (!hasAssistantOutput(content, reasoningContent) || !saved.compareAndSet(false, true)) {
             return;
         }
         chatSessionService.appendAssistantStopped(
@@ -351,7 +351,7 @@ public abstract class AbstractChatAgent implements ChatAgent {
             KnowledgeContext knowledgeContext,
             ToolExecutionCollector toolExecutionCollector
     ) {
-        if (content.isBlank() || !saved.compareAndSet(false, true)) {
+        if (!hasAssistantOutput(content, reasoningContent) || !saved.compareAndSet(false, true)) {
             return;
         }
         chatSessionService.appendAssistantError(
@@ -363,6 +363,14 @@ public abstract class AbstractChatAgent implements ChatAgent {
                 knowledgeContext.retrievalMode(),
                 allSources(knowledgeContext, toolExecutionCollector)
         );
+    }
+
+    /**
+     * 只收到推理内容时也必须保存助手消息，避免 reasoning_content 丢失。
+     */
+    private static boolean hasAssistantOutput(String content, String reasoningContent) {
+        return (content != null && !content.isBlank())
+                || (reasoningContent != null && !reasoningContent.isBlank());
     }
 
     private static void completeToolEvents(WebSearchToolInvocation webSearchInvocation) {

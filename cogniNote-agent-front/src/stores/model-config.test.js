@@ -203,6 +203,8 @@ describe('model config editor state', () => {
       isDraft: true,
       displayName: 'OpenAI-compatible Chat'
     })
+    expect(store.form.baseUrl).toBe('')
+    expect(store.reasoningEffortOptions.map(option => option.value)).toContain('MAX')
     expect(store.isCreatingDraft).toBe(true)
     expect(mocks.api.createSettingsModelConfig).not.toHaveBeenCalled()
 

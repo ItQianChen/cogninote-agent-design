@@ -71,7 +71,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   ]
   const reasoningEffortOptions = [
     { value: 'NONE', label: '关闭' }, { value: 'LOW', label: '低' }, { value: 'MEDIUM', label: '中' },
-    { value: 'HIGH', label: '高' }, { value: 'XHIGH', label: '极高' }
+    { value: 'HIGH', label: '高' }, { value: 'XHIGH', label: '极高' }, { value: 'MAX', label: '最大' }
   ]
 
   const activeChatConfig = computed(() => activeSummary.value.chat)
@@ -816,7 +816,7 @@ function defaultForm(role) {
       : role === ROLES.EMBEDDING
         ? 'OpenAI-compatible 向量模型'
         : 'OpenAI-compatible Vision',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    baseUrl: '',
     apiKey: '',
     clearApiKey: false,
     modelName: role === ROLES.VISION ? 'qwen3-vl-plus' : '',

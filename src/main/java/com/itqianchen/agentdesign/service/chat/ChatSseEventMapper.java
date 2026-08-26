@@ -98,6 +98,9 @@ public class ChatSseEventMapper {
                                     stream.conversationId(),
                                     error
                             );
+                            if (reasoningStarted.get()) {
+                                sendSafely(emitter, completed, new AgentEvent.Delta(null, ""));
+                            }
                             sendSafely(emitter, completed, new AgentEvent.Error(error.getMessage()));
                             completeSafely(emitter, completed);
                             toolEventSubscription.dispose();

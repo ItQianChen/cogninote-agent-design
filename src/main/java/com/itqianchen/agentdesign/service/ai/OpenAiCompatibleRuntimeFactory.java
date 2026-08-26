@@ -124,9 +124,7 @@ public class OpenAiCompatibleRuntimeFactory {
         OpenAiChatOptions.Builder options = OpenAiChatOptions.builder()
                 .model(config.modelName())
                 .temperature(config.resolvedTemperature());
-        if ("NONE".equals(config.resolvedReasoningEffort())) {
-            options.extraBody(Map.of("enable_thinking", false));
-        } else {
+        if (!"NONE".equals(config.resolvedReasoningEffort())) {
             options.reasoningEffort(config.resolvedReasoningEffort().toLowerCase(Locale.ROOT));
             options.extraBody(Map.of("enable_thinking", true));
         }

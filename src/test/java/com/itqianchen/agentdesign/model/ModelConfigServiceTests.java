@@ -188,6 +188,31 @@ class ModelConfigServiceTests {
     }
 
     @Test
+    void updateWithoutBaseUrlKeepsExistingBaseUrl() {
+        ModelConfig saved = modelConfigService.create(chatRequest(
+                "OPENAI_COMPATIBLE",
+                "Chat A",
+                "sk-test",
+                "https://api.example.test/v1",
+                "qwen-plus",
+                0.7,
+                8
+        ));
+
+        ModelConfig updated = modelConfigService.update(saved.id(), chatRequest(
+                "OPENAI_COMPATIBLE",
+                "Chat A",
+                "",
+                null,
+                "qwen-max",
+                0.2,
+                6
+        ));
+
+        assertThat(updated.baseUrl()).isEqualTo("https://api.example.test/v1");
+    }
+
+    @Test
     void updateSettingsCanExplicitlyClearApiKey() {
         ModelConfig saved = modelConfigService.create(visionRequest(
                 "OPENAI_COMPATIBLE",

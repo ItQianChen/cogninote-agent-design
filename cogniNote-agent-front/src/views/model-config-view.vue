@@ -316,7 +316,7 @@ function showTemperatureField() {
               v-model="modelConfigStore.form.baseUrl"
               type="url"
               autocomplete="off"
-              placeholder="https://api.example.com/v1"
+              placeholder="例如：https://api.example.com/v1"
             />
           </label>
 

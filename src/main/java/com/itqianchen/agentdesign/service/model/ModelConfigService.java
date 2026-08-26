@@ -462,7 +462,9 @@ public class ModelConfigService {
                 role,
                 provider,
                 normalizeDisplayName(role, request.displayName()),
-                normalizeBaseUrl(request.baseUrl()),
+                normalizeBaseUrl(request.baseUrl() == null || request.baseUrl().isBlank()
+                        ? existing.baseUrl()
+                        : request.baseUrl()),
                 apiKey,
                 modelName,
                 role == ModelConfigRole.EMBEDDING ? ModelConfigDefaults.EMBEDDING_DIMENSIONS : null,
