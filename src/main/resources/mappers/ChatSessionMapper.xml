@@ -42,6 +42,7 @@
             <arg column="message_sequence" javaType="_int"/>
             <arg column="role" javaType="com.itqianchen.agentdesign.domain.enums.chat.ChatMessageRole"/>
             <arg column="content" javaType="java.lang.String"/>
+            <arg column="reasoning_content" javaType="java.lang.String"/>
             <arg column="status" javaType="com.itqianchen.agentdesign.domain.enums.chat.ChatMessageStatus"/>
             <arg column="request_id" javaType="java.lang.String"/>
             <arg column="agent_type" javaType="com.itqianchen.agentdesign.domain.enums.agent.AgentType"/>
@@ -133,7 +134,7 @@
     </update>
 
     <select id="findMessages" resultMap="ChatMessageMap">
-        SELECT id, conversation_id, message_sequence, role, content, status,
+        SELECT id, conversation_id, message_sequence, role, content, reasoning_content, status,
                request_id,
                CASE
                    WHEN agent_type IS NOT NULL THEN agent_type
@@ -154,7 +155,7 @@
     </select>
 
     <select id="findMessagesAfter" resultMap="ChatMessageMap">
-        SELECT id, conversation_id, message_sequence, role, content, status,
+        SELECT id, conversation_id, message_sequence, role, content, reasoning_content, status,
                request_id,
                CASE
                    WHEN agent_type IS NOT NULL THEN agent_type
@@ -176,11 +177,11 @@
 
     <insert id="insertMessage">
         INSERT INTO chat_messages (
-            id, conversation_id, message_sequence, role, content, status,
+            id, conversation_id, message_sequence, role, content, reasoning_content, status,
             request_id, agent_type, retrieval_mode, sources_json, references_json, token_estimate, created_at
         )
         VALUES (
-            #{id}, #{conversationId}, #{sequence}, #{role}, #{content}, #{status},
+            #{id}, #{conversationId}, #{sequence}, #{role}, #{content}, #{reasoningContent}, #{status},
             #{requestId}, #{agentType}, #{retrievalMode}, #{sourcesJson}, #{referencesJson}, #{tokenEstimate}, #{createdAt}
         )
     </insert>

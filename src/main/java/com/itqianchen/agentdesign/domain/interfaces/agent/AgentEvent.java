@@ -21,7 +21,7 @@ public sealed interface AgentEvent permits AgentEvent.Meta, AgentEvent.Tool, Age
     ) implements AgentEvent {
     }
 
-    record Delta(String text) implements AgentEvent {
+    record Delta(String text, String reasoning) implements AgentEvent {
     }
 
     record Tool(ChatToolEvent event) implements AgentEvent {

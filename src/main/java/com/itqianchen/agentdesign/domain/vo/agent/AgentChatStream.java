@@ -24,6 +24,7 @@ public record AgentChatStream(
         Supplier<ChatContextUsageResponse> contextUsageSupplier,
         Flux<ChatToolEvent> toolEvents,
         Flux<String> answer,
+        Flux<String> reasoning,
         Runnable onCancel
 ) {
     /**
@@ -40,7 +41,16 @@ public record AgentChatStream(
             Runnable onCancel
     ) {
         this(requestId, conversationId, retrievalMode, sources, contextUsage, contextUsageSupplier,
-                Flux.empty(), answer, onCancel);
+                Flux.empty(), answer, Flux.empty(), onCancel);
+    }
+
+    public AgentChatStream(
+            String requestId, String conversationId, SearchMode retrievalMode, List<RagSourceResponse> sources,
+            ChatContextUsageResponse contextUsage, Supplier<ChatContextUsageResponse> contextUsageSupplier,
+            Flux<ChatToolEvent> toolEvents, Flux<String> answer, Runnable onCancel
+    ) {
+        this(requestId, conversationId, retrievalMode, sources, contextUsage, contextUsageSupplier,
+                toolEvents, answer, Flux.empty(), onCancel);
     }
 
     /**

@@ -34,7 +34,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 @Component
 public class DatabaseMigrationService {
 
-    public static final int CURRENT_SCHEMA_VERSION = 3;
+    public static final int CURRENT_SCHEMA_VERSION = 4;
     private static final Logger log = LoggerFactory.getLogger(DatabaseMigrationService.class);
     private static final DateTimeFormatter SNAPSHOT_TIME = DateTimeFormatter
             .ofPattern("yyyyMMdd-HHmmss")

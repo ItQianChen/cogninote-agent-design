@@ -1014,13 +1014,24 @@ onBeforeUnmount(() => {
                 <em v-else-if="message.status === 'error'">未完成</em>
                 <em v-else-if="message.status === 'stopped'">已停止</em>
               </div>
-              <AiMarkdownRenderer
-                v-if="message.role === 'assistant'"
-                class="message-content"
-                :content="message.content"
-                empty-text="正在等待模型返回..."
-                :final="message.status !== 'streaming'"
-              />
+              <template v-if="message.role === 'assistant'">
+                <details
+                  v-if="message.reasoningContent || message.reasoningStatus === 'streaming'"
+                  class="message-reasoning"
+                  :open="message.reasoningStatus === 'streaming'"
+                >
+                  <summary>
+                    {{ message.reasoningStatus === 'streaming' ? '思考中…' : '思考过程' }}
+                  </summary>
+                  <pre v-if="message.reasoningContent">{{ message.reasoningContent }}</pre>
+                </details>
+                <AiMarkdownRenderer
+                  class="message-content"
+                  :content="message.content"
+                  empty-text="正在等待模型返回..."
+                  :final="message.status !== 'streaming'"
+                />
+              </template>
               <template v-else>
                 <div
                   v-if="message.references?.length"

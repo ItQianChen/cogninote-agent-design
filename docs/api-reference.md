@@ -201,11 +201,11 @@ POST /api/knowledge-folders/{id}/sync
   "stage": "MODEL_CALL",
   "code": "MODEL_AUTH_FAILED",
   "message": "视觉模型鉴权失败。",
-  "detail": "DASHSCOPE / qwen3-vl-plus / HTTP 401 / invalid_api_key / 第 1 页",
+  "detail": "OPENAI_COMPATIBLE / qwen3-vl-plus / HTTP 401 / invalid_api_key / 第 1 页",
   "suggestion": "检查视觉模型 API Key、Base URL 和账号权限。",
   "occurredAt": 1780000000000,
   "pageNumber": 1,
-  "provider": "DASHSCOPE",
+  "provider": "OPENAI_COMPATIBLE",
   "modelName": "qwen3-vl-plus",
   "httpStatus": 401,
   "providerErrorCode": "invalid_api_key",
@@ -623,7 +623,7 @@ Embedding 不可用时，向量检索和混合检索可能降级或返回明确�
 
 ## 模型配置
 
-第八阶段开始，对话模型和 Embedding 模型分开维护；第 36-4 阶段新增独立 VISION 模型配置供模型 OCR 使用。普通 CRUD 兼容接口使用 `/api/model-configs`；设置页使用 `/api/model-configs/settings...` 快照接口，避免前端自己拼装 active、列表和右侧表单。旧 `/api/model-config` 仅作为过渡兼容接口保留。
+对话、Embedding 和 Vision 模型配置独立维护；所有模型通过 `OPENAI_COMPATIBLE` 协议调用。普通 CRUD 兼容接口使用 `/api/model-configs`；设置页使用 `/api/model-configs/settings...` 快照接口，避免前端自己拼装 active、列表和右侧表单。旧 `/api/model-config` 仅作为过渡兼容接口保留。
 
 ### 查询配置列表
 
@@ -648,23 +648,24 @@ GET /api/model-configs/active
   "chat": {
     "id": "active-chat",
     "role": "CHAT",
-    "provider": "DASHSCOPE",
-    "displayName": "DashScope Chat",
-    "baseUrl": "https://dashscope.aliyuncs.com/api/v1",
+    "provider": "OPENAI_COMPATIBLE",
+    "displayName": "OpenAI-compatible Chat",
+    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "apiKeyConfigured": true,
     "apiKey": "sk-...",
     "modelName": "qwen-plus",
     "temperature": 0.7,
     "defaultTopK": 8,
     "contextWindowTokens": 128000,
+    "reasoningEffort": "NONE",
     "active": true
   },
   "embedding": {
     "id": "active-embedding",
     "role": "EMBEDDING",
-    "provider": "DASHSCOPE",
-    "displayName": "DashScope Embedding",
-    "baseUrl": "https://dashscope.aliyuncs.com/api/v1",
+    "provider": "OPENAI_COMPATIBLE",
+    "displayName": "OpenAI-compatible Embedding",
+    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "apiKeyConfigured": true,
     "apiKey": "sk-...",
     "modelName": "text-embedding-v4",
@@ -677,9 +678,9 @@ GET /api/model-configs/active
   "vision": {
     "id": "active-vision",
     "role": "VISION",
-    "provider": "DASHSCOPE",
-    "displayName": "DashScope Vision",
-    "baseUrl": "https://dashscope.aliyuncs.com/api/v1",
+    "provider": "OPENAI_COMPATIBLE",
+    "displayName": "OpenAI-compatible Vision",
+    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "apiKeyConfigured": false,
     "apiKey": "",
     "modelName": "qwen3-vl-plus",
@@ -705,15 +706,16 @@ GET /api/model-configs/settings?role=VISION
     "chat": {
       "id": "active-chat",
       "role": "CHAT",
-      "displayName": "DashScope Chat",
+      "displayName": "OpenAI-compatible Chat",
       "modelName": "qwen-plus",
       "contextWindowTokens": 128000,
+    "reasoningEffort": "NONE",
       "active": true
     },
     "embedding": {
       "id": "active-embedding",
       "role": "EMBEDDING",
-      "displayName": "DashScope Embedding",
+      "displayName": "OpenAI-compatible Embedding",
       "modelName": "text-embedding-v4",
       "embeddingDimensions": 1024,
       "embeddingRequestsPerMinute": 300,
@@ -830,9 +832,9 @@ POST /api/model-configs/test
 POST /api/model-configs/models
 ```
 
-使用配置草稿获取模型列表。DashScope 走百炼兼容模型列表端点；OpenAI-compatible 走用户 `Base URL + /models`。
+使用配置草稿通过用户 `Base URL + /models` 获取模型列表。默认百炼兼容端点也遵循同一协议。
 
-模型设置页在用户点开“模型 ID”下拉框时，前端会自动调用该接口并把候选模型展示出来。模型 ID 输入框仍允许用户手动创建 provider 支持但列表中没有返回的模型。
+模型设置页在用户点开“模型 ID”下拉框时，前端会自动调用该接口并把候选模型展示出来。模型 ID 输入框仍允许用户手动创建兼容服务支持但列表中没有返回的模型。
 
 响应示例：
 
@@ -914,6 +916,7 @@ GET /api/chat/sessions
     "messageCount": 2,
     "contextUsage": {
       "contextWindowTokens": 128000,
+    "reasoningEffort": "NONE",
       "usedTokens": 680,
       "availableTokens": 127320,
       "usageRatio": 0.0053,
@@ -1165,9 +1168,9 @@ GET /api/ocr/settings
   "available": false,
   "visionModel": {
     "id": "active-vision",
-    "provider": "DASHSCOPE",
-    "displayName": "DashScope Vision",
-    "baseUrl": "https://dashscope.aliyuncs.com/api/v1",
+    "provider": "OPENAI_COMPATIBLE",
+    "displayName": "OpenAI-compatible Vision",
+    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "apiKeyConfigured": false,
     "modelName": "qwen3-vl-plus"
   },
@@ -1688,3 +1691,6 @@ POST /api/chat/stream/{requestId}/cancel
 ```
 
 `data=true` 表示找到并取消了仍在运行的流；`data=false` 表示该请求已结束、未注册或已经被取消。
+
+
+

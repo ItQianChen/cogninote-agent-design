@@ -23,13 +23,14 @@
             <arg column="is_active" javaType="_boolean"/>
             <arg column="created_at" javaType="_long"/>
             <arg column="updated_at" javaType="_long"/>
+            <arg column="reasoning_effort" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
     <sql id="ModelConfigColumns">
         id, role, provider, display_name, base_url, api_key, model_name,
         embedding_dimensions, embedding_requests_per_minute, embedding_tokens_per_minute, embedding_batch_size,
-        temperature, default_top_k, context_window_tokens,
+        temperature, default_top_k, context_window_tokens, reasoning_effort,
         is_active, created_at, updated_at
     </sql>
 
@@ -58,13 +59,13 @@
         INSERT INTO model_configs (
             id, role, provider, display_name, base_url, api_key, model_name,
             embedding_dimensions, embedding_requests_per_minute, embedding_tokens_per_minute, embedding_batch_size,
-            temperature, default_top_k, context_window_tokens,
+            temperature, default_top_k, context_window_tokens, reasoning_effort,
             is_active, created_at, updated_at
         )
         VALUES (
             #{id}, #{role}, #{provider}, #{displayName}, #{baseUrl}, #{apiKey}, #{modelName},
             #{embeddingDimensions}, #{embeddingRequestsPerMinute}, #{embeddingTokensPerMinute}, #{embeddingBatchSize},
-            #{temperature}, #{defaultTopK}, #{contextWindowTokens},
+            #{temperature}, #{defaultTopK}, #{contextWindowTokens}, #{reasoningEffort},
             #{active}, #{createdAt}, #{updatedAt}
         )
         ON CONFLICT(id) DO UPDATE SET
@@ -81,6 +82,7 @@
             temperature = excluded.temperature,
             default_top_k = excluded.default_top_k,
             context_window_tokens = excluded.context_window_tokens,
+            reasoning_effort = excluded.reasoning_effort,
             is_active = excluded.is_active,
             updated_at = excluded.updated_at
     </insert>

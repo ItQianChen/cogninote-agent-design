@@ -462,7 +462,7 @@ public class ModelConfigService {
                 role,
                 provider,
                 normalizeDisplayName(role, request.displayName()),
-                normalizeBaseUrl(provider, request.baseUrl()),
+                normalizeBaseUrl(request.baseUrl()),
                 apiKey,
                 modelName,
                 role == ModelConfigRole.EMBEDDING ? ModelConfigDefaults.EMBEDDING_DIMENSIONS : null,
@@ -480,7 +480,8 @@ public class ModelConfigService {
                 role == ModelConfigRole.CHAT ? normalizeContextWindowTokens(request.contextWindowTokens(), existing) : null,
                 active,
                 existing.createdAt(),
-                now
+                now,
+                normalizeReasoningEffort(request.reasoningEffort(), existing, role)
         );
     }
 
@@ -510,7 +511,8 @@ public class ModelConfigService {
                         request.temperature(),
                         request.topK(),
                         request.defaultTopK(),
-                        request.contextWindowTokens()
+                        request.contextWindowTokens(),
+                        request.reasoningEffort()
                 ),
                 existing,
                 existing.id(),
@@ -543,6 +545,7 @@ public class ModelConfigService {
                         request.embeddingRequestsPerMinute(),
                         request.embeddingTokensPerMinute(),
                         request.embeddingBatchSize(),
+                        null,
                         null,
                         null,
                         null,
@@ -602,24 +605,21 @@ public class ModelConfigService {
                 role == ModelConfigRole.CHAT ? ModelConfigDefaults.CONTEXT_WINDOW_TOKENS : null,
                 active,
                 now,
-                now
+                now,
+                ModelConfigDefaults.REASONING_EFFORT
         );
     }
 
     /**
-     * 读取后归一化历史 DashScope Base URL。
-     *
-     * <p>旧库可能保存 endpoint 完整路径；运行时配置统一使用配置页展示的基础地址。</p>
+     * 读取后归一化 OpenAI-compatible Base URL 和推理等级。
      *
      * @param config 数据库中的配置
      * @return 归一化后的配置
      */
     private static ModelConfig normalizeLoadedConfig(ModelConfig config) {
-        if (config.provider() != ModelProvider.DASHSCOPE) {
-            return config;
-        }
-        String normalizedBaseUrl = DashScopeBaseUrls.normalizeConfigBaseUrl(config.baseUrl());
-        if (normalizedBaseUrl.equals(config.baseUrl())) {
+        String normalizedBaseUrl = OpenAiCompatibleUrls.normalizeBaseUrl(config.baseUrl());
+        String reasoningEffort = normalizeReasoningEffort(config.reasoningEffort(), config, config.role());
+        if (normalizedBaseUrl.equals(config.baseUrl()) && reasoningEffort.equals(config.reasoningEffort())) {
             return config;
         }
         return new ModelConfig(
@@ -639,7 +639,8 @@ public class ModelConfigService {
                 config.contextWindowTokens(),
                 config.active(),
                 config.createdAt(),
-                config.updatedAt()
+                config.updatedAt(),
+                reasoningEffort
         );
     }
 
@@ -696,18 +697,29 @@ public class ModelConfigService {
     }
 
     /**
-     * 归一化 Provider Base URL。
-     *
-     * <p>DashScope 使用固定默认地址；OpenAI-compatible 必须校验用户输入，避免保存带 query/fragment 的 URL。</p>
-     *
-     * @param provider 模型 Provider
+     * 归一化 OpenAI-compatible Base URL。
      * @param baseUrl 请求 Base URL
      * @return 可用于客户端构造的 Base URL
      */
-    private static String normalizeBaseUrl(ModelProvider provider, String baseUrl) {
-        return switch (provider) {
-            case DASHSCOPE -> DashScopeBaseUrls.normalizeConfigBaseUrl(ModelConfigDefaults.BASE_URL);
-            case OPENAI_COMPATIBLE -> OpenAiCompatibleUrls.normalizeBaseUrl(baseUrl);
+    private static String normalizeBaseUrl(String baseUrl) {
+        return OpenAiCompatibleUrls.normalizeBaseUrl(baseUrl);
+    }
+
+    /**
+     * 归一化通用推理等级。
+     *
+     * <p>只有 Chat 调用能消费该协议字段；其他角色强制关闭，避免保存无效配置。</p>
+     */
+    private static String normalizeReasoningEffort(String requested, ModelConfig existing, ModelConfigRole role) {
+        if (role != ModelConfigRole.CHAT) {
+            return ModelConfigDefaults.REASONING_EFFORT;
+        }
+        String value = requested == null || requested.isBlank()
+                ? existing == null ? ModelConfigDefaults.REASONING_EFFORT : existing.resolvedReasoningEffort()
+                : requested.trim().toUpperCase(java.util.Locale.ROOT);
+        return switch (value) {
+            case "NONE", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX" -> value;
+            default -> throw new ModelConfigurationException("Unsupported reasoning effort: " + requested);
         };
     }
 

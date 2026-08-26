@@ -23,8 +23,19 @@ public record ModelConfigUpsertRequest(
         @Min(1000) @Max(10000000) Integer embeddingTokensPerMinute,
         @Min(1) @Max(128) Integer embeddingBatchSize,
         @Min(1024) @Max(2000000) Integer contextWindowTokens,
+        @Size(max = 16) String reasoningEffort,
         Boolean clearApiKey
 ) {
+    public ModelConfigUpsertRequest(
+            String role, String provider, String displayName, String baseUrl, String apiKey, String modelName,
+            Double temperature, Integer defaultTopK, Integer embeddingDimensions, Integer embeddingRequestsPerMinute,
+            Integer embeddingTokensPerMinute, Integer embeddingBatchSize, Integer contextWindowTokens,
+            Boolean clearApiKey
+    ) {
+        this(role, provider, displayName, baseUrl, apiKey, modelName, temperature, defaultTopK,
+                embeddingDimensions, embeddingRequestsPerMinute, embeddingTokensPerMinute, embeddingBatchSize,
+                contextWindowTokens, null, clearApiKey);
+    }
     /**
      * 转换为服务层使用的模型配置请求。
      *
@@ -50,7 +61,8 @@ public record ModelConfigUpsertRequest(
                 temperature,
                 defaultTopK,
                 defaultTopK,
-                contextWindowTokens
+                contextWindowTokens,
+                reasoningEffort
         );
     }
 }

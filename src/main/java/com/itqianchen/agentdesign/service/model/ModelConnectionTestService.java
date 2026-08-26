@@ -48,7 +48,7 @@ public class ModelConnectionTestService {
         if (config.role() == ModelConfigRole.CHAT || config.role() == ModelConfigRole.VISION) {
             /*
              * 第十一阶段统一从 AI Runtime 发起模型调用。
-             * 连接测试和真实对话共享同一 Provider 运行时，避免 OpenAI-compatible/DashScope 分流再次散落。
+             * 连接测试和真实对话共享同一 Provider 运行时，避免 Provider 分流再次散落。
              */
             aiRuntimeFactory.chatRuntime(config)
                     .testConnection(new Prompt(new UserMessage(promptProperties.connectionTest().user())));

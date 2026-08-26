@@ -39,11 +39,11 @@ class DocumentFailureCodecTests {
                 DocumentFailureStage.MODEL_CALL,
                 DocumentFailureCode.MODEL_AUTH_FAILED,
                 "视觉模型鉴权失败。",
-                "DASHSCOPE / qwen3-vl-plus / HTTP 401",
+                "OPENAI_COMPATIBLE / qwen3-vl-plus / HTTP 401",
                 "检查 API Key。",
                 1780000000000L,
                 2,
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "qwen3-vl-plus",
                 401,
                 "invalid_api_key"

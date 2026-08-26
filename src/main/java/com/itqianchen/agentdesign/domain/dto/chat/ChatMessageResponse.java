@@ -1,7 +1,6 @@
 package com.itqianchen.agentdesign.domain.dto.chat;
 
 
-import com.itqianchen.agentdesign.domain.enums.chat.ChatMessageRole;
 import com.itqianchen.agentdesign.domain.entity.chat.ChatMessage;
 import com.itqianchen.agentdesign.domain.enums.chat.ChatMessageRole;
 import com.itqianchen.agentdesign.domain.enums.search.SearchMode;
@@ -15,6 +14,7 @@ public record ChatMessageResponse(
         String id,
         ChatMessageRole role,
         String content,
+        String reasoningContent,
         String status,
         String requestId,
         SearchMode retrievalMode,
@@ -37,6 +37,7 @@ public record ChatMessageResponse(
                 message.id(),
                 message.role(),
                 message.content(),
+                message.reasoningContent(),
                 message.status().name().toLowerCase(),
                 message.requestId(),
                 message.retrievalMode(),
@@ -46,3 +47,4 @@ public record ChatMessageResponse(
         );
     }
 }
+

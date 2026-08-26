@@ -4,9 +4,9 @@ import { apiData } from './support/api'
 
 const configPayload = {
   role: 'CHAT',
-  provider: 'DASHSCOPE',
+  provider: 'OPENAI_COMPATIBLE',
   displayName: 'Phase 37 E2E Chat',
-  baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+  baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   apiKey: 'e2e-placeholder-key',
   modelName: 'qwen-plus',
   temperature: 0.7,
@@ -57,9 +57,9 @@ test('model overview opens the matching editor and new configurations stay local
   const activeChat = {
     id: 'chat-active-e2e',
     role: 'CHAT',
-    provider: 'DASHSCOPE',
-    displayName: 'DashScope Chat',
-    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+    provider: 'OPENAI_COMPATIBLE',
+    displayName: 'OpenAI-compatible Chat',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     modelName: 'qwen-plus',
     apiKeyConfigured: true,
     temperature: 0.7,

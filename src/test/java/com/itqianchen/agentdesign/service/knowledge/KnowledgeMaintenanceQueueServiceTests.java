@@ -65,11 +65,11 @@ class KnowledgeMaintenanceQueueServiceTests {
                 DocumentFailureStage.MODEL_CALL,
                 DocumentFailureCode.MODEL_AUTH_FAILED,
                 "视觉模型鉴权失败。",
-                "DASHSCOPE / HTTP 401",
+                "OPENAI_COMPATIBLE / HTTP 401",
                 "检查 API Key。",
                 1780000000000L,
                 1,
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "qwen3-vl-plus",
                 401,
                 "invalid_api_key"

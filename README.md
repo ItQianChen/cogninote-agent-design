@@ -68,11 +68,11 @@
 - 知识库维护队列：导入目录、同步目录、重新解析目录、启停、删除、补写索引、目录重建和全库重建都会先进入本地 FIFO 队列，通过 SSE 推送 `QUEUED/RUNNING/COMPLETED/FAILED` 等状态；等待任务可取消，运行任务执行到安全完成点。高风险操作先二次确认，导入和重建类任务完成后会弹出需要用户确认的结果提示。
 - 本地数据存储：SQLite 保存文档元数据、chunk 内容、知识库维护队列与历史、模型配置、联网搜索设置、聊天会话、消息和用户引用的助手回复片段。
 - 本地搜索索引：Lucene 提供 BM25 关键词检索、向量检索和混合检索；支持中文正文、代码标识符、路径片段和流程图节点检索，向量检索会使用 active Embedding 模型生成查询向量。Embedding 调用按模型配置中的 RPM、TPM 和 batch size 限速；供应商返回 429、rate limit、TPM/RPM limit 时会自动退避重试，并提示用户这是供应商配额限制，不是文档解析失败。
-- RAG 对话：通过 Spring AI ChatClient + Advisor 注入会话记忆和知识库片段；知识库模式可按 `AUTO/ALWAYS/OFF` 策略补全省略、指代、动作型和领域切换追问的检索 query，并保留空白的 SSE 流式输出答案、展示引用来源；模型截断、异常或流提前断开时会标记“未完成”，避免半截回答伪装成完成。
+- RAG 对话：通过 Spring AI ChatClient + Advisor 注入会话记忆和知识库片段；知识库模式可按 `AUTO/ALWAYS/OFF` 策略补全省略、指代、动作型和领域切换追问的检索 query，并保留空白的 SSE 流式输出答案、独立展示可展开的思考过程和引用来源；模型截断、异常或流提前断开时会标记“未完成”，避免半截回答伪装成完成。
 - 联网搜索 Tool Calling：全局配置 Exa API Key 后，用户可在单轮聊天设置中显式开启联网。后端只有在“本轮开关 + 全局启用 + API Key 已配置”同时满足时才挂载 `WebSearchTools.searchWeb`；工具结果通过 SSE `tool` 事件增量回传，并以 `WEB` 来源和本地知识库来源一起展示、落库。
 - OCR 识别：全局启用模型 OCR 后，无文本层 PDF 可按页渲染为图片并上传到当前 VISION 模型识别；每页成功后先保存本地检查点，普通同步可从失败页继续，整份完成后才进入 SQLite chunks 和 Lucene 索引。该流程不修改用户原始 PDF；模型密钥只保存在本机，模型配置页会明文回显，日志、异常、测试结果和维护运行记录不输出密钥。
 - 知识图谱：基于已导入 chunks 调用 active Chat 模型抽取实体、中文关系谓词、关系描述和证据，写入 SQLite 图谱缓存与派生视图；进入图谱页先展示可搜索、可筛选的已有全库/目录/文件图谱清单，点击“查看”后才按需加载完整视图；已有图谱可重新生成或删除，删除只清理图谱节点、关系、证据、视图和运行记录，不删除原始目录、文件、chunks 或 chunk 抽取缓存；关系 `type` 只做内部粗分类，画布、邻接表、Inspector 和证据抽屉直接展示后端校验后的中文 `displayLabel` 与 `description`。
-- 模型配置：Chat / Embedding / Vision 独立配置和启用；支持阿里百炼 DashScope 默认通道、OpenAI-compatible 自定义 Base URL，模型 ID 可下拉搜索、模糊匹配或手动输入；Chat 模型可配置上下文窗口，默认 `128K`；Embedding 模型可配置请求限速，标准默认值为 `300 RPM / 300000 TPM / batch 16`，也可按供应商控制台配额自定义；Vision 模型用于无文本层 PDF 的模型 OCR。
+- 模型配置：Chat / Embedding / Vision 独立配置和启用；统一使用 OpenAI-compatible 自定义 Base URL，模型 ID 可下拉搜索、模糊匹配或手动输入；Chat 模型可配置上下文窗口与推理等级，默认上下文窗口为 `128K`、推理等级为 `NONE`；Embedding 模型可配置请求限速，标准默认值为 `300 RPM / 300000 TPM / batch 16`，也可按供应商控制台配额自定义；Vision 模型用于无文本层 PDF 的模型 OCR。
 - Prompt 配置：聊天、RAG、追问补全、连接测试和知识图谱抽取 Prompt 统一放在 `src/main/resources/cogninote-prompts.yaml`；`application.yaml` 只导入该专用配置文件并保留运行配置。
 - 对话式桌面界面：左侧持久化会话列表，主区域流式对话，答案按 AI 流式 Markdown 渲染并支持 Mermaid 流程图代码块，引用来源可折叠；用户可选中已完成助手回复片段添加到下一轮对话，发送后引用标签会随用户消息持久化并支持悬停预览；对话设置可切换知识库、检索模式和 Top K，发送区显示当前会话上下文占用和压缩状态。
 - 主题设置：支持深色/夜间和日间主题，本机保存偏好。
@@ -86,7 +86,7 @@
 | 前端 | Vue 3, Vue Router, Pinia, Vite, Element Plus |
 | 存储 | SQLite |
 | 检索 | Apache Lucene |
-| 模型 | Spring AI Alibaba DashScope, Spring AI OpenAI Runtime for OpenAI-compatible |
+| 模型 | Spring AI OpenAI Runtime（OpenAI-compatible 协议） |
 | 桌面 | Tauri 2, jlink, jpackage, NSIS, macOS app/dmg |
 
 ## 开发者快速开始
@@ -309,7 +309,7 @@ bash ./scripts/build-desktop-app-macos.sh --skip-tests
 | --- | --- |
 | [项目方案](docs/cogninote-agent-design.md) | 产品定位、架构、数据模型和里程碑 |
 | [API 参考](docs/api-reference.md) | REST API、统一响应格式、SSE 事件和流式取消接口 |
-| [模型配置指南](docs/model-configuration-guide.md) | DashScope、OpenAI-compatible 与 Embedding 限速配置方式 |
+| [模型配置指南](docs/model-configuration-guide.md) | OpenAI-compatible、推理等级与 Embedding 限速配置方式 |
 | [桌面构建指南](docs/desktop-build-guide.md) | 桌面打包、签名、公证、发布和故障排查 |
 | [测试与发布门禁](docs/testing-and-release-gates.md) | 后端测试隔离与按需重复诊断、Vitest、Playwright、CI required checks、体积预算和桌面 smoke |
 
@@ -329,3 +329,6 @@ bash ./scripts/build-desktop-app-macos.sh --skip-tests
 ## License
 
 本项目使用 [Apache License 2.0](LICENSE)。
+
+
+

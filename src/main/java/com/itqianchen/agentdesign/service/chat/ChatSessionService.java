@@ -275,12 +275,13 @@ public class ChatSessionService {
     public void appendAssistantDone(
             String conversationId,
             String content,
+            String reasoningContent,
             String requestId,
             AgentType agentType,
             SearchMode retrievalMode,
             List<RagSourceResponse> sources
     ) {
-        appendAssistant(conversationId, content, requestId, agentType, retrievalMode, sources, ChatMessageStatus.DONE);
+        appendAssistant(conversationId, content, reasoningContent, requestId, agentType, retrievalMode, sources, ChatMessageStatus.DONE);
         refreshSummaryIfNeeded(conversationId);
     }
 
@@ -298,12 +299,13 @@ public class ChatSessionService {
     public void appendAssistantStopped(
             String conversationId,
             String content,
+            String reasoningContent,
             String requestId,
             AgentType agentType,
             SearchMode retrievalMode,
             List<RagSourceResponse> sources
     ) {
-        appendAssistant(conversationId, content, requestId, agentType, retrievalMode, sources, ChatMessageStatus.STOPPED);
+        appendAssistant(conversationId, content, reasoningContent, requestId, agentType, retrievalMode, sources, ChatMessageStatus.STOPPED);
         refreshSummaryIfNeeded(conversationId);
     }
 
@@ -323,12 +325,13 @@ public class ChatSessionService {
     public void appendAssistantError(
             String conversationId,
             String content,
+            String reasoningContent,
             String requestId,
             AgentType agentType,
             SearchMode retrievalMode,
             List<RagSourceResponse> sources
     ) {
-        appendAssistant(conversationId, content, requestId, agentType, retrievalMode, sources, ChatMessageStatus.ERROR);
+        appendAssistant(conversationId, content, reasoningContent, requestId, agentType, retrievalMode, sources, ChatMessageStatus.ERROR);
     }
 
     /**
@@ -358,13 +361,14 @@ public class ChatSessionService {
     private void appendAssistant(
             String conversationId,
             String content,
+            String reasoningContent,
             String requestId,
             AgentType agentType,
             SearchMode retrievalMode,
             List<RagSourceResponse> sources,
             ChatMessageStatus status
     ) {
-        if (content == null || content.isBlank()) {
+        if ((content == null || content.isBlank()) && (reasoningContent == null || reasoningContent.isBlank())) {
             // 空回复不落库，避免停止或异常路径产生看不见但会污染上下文预算的消息。
             return;
         }
@@ -372,6 +376,7 @@ public class ChatSessionService {
                 conversationId,
                 ChatMessageRole.ASSISTANT,
                 content,
+                reasoningContent,
                 status,
                 requestId,
                 agentType,

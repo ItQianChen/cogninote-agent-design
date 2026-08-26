@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * 统一 Embedding 模型调用接口。
  *
- * <p>query 与 document 分开建模，是为了适配 DashScope 等厂商的检索场景参数。</p>
+ * <p>query and document are modeled separately while protocol details stay behind this interface.</p>
  */
 public interface AiEmbeddingRuntime {
 

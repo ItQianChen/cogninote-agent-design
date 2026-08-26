@@ -4,6 +4,7 @@ import com.itqianchen.agentdesign.domain.vo.agent.AgentChatStream;
 import com.itqianchen.agentdesign.domain.vo.agent.AgentRequest;
 import com.itqianchen.agentdesign.domain.enums.agent.AgentType;
 import com.itqianchen.agentdesign.domain.interfaces.ai.AiRuntimeFactory;
+import com.itqianchen.agentdesign.domain.interfaces.ai.AiChatDelta;
 import com.itqianchen.agentdesign.domain.entity.chat.ChatMessage;
 import com.itqianchen.agentdesign.domain.entity.model.ModelConfig;
 import com.itqianchen.agentdesign.domain.enums.search.SearchMode;
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 
 /**
  * ChatAgent 的公共流式执行骨架。
@@ -119,10 +121,12 @@ public abstract class AbstractChatAgent implements ChatAgent {
                 CogninoteMemoryAdvisor.AGENT_TYPE, type()
         );
         StringBuilder assistantAnswer = new StringBuilder();
+        StringBuilder assistantReasoning = new StringBuilder();
+        Sinks.Many<String> reasoningSink = Sinks.many().multicast().onBackpressureBuffer();
         AtomicBoolean saved = new AtomicBoolean(false);
         // 模型流是冷流，defer 确保订阅发生后才真正发起外部调用和开始累计答案。
         Flux<String> answer = Flux.defer(() -> aiRuntimeFactory.chatRuntime(chatConfig)
-                .stream(
+                .streamDeltas(
                         promptAssembler.systemPrompt(type(), webSearchInvocation.enabled()),
                         promptAssembler.userPrompt(type(), modelQuestion),
                         invocation.advisors(),
@@ -130,7 +134,15 @@ public abstract class AbstractChatAgent implements ChatAgent {
                         webSearchInvocation.tools(),
                         webSearchInvocation.toolContext()
                 )
-                .doOnNext(assistantAnswer::append)
+                .doOnNext(delta -> {
+                    if (delta.text() != null) {
+                        assistantAnswer.append(delta.text());
+                    }
+                    if (delta.reasoning() != null) {
+                        assistantReasoning.append(delta.reasoning());
+                        reasoningSink.tryEmitNext(delta.reasoning());
+                    }
+                })
                 .doFinally(signal -> completeToolEvents(webSearchInvocation))
                 .doOnComplete(() -> logAgentCompleted(
                         requestId,
@@ -157,6 +169,7 @@ public abstract class AbstractChatAgent implements ChatAgent {
                         saved,
                         conversationId,
                         assistantAnswer.toString(),
+                        assistantReasoning.toString(),
                         requestId,
                         knowledgeContext,
                         webSearchInvocation.collector()
@@ -165,10 +178,15 @@ public abstract class AbstractChatAgent implements ChatAgent {
                         saved,
                         conversationId,
                         assistantAnswer.toString(),
+                        assistantReasoning.toString(),
                         requestId,
                         knowledgeContext,
                         webSearchInvocation.collector()
-                )));
+                ))
+                .doFinally(signal -> reasoningSink.tryEmitComplete())
+                // 推理阶段可能只有 reasoning、没有 text；先过滤整个 delta，再读取正文，避免 Reactor map 返回 null。
+                .filter(delta -> delta.text() != null && !delta.text().isEmpty())
+                .map(AiChatDelta::text));
 
         return new AgentChatStream(
                 requestId,
@@ -179,10 +197,12 @@ public abstract class AbstractChatAgent implements ChatAgent {
                 () -> chatSessionService.contextUsage(conversationId),
                 webSearchInvocation.toolEvents(),
                 answer,
+                reasoningSink.asFlux(),
                 () -> saveAssistantStopped(
                         saved,
                         conversationId,
                         assistantAnswer.toString(),
+                        assistantReasoning.toString(),
                         requestId,
                         knowledgeContext,
                         webSearchInvocation.collector()
@@ -262,6 +282,7 @@ public abstract class AbstractChatAgent implements ChatAgent {
             AtomicBoolean saved,
             String conversationId,
             String content,
+            String reasoningContent,
             String requestId,
             KnowledgeContext knowledgeContext,
             ToolExecutionCollector toolExecutionCollector
@@ -272,6 +293,7 @@ public abstract class AbstractChatAgent implements ChatAgent {
         chatSessionService.appendAssistantDone(
                 conversationId,
                 content,
+                reasoningContent,
                 requestId,
                 type(),
                 knowledgeContext.retrievalMode(),
@@ -292,6 +314,7 @@ public abstract class AbstractChatAgent implements ChatAgent {
             AtomicBoolean saved,
             String conversationId,
             String content,
+            String reasoningContent,
             String requestId,
             KnowledgeContext knowledgeContext,
             ToolExecutionCollector toolExecutionCollector
@@ -302,6 +325,7 @@ public abstract class AbstractChatAgent implements ChatAgent {
         chatSessionService.appendAssistantStopped(
                 conversationId,
                 content,
+                reasoningContent,
                 requestId,
                 type(),
                 knowledgeContext.retrievalMode(),
@@ -322,6 +346,7 @@ public abstract class AbstractChatAgent implements ChatAgent {
             AtomicBoolean saved,
             String conversationId,
             String content,
+            String reasoningContent,
             String requestId,
             KnowledgeContext knowledgeContext,
             ToolExecutionCollector toolExecutionCollector
@@ -332,6 +357,7 @@ public abstract class AbstractChatAgent implements ChatAgent {
         chatSessionService.appendAssistantError(
                 conversationId,
                 content,
+                reasoningContent,
                 requestId,
                 type(),
                 knowledgeContext.retrievalMode(),

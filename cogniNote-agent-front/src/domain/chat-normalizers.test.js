@@ -88,6 +88,15 @@ describe('chat protocol normalization', () => {
     })
     expect(normalizeContextUsage(null)).toBeNull()
     expect(createLocalMessage('assistant')).toMatchObject({ role: 'assistant', status: 'streaming' })
+    expect(normalizeMessage({
+      role: 'ASSISTANT',
+      reasoningContent: '先分析问题',
+      reasoningStatus: 'DONE'
+    })).toMatchObject({
+      role: 'assistant',
+      reasoningContent: '先分析问题',
+      reasoningStatus: 'done'
+    })
     expect(normalizeMessage({ role: 'USER', status: 'error' })).toMatchObject({ role: 'user', status: 'done' })
   })
 })

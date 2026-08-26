@@ -291,19 +291,7 @@ function showTemperatureField() {
               <span>模型服务商</span>
             </span>
             <div class="provider-field-control">
-              <el-select
-                :model-value="modelConfigStore.form.provider"
-                @change="modelConfigStore.changeProvider"
-              >
-                <el-option
-                  v-for="provider in modelConfigStore.providerOptions"
-                  :key="provider.value"
-                  :value="provider.value"
-                  :label="provider.label"
-                >
-                  {{ provider.label }}
-                </el-option>
-              </el-select>
+              <el-input :model-value="modelConfigStore.providerLabel" readonly />
               <span
                 v-if="modelConfigStore.isEditingExisting && modelConfigStore.selectedConfig?.active"
                 class="active-config-badge"
@@ -328,10 +316,7 @@ function showTemperatureField() {
               v-model="modelConfigStore.form.baseUrl"
               type="url"
               autocomplete="off"
-              :readonly="modelConfigStore.form.provider !== 'OPENAI_COMPATIBLE'"
-              :placeholder="modelConfigStore.form.provider === 'OPENAI_COMPATIBLE'
-                ? 'https://api.example.com/v1'
-                : 'https://dashscope.aliyuncs.com/api/v1'"
+              placeholder="https://api.example.com/v1"
             />
           </label>
 
@@ -496,6 +481,18 @@ function showTemperatureField() {
           </label>
 
           <label v-if="modelConfigStore.activeRole === modelConfigStore.ROLES.CHAT" class="field">
+            <span>推理等级</span>
+            <el-select v-model="modelConfigStore.form.reasoningEffort">
+              <el-option
+                v-for="option in modelConfigStore.reasoningEffortOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </label>
+
+          <label v-if="modelConfigStore.activeRole === modelConfigStore.ROLES.CHAT" class="field">
             <span>默认 Top K</span>
             <el-input-number v-model="modelConfigStore.form.defaultTopK" :min="1" :max="50" controls-position="right" />
           </label>
@@ -568,7 +565,7 @@ function showTemperatureField() {
     </div>
 
     <p class="warning-message">
-      阿里百炼会使用默认 DashScope 地址；OpenAI-compatible 使用用户填写的 Base URL，并调用 Base URL + /chat/completions、/embeddings 和 /models。
+      所有模型均使用用户填写的 OpenAI-compatible Base URL，并调用 Base URL + /chat/completions、/embeddings 和 /models。
       当前阶段 API Key 会以明文保存到本机 SQLite。向量模型或维度变化后，旧向量索引不会自动重建，请按需在知识库中手动重建索引。
     </p>
   </section>

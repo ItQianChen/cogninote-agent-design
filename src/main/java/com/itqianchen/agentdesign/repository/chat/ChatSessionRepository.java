@@ -291,6 +291,7 @@ public class ChatSessionRepository {
             String conversationId,
             ChatMessageRole role,
             String content,
+            String reasoningContent,
             ChatMessageStatus status,
             String requestId,
             AgentType agentType,
@@ -307,6 +308,7 @@ public class ChatSessionRepository {
                 nextSequence,
                 role,
                 content,
+                reasoningContent,
                 status,
                 requestId,
                 agentType,
@@ -319,6 +321,15 @@ public class ChatSessionRepository {
         chatSessionMapper.insertMessage(message);
         chatSessionMapper.touchSession(conversationId, createdAt);
         return message;
+    }
+
+    public ChatMessage appendMessage(
+            String conversationId, ChatMessageRole role, String content, ChatMessageStatus status, String requestId,
+            AgentType agentType, SearchMode retrievalMode, String sourcesJson, String referencesJson,
+            int tokenEstimate, long createdAt
+    ) {
+        return appendMessage(conversationId, role, content, null, status, requestId, agentType, retrievalMode,
+                sourcesJson, referencesJson, tokenEstimate, createdAt);
     }
 
     /**

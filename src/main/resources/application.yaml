@@ -18,23 +18,12 @@ spring: # Spring Boot 与 Spring AI 自动配置入口。
       embedding: ${COGNINOTE_AI_EMBEDDING_PROVIDER:none} # 环境变量 fallback 的 Embedding provider；默认 none，优先使用 SQLite active EMBEDDING 配置。
       embedding.text: ${COGNINOTE_AI_EMBEDDING_PROVIDER:none} # 兼容 Spring AI 文本 Embedding provider 配置，默认与 embedding 保持一致。
       embedding.multimodal: none # 关闭多模态 Embedding 自动配置，当前只索引文本 chunk。
-    dashscope: # Spring AI Alibaba DashScope 自动配置分组。
-      api-key: ${COGNINOTE_DASHSCOPE_API_KEY:} # 环境变量 fallback 的 DashScope API Key；为空时应用仍可启动，向量检索按需降级。
-      agent: # DashScope Agent 自动配置分组。
-        enabled: false # 关闭 DashScope Agent 自动配置，CogniNote 使用自研 ChatAgentRouter。
-      chat: # DashScope Chat 自动配置分组。
-        enabled: false # 关闭 DashScope Chat 自动配置，避免和 SQLite active CHAT 动态运行时冲突。
-      image: # DashScope Image 自动配置分组。
-        enabled: false # 关闭 DashScope Image 自动配置。
-      embedding: # DashScope Embedding 自动配置分组；仅作为环境变量 fallback 使用。
-        options: # DashScope Embedding 默认选项。
-          model: ${COGNINOTE_EMBEDDING_MODEL:text-embedding-v4} # 环境变量 fallback 的 Embedding 模型名，默认 text-embedding-v4。
     chat: # Spring AI 对话观测日志配置。
       client: # ChatClient 层观测；当前对话链路通过 ChatClient 组装 system/user/advisor。
         observations: # 默认不落盘 prompt/completion，避免发布包记录用户对话内容；dev/diagnostic profile 会显式打开。
           log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:false} # 输出 ChatClient 请求中的 prompt 内容。
           log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:false} # 输出 ChatClient 聚合后的 completion 内容。
-      observations: # ChatModel 层观测；动态创建的 DashScope/OpenAI-compatible 模型都会接入 ObservationRegistry。
+      observations: # ChatModel 层观测；动态创建的 OpenAI-compatible 模型都会接入 ObservationRegistry。
         log-prompt: ${COGNINOTE_SPRING_AI_LOG_PROMPT:false} # 输出底层模型调用 prompt。
         log-completion: ${COGNINOTE_SPRING_AI_LOG_COMPLETION:false} # 输出底层模型 completion。
         include-error-logging: ${COGNINOTE_SPRING_AI_LOG_ERRORS:true} # 模型调用异常时打印观测错误日志。

@@ -335,6 +335,14 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
 
+    if (eventName === 'reasoning') {
+      updateAssistantMessage((message) => {
+        message.reasoningContent += payload.delta || ''
+        message.reasoningStatus = payload.status || 'streaming'
+      })
+      return
+    }
+
     if (eventName === 'tool') {
       updateAssistantMessage((message) => {
         message.sources = mergeSources(message.sources, payload.sources)

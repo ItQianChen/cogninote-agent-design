@@ -23,7 +23,6 @@ const visionModel = computed(() => ocrSettingsStore.settings.visionModel)
 const keyStatusLabel = computed(() => visionModel.value.apiKeyConfigured ? '已配置' : '未配置')
 const providerLabel = computed(() => {
   return {
-    DASHSCOPE: '阿里百炼 DashScope',
     OPENAI_COMPATIBLE: 'OpenAI-compatible'
   }[visionModel.value.provider] || visionModel.value.provider || '-'
 })

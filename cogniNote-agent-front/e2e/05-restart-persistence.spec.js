@@ -16,9 +16,9 @@ test('folders, sessions, and model config survive a backend restart on the same 
   await apiData(await request.post('/api/model-configs/settings/configs', {
     data: {
       role: 'CHAT',
-      provider: 'DASHSCOPE',
+      provider: 'OPENAI_COMPATIBLE',
       displayName: 'Phase 37 Restart Config',
-      baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+      baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       apiKey: 'restart-placeholder-key',
       modelName: 'qwen-plus',
       temperature: 0.7,

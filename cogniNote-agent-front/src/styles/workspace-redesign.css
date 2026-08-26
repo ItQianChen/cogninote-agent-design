@@ -669,6 +669,33 @@
   box-shadow: none;
 }
 
+.message-reasoning {
+  margin: 0 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+}
+
+.message-reasoning summary {
+  padding: 9px 12px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.message-reasoning pre {
+  max-height: 320px;
+  margin: 0;
+  padding: 0 12px 12px;
+  overflow: auto;
+  color: var(--color-text-muted);
+  font: inherit;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
 .message-source-strip {
   display: flex;
   flex-wrap: wrap;

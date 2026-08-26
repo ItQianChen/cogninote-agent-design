@@ -19,6 +19,7 @@ public record ChatMessage(
         int sequence,
         ChatMessageRole role,
         String content,
+        String reasoningContent,
         ChatMessageStatus status,
         String requestId,
         AgentType agentType,
@@ -28,4 +29,12 @@ public record ChatMessage(
         int tokenEstimate,
         long createdAt
 ) {
+    public ChatMessage(
+            String id, String conversationId, int sequence, ChatMessageRole role, String content,
+            ChatMessageStatus status, String requestId, AgentType agentType, SearchMode retrievalMode,
+            String sourcesJson, String referencesJson, int tokenEstimate, long createdAt
+    ) {
+        this(id, conversationId, sequence, role, content, null, status, requestId, agentType, retrievalMode,
+                sourcesJson, referencesJson, tokenEstimate, createdAt);
+    }
 }

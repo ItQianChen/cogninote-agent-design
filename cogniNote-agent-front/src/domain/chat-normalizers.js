@@ -37,6 +37,8 @@ export function normalizeMessage(message, fallbackRole = 'assistant') {
     id: message?.id || nextId(role),
     role,
     content: message?.content || '',
+    reasoningContent: message?.reasoningContent || '',
+    reasoningStatus: String(message?.reasoningStatus || '').toLowerCase(),
     status: normalizeStatus(message?.status, role),
     sources: normalizeSources(message?.sources),
     references: normalizeReferences(message?.references),

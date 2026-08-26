@@ -20,7 +20,7 @@
 - Java-first：主体使用 Spring Boot，而不是 Python/Node
 - 本地优先：知识文件、SQLite 数据库、Lucene 索引和配置默认保存在本机
 - 混合检索：优先用 Lucene 同时支持关键词检索和向量检索
-- 模型开放：支持 DashScope / 百炼默认通道，也支持 OpenAI-compatible 自定义 Base URL；Ollama、LM Studio 等可通过兼容接口或后续专项适配接入
+- 模型开放：统一使用 OpenAI-compatible 自定义 Base URL；百炼兼容端点、Ollama、LM Studio 等可通过兼容接口接入
 
 ## 2. 第一版 MVP 范围
 
@@ -104,7 +104,7 @@ Spring Boot 后端
   ├─ Chat API / SSE Adapter
   ├─ Agent Execution Service
   ├─ WebSearchToolPolicy + WebSearchTools
-  ├─ AI Runtime (DashScope / OpenAI-compatible)
+  ├─ AI Runtime (OpenAI-compatible)
   ├─ SQLite Chat Memory
   ├─ Repository + MyBatis XML Mapper
   ├─ Spring AI Advisor (Memory / RAG)
@@ -243,13 +243,9 @@ RRF K: 60
 
 ### 5.4 Embedding Gateway
 
-嵌入模型不放进 JVM。CogniNote 使用自己的 `EmbeddingGateway` 和 `AiEmbeddingRuntime` 隔离 provider 差异，默认推荐 DashScope `text-embedding-v4`。业务代码只区分“文档向量化”和“查询向量化”，不直接依赖 Alibaba 或 OpenAI 具体类。
+嵌入模型不放进 JVM。CogniNote 使用自己的 `EmbeddingGateway` 和 `AiEmbeddingRuntime` 隔离运行时边界，默认推荐 `text-embedding-v4`。业务代码只区分“文档向量化”和“查询向量化”，不直接依赖厂商 SDK。
 
-第一版推荐默认接入：
-
-- DashScope / 百炼 embedding：通过 Spring AI Alibaba `DashScopeEmbeddingOptions.textType` 分别传递 `document` 和 `query`。
-- OpenAI-compatible embedding：继续走 Spring AI OpenAI runtime 的标准 `/embeddings` 请求；Spring AI OpenAI 的 embedding options 没有 `text_type` 字段，CogniNote 不发送非标准参数。
-- 后续可扩展 Ollama、DeepSeek 或其它 provider，只需实现对应 `AiEmbeddingRuntime`。
+当前实现统一使用 Spring AI OpenAI Runtime 调用标准 `/embeddings`。Embedding options 不发送 `text_type` 等非标准参数；未来新增协议时，只在 `ModelRuntimeFactory` 增加新运行时路由，不让厂商逻辑渗入业务层。
 
 统一接口：
 
@@ -263,22 +259,22 @@ public interface EmbeddingGateway {
 
 Embedding 配置由 SQLite `model_configs` 的 active `EMBEDDING` 记录提供，主要字段包括模型 ID、向量维度、RPM、TPM 和 Batch。默认限速是 `300 RPM / 300000 TPM / batch 16`；前端提供保守、标准、快速和自定义档位，用户可按供应商控制台配额调整，例如高额度账号可设置 `3000 RPM / 1000000 TPM`。
 
-未配置 API Key 时，关键词检索仍应可用；向量索引和混合检索需要明确提示 Embedding 未启用。Spring AI Alibaba 和 Spring AI OpenAI 的若干自动配置默认会尝试创建模型 Bean，因此默认把 `spring.ai.model.embedding.text`、`spring.ai.model.chat`、`spring.ai.model.image`、`spring.ai.model.moderation` 等未使用模块设为 `none`。模型实例由 SQLite 中的 active 配置在 AI Runtime 层动态创建。
+未配置 API Key 时，关键词检索仍应可用；向量索引和混合检索需要明确提示 Embedding 未启用。Spring AI 的若干自动配置默认会尝试创建模型 Bean，因此默认把 `spring.ai.model.embedding.text`、`spring.ai.model.chat`、`spring.ai.model.image`、`spring.ai.model.moderation` 等未使用模块设为 `none`。模型实例由 SQLite 中的 active 配置在 AI Runtime 层动态创建。
 
 Embedding 请求在网关层按配置限速：RPM 换算为最小请求间隔，TPM 使用 60 秒滚动窗口，Batch 控制每次提交的 chunk 数。供应商返回 429、`rate limit`、`TPM limit` 或 `RPM limit` 时，后端会最多退避重试 5 次并通过维护任务提示“这不是文档解析失败”。连续限流后仍失败的文档保持 `indexed_at=NULL`，由 `REPAIR_INDEX` 补写索引恢复。
 
 ### 5.5 AI Runtime 与 Agent 执行层
 
-所有大模型调用必须统一收敛到模型运行时层。对话层不直接绑定某个厂商 SDK，也不直接知道 OpenAI-compatible 的 HTTP 细节或 DashScope 的 endpoint 选择规则。
+所有大模型调用必须统一收敛到模型运行时层。对话层不直接绑定某个厂商 SDK，也不直接知道 OpenAI-compatible 的 HTTP 细节。
 
 当前实现状态：
 
-- `DASHSCOPE` 使用 Spring AI Alibaba 原生 `DashScopeChatModel` / `DashScopeEmbeddingModel`。
-- `OPENAI_COMPATIBLE` 使用 Spring AI OpenAI 官方模型实现，保留用户配置的 `Base URL + /chat/completions` 与 `Base URL + /embeddings` 语义。
-- `AiRuntimeFactory` 根据 active `ModelConfig` 创建和缓存 Chat / Embedding runtime。
-- `DashScopeRuntime` 继续封装 Spring AI Alibaba，并保留 DashScope 默认百炼地址和多模态 endpoint 判断。
-- `OpenAiCompatibleRuntime` 使用 Spring AI OpenAI 官方模型实现，读取用户自定义 Base URL、API Key、模型 ID 和模型参数。
-- 旧 `OpenAiCompatibleClient` / `OpenAiCompatibleEmbeddingClient` 已删除，避免长期维护两套 OpenAI-compatible 调用路径。
+- `ModelProvider` 当前仅保留 `OPENAI_COMPATIBLE`，`ModelRuntimeFactory` 是未来增加新协议的稳定路由边界。
+- `OpenAiCompatibleRuntimeFactory` 使用 Spring AI OpenAI 官方模型实现，按 Base URL、API Key、模型、温度、维度和推理等级创建并缓存 Chat / Embedding runtime。
+- Chat 运行时以标准 `Base URL + /chat/completions` 调用；Embedding 运行时以标准 `Base URL + /embeddings` 调用。
+- `reasoningEffort=NONE` 会关闭 thinking；其他等级会透传小写推理等级并开启 thinking。推理等级也是 Chat runtime 缓存 key 的一部分。
+- 旧原生 DashScope Runtime、Embedding Runtime 和 OpenAI-compatible 自研 HTTP client 均已删除，避免维护多套调用路径。
+
 - `AgentExecutionService` 通过 `ChatAgentRouter` 路由到具体 Agent，Controller 只负责 SSE 适配。
 - `GENERAL_CHAT` 普通对话 Agent 只挂会话记忆，不检索知识库；`KNOWLEDGE_BASE` 知识库 Agent 挂会话记忆和 RAG Advisor。
 - 第 35 阶段后，普通对话和知识库对话都可以按本轮 `useWebSearch` 挂载联网搜索工具。`WebSearchToolPolicy` 统一执行“本轮开关 + 全局启用 + EXA API Key 已配置”三重门控；未开启本轮联网时直接返回 disabled，不读取联网设置或密钥。
@@ -294,12 +290,12 @@ Embedding 请求在网关层按配置限速：RPM 换算为最小请求间隔，
 
 用户在前端配置：
 
-- Provider 类型
-- Base URL（仅 OpenAI-compatible 可自定义；DashScope 使用默认百炼地址）
+- Provider：当前固定为 `OPENAI_COMPATIBLE`
+- Base URL：每条配置均可自定义
 - API Key
 - 模型 ID
-- 配置类型：`CHAT` 或 `EMBEDDING`
-- Chat 上下文窗口：默认 `128000` tokens，前端显示 `128K`，仅用于本地历史裁剪、压缩和上下文占用展示
+- 配置类型：`CHAT`、`EMBEDDING` 或 `VISION`
+- Chat 上下文窗口与推理等级：上下文窗口默认 `128000` tokens（前端显示 `128K`），推理等级默认 `NONE`
 - Embedding 请求限速：RPM、TPM 和 Batch，默认 `300 / 300000 / 16`
 
 后端接口：
@@ -321,7 +317,7 @@ DELETE /api/model-configs/settings/configs/{id}
 POST   /api/model-configs/settings/configs/{id}/activate
 ```
 
-第五阶段先把模型配置页做扎实：用户选择 `DASHSCOPE` 时使用默认百炼通道，配置页展示 `https://dashscope.aliyuncs.com/api/v1`；选择 `OPENAI_COMPATIBLE` 时输入自定义 Base URL，后端按 `Base URL + /models`、`Base URL + /chat/completions`、`Base URL + /embeddings` 调用通用接口。
+当前模型配置页统一使用 `OPENAI_COMPATIBLE`：用户输入自定义 Base URL，后端按 `Base URL + /models`、`Base URL + /chat/completions`、`Base URL + /embeddings` 调用通用接口。默认值可使用百炼兼容端点 `https://dashscope.aliyuncs.com/compatible-mode/v1`。
 
 第八阶段把单个 active 模型配置拆成多配置中心：`CHAT` 和 `EMBEDDING` 独立维护、独立激活。RAG 回答读取 active Chat 配置；文档向量化、向量检索和混合检索读取 active Embedding 配置。旧 `/api/model-config` 只作为过渡兼容接口保留。
 
@@ -413,15 +409,16 @@ useKnowledgeBase=true
 
 第 29 阶段后，user 消息可以携带用户选中的助手回复片段引用。引用对象只保存 `id/messageId/snippet`，写入 `chat_messages.references_json`；`chat_messages.content` 始终保留用户原始问题。进入模型上下文、会话记忆和 token 估算时，`ChatReferencePromptFormatter` 才把引用片段格式化为“引用片段块 + 用户问题”，并明确提示模型不要把引用片段当作用户新说的话。
 
-Token 估算优先使用本地 JTokkit。DashScope/Qwen 默认采用 `o200k_base`，OpenAI-compatible 优先按模型名匹配 tokenizer，识别不到时使用 `cl100k_base`；单条 chat message 会追加 framing overhead，避免低估上下文。聊天页通过 `ChatContextUsageResponse` 展示当前会话占用，已压缩会话按“摘要 + 最近原文消息”重新估算。`ChatSessionResponse`、SSE `meta` 和 SSE `done` 都携带同一口径的 `contextUsage`。
+Token 估算优先使用本地 JTokkit。Qwen 等模型优先采用 `o200k_base`，其余 OpenAI-compatible 模型按名称匹配 tokenizer，识别不到时使用 `cl100k_base`；单条 chat message 会追加 framing overhead，避免低估上下文。聊天页通过 `ChatContextUsageResponse` 展示当前会话占用，已压缩会话按“摘要 + 最近原文消息”重新估算。`ChatSessionResponse`、SSE `meta` 和 SSE `done` 都携带同一口径的 `contextUsage`。
 
 ### 5.7 流式输出与 Markdown 合同
 
 AI 回答的 Markdown 质量不只取决于前端渲染器，也取决于后端流式传输是否保留模型原文。第十二阶段后，流式输出遵循以下合同：
 
-- SSE 事件顺序保持 `meta -> delta/tool -> done/error`；`meta` 包含 `requestId`、`conversationId`、实际检索模式、本地引用来源和当前上下文占用 `contextUsage`。
+- SSE 事件顺序保持 `meta -> delta/reasoning/tool -> done/error`；`meta` 包含 `requestId`、`conversationId`、实际检索模式、本地引用来源和当前上下文占用 `contextUsage`。
 - `tool` 事件用于推送本轮工具调用状态和网页来源。前端必须按 `requestId` 把 `sources[].sourceType=WEB` 合并到当前 assistant 消息；旧本地来源缺少 `sourceType` 时按 `LOCAL` 兼容。
-- `delta.text` 是模型原始增量，可能只包含一个空格、换行或缩进。后端 runtime、SSE mapper 和前端 parser 都不能对它做 `trim()`、`trimStart()` 或 `isBlank()` 过滤。
+- `delta.text` 是模型原始回答增量，可能只包含一个空格、换行或缩进。后端 runtime、SSE mapper 和前端 parser 都不能对它做 `trim()`、`trimStart()` 或 `isBlank()` 过滤。
+- `reasoning` 事件承载独立推理增量，完成时发送 `status=done`；推理单独存入 `chat_messages.reasoning_content`，不作为下一轮聊天记忆。
 - 前端手写 SSE parser 只能移除 `data:` 后一个协议分隔空格，不能移除内容本身的前导空白。
 - Prompt 在 `cogninote-prompts.yaml` 中集中维护，并要求模型输出标准 Markdown：标题符号后带空格、列表符号后带空格、代码块使用 fenced code block、禁止原始 HTML。
 - 前端必须收到 `done` 或 `error` 终止事件才认为本轮 SSE 流完整结束；连接提前结束但没有终止事件时，本轮回答应显示为“未完成”。
@@ -501,12 +498,12 @@ AI 回答的 Markdown 质量不只取决于前端渲染器，也取决于后端�
 
 - `CHAT` 和 `EMBEDDING` 两类配置独立维护
 - 每类配置支持多条保存、编辑、删除和激活
-- 选择阿里百炼或 OpenAI-compatible Provider
-- 为 OpenAI-compatible 输入 Base URL；DashScope 使用默认地址
+- 唯一 Provider 为 OpenAI-compatible
+- 为 OpenAI-compatible 输入 Base URL
 - 输入、显示和复制 API Key
 - 测试连接
 - 自动拉取模型列表
-- 为对话模型配置 Temperature 和默认 Top K
+- 为对话模型配置 Temperature、默认 Top K、上下文窗口和推理等级
 - 为 Embedding 模型配置维度、RPM、TPM 和 Batch
 
 模型配置页的数据流：
@@ -1521,3 +1518,6 @@ POST   /api/chat/stream/{requestId}/cancel
 > 一个 Java + Vue 实现的本地 Markdown / TXT / DOCX / DOC / HTML / PDF 知识库问答工具，文本型 PDF 直接入库，无文本层 PDF 可诊断为需 OCR 并在配置视觉模型 OCR 后重新解析；核心卖点是 SQLite + Lucene 的清晰存储分工、Lucene 混合检索、模型可配置、答案可溯源，并能打包成 Windows 桌面应用一键运行。
 
 只要第一版把这个闭环做扎实，它就已经不是普通 RAG Demo，而是一个能展示 Java 工程能力、搜索引擎能力、前端产品能力和 AI 应用落地能力的完整开源项目。
+
+
+

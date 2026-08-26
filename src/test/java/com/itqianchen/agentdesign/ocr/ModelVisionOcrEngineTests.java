@@ -198,7 +198,7 @@ class ModelVisionOcrEngineTests {
             return new ModelConfig(
                     ModelConfigDefaults.ACTIVE_VISION_CONFIG_ID,
                     ModelConfigRole.VISION,
-                    ModelProvider.DASHSCOPE,
+                    ModelProvider.OPENAI_COMPATIBLE,
                     ModelConfigDefaults.VISION_DISPLAY_NAME,
                     ModelConfigDefaults.BASE_URL,
                     "sk-vision",

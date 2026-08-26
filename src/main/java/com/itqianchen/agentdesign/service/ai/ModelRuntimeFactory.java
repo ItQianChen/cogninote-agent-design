@@ -4,7 +4,6 @@ import com.itqianchen.agentdesign.domain.interfaces.ai.AiChatRuntime;
 import com.itqianchen.agentdesign.domain.interfaces.ai.AiEmbeddingRuntime;
 import com.itqianchen.agentdesign.domain.interfaces.ai.AiRuntimeFactory;
 import com.itqianchen.agentdesign.domain.entity.model.ModelConfig;
-import com.itqianchen.agentdesign.domain.enums.model.ModelProvider;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,20 +14,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class ModelRuntimeFactory implements AiRuntimeFactory {
 
-    private final DashScopeRuntimeFactory dashScopeRuntimeFactory;
     private final OpenAiCompatibleRuntimeFactory openAiCompatibleRuntimeFactory;
 
     /**
      * 注入所有已支持 Provider 的运行时工厂。
      *
-     * @param dashScopeRuntimeFactory DashScope 运行时工厂
      * @param openAiCompatibleRuntimeFactory OpenAI-compatible 运行时工厂
      */
-    public ModelRuntimeFactory(
-            DashScopeRuntimeFactory dashScopeRuntimeFactory,
-            OpenAiCompatibleRuntimeFactory openAiCompatibleRuntimeFactory
-    ) {
-        this.dashScopeRuntimeFactory = dashScopeRuntimeFactory;
+    public ModelRuntimeFactory(OpenAiCompatibleRuntimeFactory openAiCompatibleRuntimeFactory) {
         this.openAiCompatibleRuntimeFactory = openAiCompatibleRuntimeFactory;
     }
 
@@ -40,10 +33,7 @@ public class ModelRuntimeFactory implements AiRuntimeFactory {
      */
     @Override
     public AiChatRuntime chatRuntime(ModelConfig config) {
-        if (config.provider() == ModelProvider.OPENAI_COMPATIBLE) {
-            return openAiCompatibleRuntimeFactory.chatRuntime(config);
-        }
-        return dashScopeRuntimeFactory.chatRuntime(config);
+        return openAiCompatibleRuntimeFactory.chatRuntime(config);
     }
 
     /**
@@ -54,9 +44,6 @@ public class ModelRuntimeFactory implements AiRuntimeFactory {
      */
     @Override
     public AiEmbeddingRuntime embeddingRuntime(ModelConfig config) {
-        if (config.provider() == ModelProvider.OPENAI_COMPATIBLE) {
-            return openAiCompatibleRuntimeFactory.embeddingRuntime(config);
-        }
-        return dashScopeRuntimeFactory.embeddingRuntime(config);
+        return openAiCompatibleRuntimeFactory.embeddingRuntime(config);
     }
 }

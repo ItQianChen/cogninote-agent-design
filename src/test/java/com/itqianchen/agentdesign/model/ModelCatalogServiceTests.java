@@ -1,8 +1,6 @@
 package com.itqianchen.agentdesign.model;
 
 
-import com.itqianchen.agentdesign.domain.enums.model.ModelConfigRole;
-import com.itqianchen.agentdesign.domain.support.model.ModelConfigDefaults;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -25,7 +23,7 @@ import org.springframework.web.client.RestClient;
 class ModelCatalogServiceTests {
 
     @Test
-    void fetchModelsUsesDashScopeDefaultModelsEndpointAndClassifiesResults() {
+    void fetchModelsUsesConfiguredOpenAiCompatibleModelsEndpointAndClassifiesResults() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         ModelCatalogService service = new ModelCatalogService(
@@ -33,7 +31,7 @@ class ModelCatalogServiceTests {
                 builder
         );
 
-        server.expect(requestTo("https://dashscope.aliyuncs.com/compatible-mode/v1/models"))
+        server.expect(requestTo("https://example.test/compatible-mode/v1/models"))
                 .andExpect(header("Authorization", "Bearer sk-test"))
                 .andRespond(withSuccess("""
                         {
@@ -47,9 +45,9 @@ class ModelCatalogServiceTests {
 
         ModelOptionsResponse response = service.fetchModels(new ModelConfigRequest(
                 ModelConfigRole.CHAT.name(),
-                "DASHSCOPE",
-                "DashScope",
-                // DashScope provider 固定使用百炼默认地址，这里传入自定义 host 是为了防止旧逻辑回退。
+                "OPENAI_COMPATIBLE",
+                "OpenAI-compatible",
+                // OpenAI-compatible provider must honor the configured Base URL without provider-specific fallback.
                 "https://example.test/compatible-mode/v1",
                 "sk-test",
                 "qwen-plus",

@@ -6,6 +6,7 @@ import com.itqianchen.agentdesign.domain.dto.chat.ChatDeltaEvent;
 import com.itqianchen.agentdesign.domain.dto.chat.ChatDoneEvent;
 import com.itqianchen.agentdesign.domain.dto.chat.ChatErrorEvent;
 import com.itqianchen.agentdesign.domain.dto.chat.ChatMetaEvent;
+import com.itqianchen.agentdesign.domain.dto.chat.ChatReasoningEvent;
 import com.itqianchen.agentdesign.service.chat.ChatStreamCancellationRegistry.StreamCancellation;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -81,10 +82,16 @@ public class ChatSseEventMapper {
                                 error
                         )
                 );
+        AtomicBoolean reasoningStarted = new AtomicBoolean(false);
+        Disposable reasoningSubscription = stream.reasoning()
+                .subscribe(reasoning -> {
+                    reasoningStarted.set(true);
+                    sendSafely(emitter, completed, new AgentEvent.Delta(null, reasoning));
+                });
         stream.answer()
                 .doOnSubscribe(subscription -> cancellation.attach(cancellationHandle(subscription)))
                 .subscribe(
-                        text -> sendSafely(emitter, completed, new AgentEvent.Delta(text)),
+                        text -> sendSafely(emitter, completed, new AgentEvent.Delta(text, null)),
                         error -> {
                             log.warn("agent_chat_stream_failed requestId={} conversationId={}",
                                     stream.requestId(),
@@ -94,12 +101,17 @@ public class ChatSseEventMapper {
                             sendSafely(emitter, completed, new AgentEvent.Error(error.getMessage()));
                             completeSafely(emitter, completed);
                             toolEventSubscription.dispose();
+                            reasoningSubscription.dispose();
                             cancellationRegistry.unregister(stream.requestId(), cancellation);
                         },
                         () -> {
+                            if (reasoningStarted.get()) {
+                                sendSafely(emitter, completed, new AgentEvent.Delta(null, ""));
+                            }
                             sendSafely(emitter, completed, new AgentEvent.Done(null, stream.currentContextUsage()));
                             completeSafely(emitter, completed);
                             toolEventSubscription.dispose();
+                            reasoningSubscription.dispose();
                             cancellationRegistry.unregister(stream.requestId(), cancellation);
                         }
                 );
@@ -233,6 +245,15 @@ public class ChatSseEventMapper {
             return;
         }
         if (event instanceof AgentEvent.Delta delta) {
+            if (delta.reasoning() != null) {
+                emitter.send(SseEmitter.event()
+                        .name("reasoning")
+                        .data(new ChatReasoningEvent(delta.reasoning(),
+                                delta.reasoning().isEmpty() ? "done" : "streaming")));
+            }
+            if (delta.text() == null || delta.text().isEmpty()) {
+                return;
+            }
             emitter.send(SseEmitter.event()
                     .name("delta")
                     .data(new ChatDeltaEvent(delta.text())));

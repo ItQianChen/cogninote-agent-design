@@ -1,7 +1,6 @@
 package com.itqianchen.agentdesign.service.chat;
 
 import com.itqianchen.agentdesign.domain.entity.model.ModelConfig;
-import com.itqianchen.agentdesign.domain.enums.model.ModelProvider;
 import com.knuddels.jtokkit.Encodings;
 import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingRegistry;
@@ -110,8 +109,7 @@ public class TokenEstimator {
      */
     private EncodingChoice fallbackEncoding(ModelConfig config, String modelName) {
         String normalized = modelName.toLowerCase(Locale.ROOT);
-        boolean preferO200K = config != null && config.provider() == ModelProvider.DASHSCOPE
-                || normalized.contains("qwen")
+        boolean preferO200K = normalized.contains("qwen")
                 || normalized.contains("gpt-4o")
                 || normalized.contains("gpt-5");
         EncodingType encodingType = preferO200K ? EncodingType.O200K_BASE : EncodingType.CL100K_BASE;

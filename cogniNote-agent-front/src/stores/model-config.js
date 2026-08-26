@@ -39,12 +39,6 @@ const EMBEDDING_RATE_LIMIT_PRESETS = [
 export const useModelConfigStore = defineStore('modelConfig', () => {
   const providerOptions = [
     {
-      value: 'DASHSCOPE',
-      label: '阿里百炼 DashScope',
-      baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
-      displayName: 'DashScope'
-    },
-    {
       value: 'OPENAI_COMPATIBLE',
       label: 'OpenAI-compatible',
       baseUrl: '',
@@ -74,6 +68,10 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     { label: '128K', value: DEFAULT_CONTEXT_WINDOW_TOKENS },
     { label: '200K', value: 200000 },
     { label: '1M', value: 1000000 }
+  ]
+  const reasoningEffortOptions = [
+    { value: 'NONE', label: '关闭' }, { value: 'LOW', label: '低' }, { value: 'MEDIUM', label: '中' },
+    { value: 'HIGH', label: '高' }, { value: 'XHIGH', label: '极高' }
   ]
 
   const activeChatConfig = computed(() => activeSummary.value.chat)
@@ -554,7 +552,8 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       defaultTopK: role === ROLES.CHAT ? Number(current.defaultTopK) : undefined,
       contextWindowTokens: role === ROLES.CHAT
         ? normalizeContextWindowTokens(current.contextWindowTokens)
-        : undefined
+        : undefined,
+      reasoningEffort: role === ROLES.CHAT ? normalizeReasoningEffort(current.reasoningEffort) : undefined
     }
   }
 
@@ -713,6 +712,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     editingIdByRole,
     visibleApiKeyByRole,
     contextWindowPresets,
+    reasoningEffortOptions,
     embeddingRateLimitPresets: EMBEDDING_RATE_LIMIT_PRESETS,
     providerOptions,
     providerLabel,
@@ -793,7 +793,7 @@ function draftListItem(draft, role) {
     isDraft: true,
     active: false,
     displayName: String(form.displayName || '').trim() || '未命名模型',
-    provider: form.provider || 'DASHSCOPE',
+    provider: form.provider || 'OPENAI_COMPATIBLE',
     modelName: String(form.modelName || '').trim() || '未填写模型 ID',
     baseUrl: String(form.baseUrl || '').trim() || '-'
   }
@@ -810,13 +810,13 @@ function clearSubmittedApiKeyDraft(state, submittedApiKeyRevision) {
 function defaultForm(role) {
   return {
     role,
-    provider: 'DASHSCOPE',
+    provider: 'OPENAI_COMPATIBLE',
     displayName: role === ROLES.CHAT
-      ? 'DashScope Chat'
+      ? 'OpenAI-compatible Chat'
       : role === ROLES.EMBEDDING
-        ? 'DashScope 向量模型'
-        : 'DashScope Vision',
-    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+        ? 'OpenAI-compatible 向量模型'
+        : 'OpenAI-compatible Vision',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     apiKey: '',
     clearApiKey: false,
     modelName: role === ROLES.VISION ? 'qwen3-vl-plus' : '',
@@ -827,7 +827,8 @@ function defaultForm(role) {
     embeddingBatchSize: role === ROLES.EMBEDDING ? 16 : null,
     temperature: role === ROLES.CHAT ? 0.7 : role === ROLES.VISION ? 0.0 : null,
     defaultTopK: role === ROLES.CHAT ? 8 : null,
-    contextWindowTokens: role === ROLES.CHAT ? DEFAULT_CONTEXT_WINDOW_TOKENS : null
+    contextWindowTokens: role === ROLES.CHAT ? DEFAULT_CONTEXT_WINDOW_TOKENS : null,
+    reasoningEffort: role === ROLES.CHAT ? 'NONE' : null
   }
 }
 
@@ -866,7 +867,8 @@ function formFromConfig(config) {
       : null,
     contextWindowTokens: role === ROLES.CHAT
       ? normalizeContextWindowTokens(config.contextWindowTokens ?? defaults.contextWindowTokens)
-      : null
+      : null,
+    reasoningEffort: role === ROLES.CHAT ? normalizeReasoningEffort(config.reasoningEffort ?? defaults.reasoningEffort) : null
   }
 }
 
@@ -902,7 +904,8 @@ function normalizeConfigForRole(config, role = normalizeRoleValue(config?.role))
       : null,
     temperature: isGenerationRole(role)
       ? normalizeTemperature(config.temperature, role)
-      : null
+      : null,
+    reasoningEffort: role === ROLES.CHAT ? normalizeReasoningEffort(config.reasoningEffort) : null
   }
 }
 
@@ -936,7 +939,8 @@ function normalizeFormForRole(nextForm, role = normalizeRoleValue(nextForm?.role
     defaultTopK: role === ROLES.CHAT ? (nextForm?.defaultTopK ?? defaults.defaultTopK) : null,
     contextWindowTokens: role === ROLES.CHAT
       ? normalizeContextWindowTokens(nextForm?.contextWindowTokens ?? defaults.contextWindowTokens)
-      : null
+      : null,
+    reasoningEffort: role === ROLES.CHAT ? normalizeReasoningEffort(nextForm?.reasoningEffort ?? defaults.reasoningEffort) : null
   }
 }
 
@@ -1016,21 +1020,12 @@ function formatCompactNumber(value) {
 }
 
 function normalizeProviderValue(provider, baseUrl = '') {
-  const normalized = String(provider || '').trim().toUpperCase()
-  if (normalized === 'OPENAI_COMPATIBLE' || normalized === 'OPENAI' || normalized.includes('OPENAI')) {
-    return 'OPENAI_COMPATIBLE'
-  }
-  if (normalized === 'DASHSCOPE' || normalized.includes('DASH')) {
-    return 'DASHSCOPE'
-  }
+  return 'OPENAI_COMPATIBLE'
+}
 
-  // 旧数据或手动导入数据可能只有自定义 Base URL。非 DashScope 地址按 OpenAI-compatible 渲染，
-  // 避免 <select> 因未知 value 回落显示第一个 DashScope 选项。
-  const normalizedBaseUrl = String(baseUrl || '').trim().toLowerCase()
-  if (normalizedBaseUrl && !normalizedBaseUrl.includes('dashscope.aliyuncs.com')) {
-    return 'OPENAI_COMPATIBLE'
-  }
-  return 'DASHSCOPE'
+function normalizeReasoningEffort(value) {
+  const normalized = String(value || '').trim().toUpperCase()
+  return ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'XHIGH', 'MAX'].includes(normalized) ? normalized : 'NONE'
 }
 
 function sortedModelOptionsForRole(options, role) {

@@ -25,7 +25,8 @@ public record ModelConfigResponse(
         Integer contextWindowTokens,
         boolean active,
         Long createdAt,
-        Long updatedAt
+        Long updatedAt,
+        String reasoningEffort
 ) {
     /**
      * 构造模型设置页的配置响应。
@@ -59,7 +60,8 @@ public record ModelConfigResponse(
                         : null,
                 config.active(),
                 config.createdAt(),
-                config.updatedAt()
+                config.updatedAt(),
+                config.role() == ModelConfigRole.CHAT ? config.resolvedReasoningEffort() : null
         );
     }
 }

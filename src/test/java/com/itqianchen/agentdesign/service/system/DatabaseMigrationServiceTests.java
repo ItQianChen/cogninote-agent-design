@@ -28,10 +28,14 @@ class DatabaseMigrationServiceTests {
 
         fixture.migrationService().migrateBeforeConnectionPool();
 
-        assertThat(fixture.migrationService().currentSchemaVersion()).isEqualTo(3);
+        assertThat(fixture.migrationService().currentSchemaVersion()).isEqualTo(4);
         assertThat(queryInt(fixture, "SELECT COUNT(*) FROM model_configs")).isEqualTo(3);
         assertThat(queryInt(fixture, "SELECT COUNT(*) FROM data_protection_events")).isZero();
         assertThat(queryInt(fixture, "SELECT COUNT(*) FROM sqlite_master WHERE name='durable_task_runs'"))
+                .isEqualTo(1);
+        assertThat(queryInt(fixture, "SELECT COUNT(*) FROM pragma_table_info('model_configs') WHERE name='reasoning_effort'"))
+                .isEqualTo(1);
+        assertThat(queryInt(fixture, "SELECT COUNT(*) FROM pragma_table_info('chat_messages') WHERE name='reasoning_content'"))
                 .isEqualTo(1);
     }
 
@@ -52,7 +56,7 @@ class DatabaseMigrationServiceTests {
 
         fixture.migrationService().migrateBeforeConnectionPool();
 
-        assertThat(fixture.migrationService().currentSchemaVersion()).isEqualTo(3);
+        assertThat(fixture.migrationService().currentSchemaVersion()).isEqualTo(4);
         assertThat(queryInt(fixture, "SELECT COUNT(*) FROM data_protection_events")).isZero();
         assertThat(fixture.storageInitializer().appStorage().internalBackupDir().toFile().listFiles())
                 .isNotNull()
@@ -78,7 +82,7 @@ class DatabaseMigrationServiceTests {
 
         fixture.migrationService().migrateBeforeConnectionPool();
 
-        assertThat(fixture.migrationService().currentSchemaVersion()).isEqualTo(3);
+        assertThat(fixture.migrationService().currentSchemaVersion()).isEqualTo(4);
         assertThat(queryInt(fixture, "SELECT COUNT(*) FROM sqlite_master WHERE name='model_config'"))
                 .isEqualTo(1);
         assertThat(queryInt(fixture, "SELECT COUNT(*) FROM sqlite_master WHERE name='knowledge_folder_runs_migration'"))

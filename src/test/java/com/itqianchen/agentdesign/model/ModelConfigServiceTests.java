@@ -57,7 +57,7 @@ class ModelConfigServiceTests {
         ModelConfig vision = modelConfigService.activeVisionOrDefault();
 
         assertThat(chat.role()).isEqualTo(ModelConfigRole.CHAT);
-        assertThat(chat.provider()).isEqualTo(ModelProvider.DASHSCOPE);
+        assertThat(chat.provider()).isEqualTo(ModelProvider.OPENAI_COMPATIBLE);
         assertThat(chat.baseUrl()).isEqualTo(ModelConfigDefaults.BASE_URL);
         assertThat(chat.modelName()).isEqualTo("qwen-plus");
         assertThat(chat.resolvedTemperature()).isEqualTo(0.7);
@@ -80,7 +80,7 @@ class ModelConfigServiceTests {
     @Test
     void createAndActivateChatDoesNotOverwriteEmbedding() {
         ModelConfig embedding = modelConfigService.create(embeddingRequest(
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Embedding A",
                 "sk-embedding",
                 ModelConfigDefaults.BASE_URL,
@@ -124,7 +124,7 @@ class ModelConfigServiceTests {
     @Test
     void chatContextWindowCanBeCustomizedAndReturnedInSettings() {
         ModelConfig chat = modelConfigService.create(chatRequest(
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Chat 64K",
                 "sk-test",
                 ModelConfigDefaults.BASE_URL,
@@ -143,7 +143,7 @@ class ModelConfigServiceTests {
     @Test
     void embeddingConfigKeepsContextWindowEmpty() {
         ModelConfig embedding = modelConfigService.create(embeddingRequest(
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Embedding A",
                 "sk-embedding",
                 ModelConfigDefaults.BASE_URL,
@@ -160,7 +160,7 @@ class ModelConfigServiceTests {
     @Test
     void updateWithBlankApiKeyKeepsExistingSecret() {
         ModelConfig saved = modelConfigService.create(chatRequest(
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Chat A",
                 "sk-test",
                 ModelConfigDefaults.BASE_URL,
@@ -170,7 +170,7 @@ class ModelConfigServiceTests {
         ));
 
         modelConfigService.update(saved.id(), chatRequest(
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Chat A",
                 "",
                 ModelConfigDefaults.BASE_URL,
@@ -190,7 +190,7 @@ class ModelConfigServiceTests {
     @Test
     void updateSettingsCanExplicitlyClearApiKey() {
         ModelConfig saved = modelConfigService.create(visionRequest(
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Vision A",
                 "sk-vision",
                 ModelConfigDefaults.BASE_URL,
@@ -200,7 +200,7 @@ class ModelConfigServiceTests {
 
         modelConfigService.updateSettings(saved.id(), new ModelConfigUpsertRequest(
                 ModelConfigRole.VISION.name(),
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Vision A",
                 ModelConfigDefaults.BASE_URL,
                 "",
@@ -227,7 +227,7 @@ class ModelConfigServiceTests {
     @Test
     void deleteOnlyActiveConfigCreatesDefaultFallback() {
         ModelConfig chat = modelConfigService.create(chatRequest(
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Chat A",
                 "sk-test",
                 ModelConfigDefaults.BASE_URL,
@@ -248,7 +248,7 @@ class ModelConfigServiceTests {
     @Test
     void deleteOnlyActiveVisionConfigCreatesDefaultFallback() {
         ModelConfig vision = modelConfigService.create(visionRequest(
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Vision A",
                 "sk-vision",
                 ModelConfigDefaults.BASE_URL,
@@ -269,7 +269,7 @@ class ModelConfigServiceTests {
     @Test
     void deleteActiveConfigPromotesRemainingConfig() {
         ModelConfig active = modelConfigService.create(chatRequest(
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Chat A",
                 "sk-active",
                 ModelConfigDefaults.BASE_URL,
@@ -278,7 +278,7 @@ class ModelConfigServiceTests {
                 8
         ));
         ModelConfig standby = modelConfigService.create(chatRequest(
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Chat B",
                 "sk-standby",
                 ModelConfigDefaults.BASE_URL,
@@ -299,8 +299,8 @@ class ModelConfigServiceTests {
     void saveLegacyRequestSplitsChatAndEmbedding() {
         modelConfigService.save(new ModelConfigRequest(
                 null,
-                "DASHSCOPE",
-                "DashScope",
+                "OPENAI_COMPATIBLE",
+                "OpenAI-compatible",
                 ModelConfigDefaults.BASE_URL,
                 "sk-test",
                 null,

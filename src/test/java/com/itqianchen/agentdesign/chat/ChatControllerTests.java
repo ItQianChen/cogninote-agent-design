@@ -99,8 +99,8 @@ class ChatControllerTests {
         Files.writeString(tempDir.resolve("packaging.md"), "CogniNote uses Launch4j for Windows EXE packaging.");
         modelConfigService.save(new ModelConfigRequest(
                 null,
-                "DASHSCOPE",
-                "DashScope",
+                "OPENAI_COMPATIBLE",
+                "OpenAI-compatible",
                 ModelConfigDefaults.BASE_URL,
                 "sk-test",
                 null,

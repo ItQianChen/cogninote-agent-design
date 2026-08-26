@@ -1,49 +1,20 @@
 # 模型配置指南
 
-CogniNote 第八阶段开始使用多模型配置中心。对话模型和 Embedding 模型独立维护、独立激活：RAG 回答使用 active `CHAT` 配置，向量索引和向量检索使用 active `EMBEDDING` 配置。
+CogniNote 使用多模型配置中心。对话、Embedding 与视觉识别模型独立维护、独立激活：RAG 回答和内部 Agent 使用 active `CHAT` 配置，向量索引和向量检索使用 active `EMBEDDING` 配置，模型 OCR 使用 active `VISION` 配置。
 
-配置保存在本机 SQLite 的 `model_configs` 表中，应用启动后无需重启即可读取最新 active 配置。旧的单行 `model_config` 会在启动时自动拆成 Chat 和 Embedding 两条配置。
+配置保存在本机 SQLite 的 `model_configs` 表中，应用启动后无需重启即可读取最新 active 配置。旧的单行 `model_config` 会在启动时自动拆分为多条角色配置。
 
-第十一阶段已把这些 active 配置统一交给 AI Runtime 消费：DashScope Runtime 封装 Spring AI Alibaba，OpenAI-compatible Runtime 使用 Spring AI OpenAI 官方模型实现，并保留用户自定义 Base URL。原自研 OpenAI-compatible HTTP client 已删除，后续不再维护两套模型调用路径。
-
-第 21 阶段后，active `CHAT` 配置还会被知识库模式下的 `QueryContextualizerAgent` 复用。这个内部 Agent 只用独立 JSON Prompt 判断省略式追问是否需要补全检索 query，不回答用户问题，也不新增前端模型角色。也就是说，用户仍只需要维护“对话模型”和“Embedding 模型”两类配置；但对话模型的指令遵循能力会影响追问补全质量。
-
-第 22 阶段后，active `CHAT` 配置还会提供聊天上下文窗口 `contextWindowTokens`。默认值为 `128000`，前端显示为 `128K`；该字段只用于本地会话历史裁剪、压缩和聊天页上下文占用展示，不会作为通用参数发送给模型 API。Embedding 配置不使用上下文窗口，字段保持 `null`。
-
-第 23 阶段后，全局“知识库追问补全策略”移动到“设置 -> 知识库 -> 知识库追问补全策略”。该设置保存在 SQLite `app_settings`，不是单个模型配置的一部分；它仍复用 active `CHAT` 模型执行内部补全 Agent，因此对话模型的稳定性会影响知识库追问检索质量。
-
-第 25 阶段后，知识图谱抽取也复用 active `CHAT` 配置。图谱重建会按 chunk 调用该模型抽取实体、关系和证据；抽取 Prompt 统一维护在 `src/main/resources/cogninote-prompts.yaml`，不新增单独的 `GRAPH_EXTRACTION` 模型角色。因此，active Chat 模型的 JSON 遵循能力会影响图谱质量和缓存命中后的复用价值。
-
-当前 Embedding 配置还包含模型级请求限速：`embeddingRequestsPerMinute`、`embeddingTokensPerMinute` 和 `embeddingBatchSize`。这些字段使用供应商控制台最常见的 RPM/TPM 口径，后端运行时再换算为请求间隔和 60 秒滚动 TPM 窗口。它们的目的不是精确计费，而是减少供应商 429、TPM limit 或 RPM limit。
+所有模型调用统一通过 Spring AI OpenAI Runtime 与 `OPENAI_COMPATIBLE` 协议执行。`ModelProvider` 和 `ModelRuntimeFactory` 仍保留为未来协议扩展边界，但当前不再提供 DashScope 专用 Provider、原生 API 调用链或 Spring AI Alibaba 运行时。
 
 ## Provider 类型
 
-### DashScope
-
-`DASHSCOPE` 用于阿里百炼默认通道。
-
-- 配置页展示的 Base URL：`https://dashscope.aliyuncs.com/api/v1`
-- Chat / Embedding 调用：使用 Spring AI Alibaba 原生 DashScope 客户端
-- 模型列表：使用百炼兼容 `/models` 端点
-- Embedding 语义：索引文档时传递 `textType=document`，搜索查询时传递 `textType=query`
-
-DashScope 不允许用户自定义 host。需要自定义 URL 时，应选择 `OPENAI_COMPATIBLE`。
-
-实现约束：DashScope SDK 示例中的 HTTP API Root 是 `https://dashscope.aliyuncs.com/api/v1`。Spring AI Alibaba 的 `DashScopeApi` 内部 path 已包含 `/api/v1/services/...`，因此后端构造客户端时会转换为裸域名 `https://dashscope.aliyuncs.com`，避免拼出重复 `/api/v1`。
-
-第 20 阶段后，DashScope Embedding 不再和通用 Spring AI runtime 混在一起处理：`DashScopeEmbeddingRuntime` 通过 `DashScopeModelFactory.embeddingModel(config, textType)` 分别创建并缓存 `document` / `query` 两类模型实例。这个差异只存在于 DashScope 具体实现里，搜索索引层只调用 `embedDocuments` 和 `embedQuery`。
-
-### OpenAI-compatible
-
-`OPENAI_COMPATIBLE` 用于通用 OpenAI-compatible 服务。
-
-用户需要填写：
+当前唯一的 Provider 为 `OPENAI_COMPATIBLE`。每一条配置都需要填写：
 
 - Base URL
 - API Key
 - 模型 ID
 
-后端会调用：
+后端按同一个 Base URL 调用标准接口：
 
 ```text
 Base URL + /models
@@ -51,152 +22,96 @@ Base URL + /chat/completions
 Base URL + /embeddings
 ```
 
-如果用户粘贴了完整的 `/chat/completions`、`/embeddings` 或 `/models` 地址，后端会尽量规整回 Base URL。
+Base URL 可指向任何实现上述 OpenAI-compatible 协议的服务。默认值为百炼兼容端点 `https://dashscope.aliyuncs.com/compatible-mode/v1`；它只是一个可替换的兼容服务地址，不是独立 Provider。若粘贴完整的 `/chat/completions`、`/embeddings` 或 `/models` 地址，后端会尽量规整回 Base URL。
 
-OpenAI-compatible 的 Embedding 继续使用 Spring AI OpenAI runtime 的标准 `/embeddings` 请求。Spring AI OpenAI 的 Embedding options 只有 `model`、`encodingFormat`、`dimensions`、`user` 等标准字段，没有 DashScope 的 `text_type`；CogniNote 不会向 OpenAI-compatible 服务发送非标准 `text_type` 参数。内部仍保留 `embedDocuments` / `embedQuery` 两个入口，方便后续 provider 自己实现查询/文档语义区分。
+Embedding 始终使用标准 `/embeddings` 请求。CogniNote 不会发送 DashScope 原生 `text_type` 等非标准参数；内部仍保留 `embedDocuments` / `embedQuery` 两个入口，以便将来有协议确实支持文档与查询语义时扩展。
+
+已有数据库中的 `DASHSCOPE` 配置会在 V4 Flyway 迁移中自动改写为 `OPENAI_COMPATIBLE`，Base URL 改为上述兼容端点，名称中的 `DashScope` 也会改为 `OpenAI-compatible`。这是一次单向迁移，旧原生 DashScope 调用不再保留。
 
 ## 配置类型
 
 | 类型 | 用途 | 主要字段 |
 | --- | --- | --- |
-| `CHAT` | RAG 流式回答、连接测试、聊天上下文预算 | 模型 ID、Temperature、默认 Top K、上下文窗口 |
+| `CHAT` | RAG 流式回答、连接测试、内部 Agent、聊天上下文预算 | 模型 ID、Temperature、默认 Top K、上下文窗口、推理等级 |
 | `EMBEDDING` | 文档向量化、向量检索、混合检索 | 模型 ID、Embedding 维度、RPM、TPM、Batch |
+| `VISION` | 图片输入与模型 OCR | 模型 ID、Temperature |
 
-每个类型可以保存多条配置，但同一时间只有一条 active 配置。激活 Chat 配置不会覆盖 Embedding 配置，反之亦然。
+每个类型可以保存多条配置，但同一时间只有一条 active 配置。激活一个角色的配置不会覆盖其他角色。
 
 ## 默认值
 
 | 类型 | 字段 | 默认值 |
 | --- | --- | --- |
-| Chat | Provider | `DASHSCOPE` |
+| Chat | Provider | `OPENAI_COMPATIBLE` |
+| Chat | Base URL | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 | Chat | 模型 | `qwen-plus` |
 | Chat | Temperature | `0.7` |
 | Chat | Top K | `8` |
 | Chat | 上下文窗口 | `128000`（前端显示 `128K`） |
+| Chat | 推理等级 | `NONE` |
 | 知识库设置 | 追问补全策略 | `AUTO`（前端显示“自动”） |
-| Embedding | Provider | `DASHSCOPE` |
+| Embedding | Provider | `OPENAI_COMPATIBLE` |
 | Embedding | 模型 | `text-embedding-v4` |
 | Embedding | 维度 | `1024` |
 | Embedding | 请求限速 | `300 RPM / 300000 TPM / batch 16` |
-| Embedding | 上下文窗口 | `null`（不适用） |
 
 Embedding 请求限速预设：
 
 | 档位 | RPM | TPM | Batch | 适用场景 |
 | --- | ---: | ---: | ---: | --- |
 | 保守 | `60` | `100000` | `8` | 免费、试用或不确定配额的账号 |
-| 标准 | `300` | `300000` | `16` | 默认档位，适合多数 OpenAI-compatible、百炼、GLM 等通用供应商配置 |
+| 标准 | `300` | `300000` | `16` | 默认档位，适合多数兼容服务 |
 | 快速 | `1000` | `800000` | `32` | 明确知道账号配额较高，且需要更快索引 |
-| 自定义 | 用户填写 | 用户填写 | 用户填写 | 按供应商控制台额度填写，例如硅基流动高配可填 `3000 RPM / 1000000 TPM / batch 32-64` |
+| 自定义 | 用户填写 | 用户填写 | 用户填写 | 按供应商控制台额度填写 |
 
-后端校验范围：RPM `1` 到 `10000`，TPM `1000` 到 `10000000`，Batch `1` 到 `128`。Batch 越大越省 RPM，但单次输入 token 更多，仍受 TPM 和供应商单请求限制约束；如果供应商明确限制单次 batch 或输入长度，应按供应商控制台和文档下调。
+后端校验范围：RPM `1` 到 `10000`，TPM `1000` 到 `10000000`，Batch `1` 到 `128`。Batch 越大越省 RPM，但单次输入 token 更多，仍受 TPM 和单请求限制约束。
+
+## 推理等级与思考内容
+
+`reasoningEffort` 仅用于 `CHAT` 配置，可选值为 `NONE`、`LOW`、`MEDIUM`、`HIGH`、`XHIGH`、`MAX`，默认 `NONE`。
+
+- `NONE`：运行时透传 `enable_thinking=false`。
+- 其他等级：运行时透传小写 `reasoning_effort` 与 `enable_thinking=true`。
+- 不同服务对这些字段的支持度不同；不支持时可选择 `NONE`，或按服务商兼容性说明调整。
+
+流式响应中的推理内容通过独立 `reasoning` SSE 事件返回，不与正常回答 `delta` 混合。前端在生成期间显示可展开的“思考中…”，完成后收起为“思考过程”。最终回答写入 `chat_messages.content`，推理内容单独写入 `chat_messages.reasoning_content`；会话记忆只把最终回答送回模型上下文，避免推理文本污染下一轮对话。
 
 ## 配置流程
 
-1. 打开“设置”页，切换到“模型”区域。
-2. 在“对话模型”或“Embedding 模型”之间切换。
-3. 点击“新建配置”，填写 Provider、Base URL、API Key 和模型 ID。
-4. 配置 Embedding 模型时，在“请求限速”里选择保守、标准、快速或自定义，并按供应商控制台配额填写 RPM、TPM 和 Batch。
-5. 点开“模型 ID”下拉框获取候选模型；如果服务商模型列表为空或不完整，可直接手动输入模型 ID。
-6. 点击“测试连接”验证当前配置草稿。
-7. 保存配置。
-8. 在配置列表中点击“设为启用”让该配置成为当前类型的 active 配置。
+1. 打开“设置 -> 模型”。
+2. 在“对话模型”“Embedding 模型”或“视觉识别模型”之间切换。
+3. 点击“新建配置”，填写 Base URL、API Key 和模型 ID。
+4. Chat 模型可设置 Temperature、默认 Top K、上下文窗口和推理等级。
+5. Embedding 模型可在“请求限速”里选择预设或自定义 RPM、TPM 和 Batch。
+6. 点开“模型 ID”下拉框获取候选模型；列表不完整时可直接手动输入模型 ID。
+7. 点击“测试连接”验证当前草稿，保存后在配置列表中设为启用。
 
-## 模型 ID 选择与模型列表
+## 模型列表与索引重建
 
-模型 ID 字段是可搜索、可创建的下拉输入框。用户可以从候选模型中选择，也可以直接输入 provider 支持但列表里没有返回的模型 ID。输入时前端会按模型 ID、名称和能力标签做模糊过滤。
+前端会用当前表单的 role、Base URL 和 API Key 调用 `POST /api/model-configs/models` 拉取模型列表。模型列表仅用于辅助选择和排序；获取失败或返回不完整时，仍可以手动输入模型 ID 保存。
 
-点开模型 ID 下拉框时，前端会用当前表单里的 role、Provider、Base URL 和 API Key 调用 `POST /api/model-configs/models` 拉取模型列表。相同 role、当前配置 ID、Provider 和 Base URL 的列表会缓存 3 分钟；切换 Provider、Base URL 或编辑不同配置时缓存失效。缓存只是减少短时间重复请求，最终保存仍以用户输入的模型 ID 为准。
-
-后端只对 provider `/models` 响应做保守能力标注：
-
-| 能力 | 含义 |
-| --- | --- |
-| `CHAT` | provider 明确返回 Chat / Completion / Text Generation 能力。 |
-| `EMBEDDING` | provider 明确返回 Embedding 能力，或模型 ID 命中 embedding、bge、gte、e5、jina-embeddings 等常见向量模型特征。 |
-| `UNKNOWN` | provider 没有返回足够能力信息。该值不代表模型不可用，前端仍会展示并允许选择。 |
-
-模型列表只做辅助选择和排序，不会补造 provider 没返回的模型，也不会因为能力是 `UNKNOWN` 就隐藏模型。如果获取失败，可以继续手动输入模型 ID 后保存。
-
-对话模型表单中的“上下文长度”只在 `CHAT` 类型显示，可以使用预设值，也可以手动输入。保存时后端校验范围为 `1024` 到 `2000000`；超出范围会返回参数校验错误。保存成功后，聊天页会按 active Chat 配置重新计算当前会话的上下文占用。
-
-“设置 -> 知识库 -> 知识库追问补全策略”用于控制知识库模式下是否调用内部补全 Agent：
-
-| 选项 | 后端值 | 说明 |
-| --- | --- | --- |
-| 自动 | `AUTO` | 推荐。只有像省略、指代、动作型追问、英文领域切换或检索较弱时才补全检索问题。 |
-| 始终 | `ALWAYS` | 每轮知识库问答都先判断是否需要补全，准确性更稳但更慢。 |
-| 关闭 | `OFF` | 不补全追问，成本最低，但“继续/给个例子”等追问可能检索不准。 |
-
-该策略是全局知识库设置，不跟随单个 Chat 配置保存。它只影响知识库检索 query，不会修改聊天记录中的用户原文，也不会影响纯模型对话。保存策略时前端调用 `PUT /api/chat/settings` 写入 SQLite，刷新页面后通过 `GET /api/chat/settings` 回显。
-
-启用向量配置，或保存已启用的向量配置时，如果 Provider、Base URL、模型 ID 或向量维度发生变化，需要在知识库中手动重建索引。系统不会自动重建旧向量，避免用户不知情地产生大量外部模型调用。只修改配置名称、API Key、RPM、TPM 或 Batch，或保存时这些索引相关字段没有变化，不会弹出重建索引提示。第 20 阶段调整了中文 Analyzer、代码块索引文本和混合检索融合方式，升级后也需要重建 Lucene 索引；如果旧 chunks 已经丢失代码缩进，需要重新导入原始文件才能恢复代码格式。
-
-## 前端回显规则
-
-模型设置页使用后端 settings 快照作为页面事实来源：
-
-- 进入“设置 -> 模型”时加载 `GET /api/model-configs/settings?role=CHAT`。
-- 点击“Embedding 模型”时加载 `GET /api/model-configs/settings?role=EMBEDDING`。
-- 顶部 Active 卡片来自快照里的 `active.chat` 和 `active.embedding`。
-- 左侧配置列表来自快照里的 `configs`。
-- 右侧表单来自快照里的 `selectedConfig`，并直接绑定前端 store 的单一 `form`。
-
-如果请求失败，页面不会清空已有表单，只显示错误并允许用户重新读取。模型页不显示整块加载遮罩，避免切换设置页时出现闪烁。
+已启用的 Embedding 配置如果修改了 Base URL、模型 ID 或向量维度，需要在知识库中手动重建索引。系统不会自动重建旧向量，避免用户不知情地产生大量外部模型调用。仅改名称、API Key、RPM、TPM 或 Batch 不会触发重建提示。
 
 ## API Key 处理
 
-当前开发阶段 API Key 明文保存到：
+当前开发阶段 API Key 明文保存在：
 
 ```text
 %APPDATA%\CogniNote\data\cogninote.db
 ```
 
-这是为了先打通本地闭环的临时取舍。公开发布前应改为 Windows 本地加密或凭据管理。
-
-保存配置时，如果 API Key 留空，后端会复用该配置已保存的 key。这样用户只改模型名、Base URL、temperature、Top K 或维度时，不需要重新输入密钥。
-
-保存 Chat 配置时，如果上下文窗口留空，后端会回退默认 `128000`。保存 Embedding 配置时，后端会忽略上下文窗口并保存为 `null`；RPM、TPM 和 Batch 留空时分别回退 `300`、`300000` 和 `16`。
-
-追问补全策略的环境变量兜底为 `COGNINOTE_QUERY_CONTEXTUALIZER_MODE`，合法值为 `AUTO`、`ALWAYS`、`OFF`。旧变量 `COGNINOTE_QUERY_CONTEXTUALIZER_ENABLED=false` 仍兼容为 `OFF`，但只在没有 SQLite 用户设置且没有 mode 配置时生效。
-
-## 环境变量 fallback
-
-没有 SQLite Embedding 配置或 active Embedding 配置没有 API Key 时，Embedding 仍保留 Phase 3 的环境变量 fallback：
-
-```powershell
-$env:COGNINOTE_AI_EMBEDDING_PROVIDER="dashscope"
-$env:COGNINOTE_DASHSCOPE_API_KEY="your-api-key"
-$env:COGNINOTE_EMBEDDING_MODEL="text-embedding-v4"
-```
-
-如果 SQLite 中存在 active Embedding 配置并填写了 API Key，优先使用 SQLite。
+这是为了打通本地闭环的临时取舍。公开发布前应替换为操作系统凭据管理或本地加密。编辑既有配置时留空 API Key，后端会复用已保存的 key。
 
 ## 常见问题
 
-### DashScope 连接测试返回 url error
+### 连接测试或模型调用返回 URL 错误
 
-通常是把自定义 OpenAI-compatible URL 配到了 DashScope Provider，或者把 DashScope 的 `/api/v1` 地址直接传给了不该接收它的客户端。
-
-处理方式：
-
-- 阿里百炼选择 `DASHSCOPE`，使用默认地址。
-- 自定义网关、OpenAI-compatible 服务选择 `OPENAI_COMPATIBLE`。
+确认填写的是兼容服务的 **Base URL**，而不是重复追加了 `/chat/completions` 的地址。即使粘贴完整 endpoint，后端也会尝试归一化；如果服务使用非标准路径，请填写该服务文档要求的 API 根地址。
 
 ### 获取模型失败
 
-模型列表接口并不是所有服务都实现完整。如果获取失败，或者返回列表缺少实际可用的模型，可以手动输入模型 ID 后保存。Chat 调用和 Embedding 调用只依赖最终保存的模型名。
+并非所有兼容服务都完整实现 `/models`。获取失败或列表缺少可用模型时，直接手动输入模型 ID 后保存即可；实际 Chat、Embedding 和 Vision 调用依赖最终保存的模型名。
 
-### Embedding 不可用
+### Embedding 不可用或被限流
 
-Embedding 不可用会影响向量索引、向量检索和混合检索。RAG 对话在 `HYBRID` 或 `VECTOR` 失败时会尝试降级到 `KEYWORD`，并在 SSE `meta.retrievalMode` 中返回实际检索模式。
-
-### Embedding 供应商限流
-
-维护任务中出现 `供应商限流，已等待后重试；这不是文档解析失败。` 表示 PDF 或文档解析已经成功，但 Embedding 服务返回了 429、rate limit、TPM limit 或 RPM limit。后端会最多重试 5 次，使用指数退避和 jitter；如果仍失败，文档保持 `indexed_at=NULL`，健康页会继续显示“补写索引”。
-
-处理方式：
-
-- 先在“设置 -> 模型 -> 向量模型 -> 请求限速”按供应商控制台配额调低 RPM、TPM 或 Batch。
-- 再在知识库健康抽屉或目录管理中点击“补写索引”。补写只处理已解析但未索引的文档，不重新解析 PDF，也不重建已索引文档。
-- 高配账号可以选择“自定义”，例如把硅基流动这类高额度账号设置为 `3000 RPM / 1000000 TPM`，Batch 按供应商单请求限制和实际稳定性在 `32` 到 `64` 之间调整。
+Embedding 不可用会影响向量索引、向量检索和混合检索；RAG 在 `HYBRID` 或 `VECTOR` 失败时会尝试降级到 `KEYWORD`。遇到 429、rate limit、TPM limit 或 RPM limit 时，先按供应商配额下调 RPM、TPM 或 Batch，再在知识库中执行“补写索引”。

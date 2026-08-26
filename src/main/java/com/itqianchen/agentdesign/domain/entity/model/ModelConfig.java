@@ -26,8 +26,31 @@ public record ModelConfig(
         Integer contextWindowTokens,
         boolean active,
         long createdAt,
-        long updatedAt
+        long updatedAt,
+        String reasoningEffort
 ) {
+    public ModelConfig(
+            String id, ModelConfigRole role, ModelProvider provider, String displayName, String baseUrl,
+            String apiKey, String modelName, Integer embeddingDimensions, Integer embeddingRequestsPerMinute,
+            Integer embeddingTokensPerMinute, Integer embeddingBatchSize, Double temperature, Integer defaultTopK,
+            Integer contextWindowTokens, boolean active, long createdAt, long updatedAt
+    ) {
+        this(id, role, provider, displayName, baseUrl, apiKey, modelName, embeddingDimensions,
+                embeddingRequestsPerMinute, embeddingTokensPerMinute, embeddingBatchSize, temperature,
+                defaultTopK, contextWindowTokens, active, createdAt, updatedAt, ModelConfigDefaults.REASONING_EFFORT);
+    }
+
+    /**
+     * 返回对话模型的有效推理等级。
+     *
+     * <p>非 CHAT 配置没有思考语义，始终关闭，避免视觉或向量调用携带无关协议参数。</p>
+     */
+    public String resolvedReasoningEffort() {
+        if (role != ModelConfigRole.CHAT || reasoningEffort == null || reasoningEffort.isBlank()) {
+            return ModelConfigDefaults.REASONING_EFFORT;
+        }
+        return reasoningEffort.trim().toUpperCase(java.util.Locale.ROOT);
+    }
     /**
      * 判断该配置是否包含可用于 provider 调用的 API Key。
      *

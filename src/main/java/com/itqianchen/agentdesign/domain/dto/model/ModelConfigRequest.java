@@ -25,8 +25,19 @@ public record ModelConfigRequest(
         @Min(0) @Max(2) Double temperature,
         @Min(1) @Max(50) Integer topK,
         @Min(1) @Max(50) Integer defaultTopK,
-        @Min(1024) @Max(2000000) Integer contextWindowTokens
+        @Min(1024) @Max(2000000) Integer contextWindowTokens,
+        @Size(max = 16) String reasoningEffort
 ) {
+    public ModelConfigRequest(
+            String role, String provider, String displayName, String baseUrl, String apiKey, String modelName,
+            String chatModel, String embeddingModel, Integer embeddingDimensions, Integer embeddingRequestsPerMinute,
+            Integer embeddingTokensPerMinute, Integer embeddingBatchSize, Double temperature, Integer topK,
+            Integer defaultTopK, Integer contextWindowTokens
+    ) {
+        this(role, provider, displayName, baseUrl, apiKey, modelName, chatModel, embeddingModel,
+                embeddingDimensions, embeddingRequestsPerMinute, embeddingTokensPerMinute, embeddingBatchSize,
+                temperature, topK, defaultTopK, contextWindowTokens, null);
+    }
 }
 
 

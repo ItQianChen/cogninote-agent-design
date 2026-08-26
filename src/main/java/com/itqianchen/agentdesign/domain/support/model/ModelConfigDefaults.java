@@ -13,16 +13,16 @@ public final class ModelConfigDefaults {
     public static final String ACTIVE_CHAT_CONFIG_ID = "active-chat";
     public static final String ACTIVE_EMBEDDING_CONFIG_ID = "active-embedding";
     public static final String ACTIVE_VISION_CONFIG_ID = "active-vision";
-    public static final ModelProvider PROVIDER = ModelProvider.DASHSCOPE;
-    public static final String DISPLAY_NAME = "DashScope";
-    public static final String CHAT_DISPLAY_NAME = "DashScope Chat";
-    public static final String EMBEDDING_DISPLAY_NAME = "DashScope Embedding";
-    public static final String VISION_DISPLAY_NAME = "DashScope Vision";
+    public static final ModelProvider PROVIDER = ModelProvider.OPENAI_COMPATIBLE;
+    public static final String DISPLAY_NAME = "OpenAI-compatible";
+    public static final String CHAT_DISPLAY_NAME = "OpenAI-compatible Chat";
+    public static final String EMBEDDING_DISPLAY_NAME = "OpenAI-compatible Embedding";
+    public static final String VISION_DISPLAY_NAME = "OpenAI-compatible Vision";
     /**
-     * DashScope Provider 对用户展示原生 HTTP API Root。
-     * Spring AI Alibaba 内部 path 已包含 /api/v1，实际构造客户端时会转换成裸域名。
+     * 默认使用一个 OpenAI-compatible endpoint；用户可替换为任意兼容服务的 Base URL。
      */
-    public static final String BASE_URL = "https://dashscope.aliyuncs.com/api/v1";
+    public static final String BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+    public static final String REASONING_EFFORT = "NONE";
     public static final String CHAT_MODEL = "qwen-plus";
     public static final String EMBEDDING_MODEL = "text-embedding-v4";
     public static final String VISION_MODEL = "qwen3-vl-plus";

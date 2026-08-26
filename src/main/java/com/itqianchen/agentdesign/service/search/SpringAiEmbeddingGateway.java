@@ -19,7 +19,6 @@ import java.util.function.Supplier;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 /**
  * Embedding 模型的运行时适配器。
@@ -42,7 +41,6 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
     private final KnowledgeMaintenanceProgressReporter progressReporter;
     private final EmbeddingRateLimiter rateLimiter = new EmbeddingRateLimiter();
     private final String embeddingProvider;
-    private final String dashscopeApiKey;
 
     /**
      * 注入 Embedding 运行时依赖。
@@ -53,7 +51,6 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
      * @param embeddingProperties Embedding 配置
      * @param progressReporter 维护任务进度上报器
      * @param embeddingProvider 自动配置 Provider 名称
-     * @param dashscopeApiKey DashScope 自动配置 API Key
      */
     public SpringAiEmbeddingGateway(
             Optional<EmbeddingModel> embeddingModel,
@@ -61,8 +58,7 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
             AiRuntimeFactory aiRuntimeFactory,
             EmbeddingProperties embeddingProperties,
             KnowledgeMaintenanceProgressReporter progressReporter,
-            @Value("${spring.ai.model.embedding:none}") String embeddingProvider,
-            @Value("${spring.ai.dashscope.api-key:}") String dashscopeApiKey
+            @Value("${spring.ai.model.embedding:none}") String embeddingProvider
     ) {
         this.embeddingModel = embeddingModel;
         this.modelConfigRepository = modelConfigRepository;
@@ -70,7 +66,6 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
         this.embeddingProperties = embeddingProperties;
         this.progressReporter = progressReporter;
         this.embeddingProvider = embeddingProvider;
-        this.dashscopeApiKey = dashscopeApiKey;
     }
 
     /**
@@ -90,9 +85,7 @@ public class SpringAiEmbeddingGateway implements EmbeddingGateway {
             return false;
         }
 
-        // DashScope starter 在依赖中存在时也不能强制要求 API Key。
-        // 未配置密钥时保持应用可启动，由检索层按需降级到关键词检索。
-        return !"dashscope".equalsIgnoreCase(embeddingProvider) || StringUtils.hasText(dashscopeApiKey);
+        return true;
     }
 
     /**

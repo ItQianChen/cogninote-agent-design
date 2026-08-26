@@ -23,9 +23,9 @@ function snapshot(displayName = 'Remote chat') {
   const selectedConfig = {
     id: 'chat-1',
     role: 'CHAT',
-    provider: 'DASHSCOPE',
+    provider: 'OPENAI_COMPATIBLE',
     displayName,
-    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     modelName: 'qwen-plus',
     apiKeyConfigured: true,
     defaultTopK: 8,
@@ -44,9 +44,9 @@ function embeddingSnapshot(displayName = 'Remote embedding') {
   const selectedConfig = {
     id: 'embedding-1',
     role: 'EMBEDDING',
-    provider: 'DASHSCOPE',
+    provider: 'OPENAI_COMPATIBLE',
     displayName,
-    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     modelName: 'text-embedding-v4',
     apiKeyConfigured: true,
     embeddingDimensions: 1024,
@@ -66,9 +66,9 @@ function createdSnapshot(displayName = 'New local chat') {
   const createdConfig = {
     id: 'chat-created',
     role: 'CHAT',
-    provider: 'DASHSCOPE',
+    provider: 'OPENAI_COMPATIBLE',
     displayName,
-    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     modelName: 'qwen-plus',
     apiKeyConfigured: true,
     defaultTopK: 8,
@@ -111,6 +111,7 @@ describe('model config editor state', () => {
       .mockResolvedValueOnce(snapshot('New remote'))
     const store = useModelConfigStore()
     await store.enterModelSettings()
+    expect(store.providerLabel).toBe('OpenAI-compatible')
     store.form.displayName = 'Local draft'
     store.markFormTouched()
 
@@ -200,7 +201,7 @@ describe('model config editor state', () => {
 
     expect(store.activeList[0]).toMatchObject({
       isDraft: true,
-      displayName: 'DashScope Chat'
+      displayName: 'OpenAI-compatible Chat'
     })
     expect(store.isCreatingDraft).toBe(true)
     expect(mocks.api.createSettingsModelConfig).not.toHaveBeenCalled()

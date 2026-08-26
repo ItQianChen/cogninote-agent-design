@@ -24,6 +24,15 @@ public interface AiChatRuntime {
     Flux<String> stream(Prompt prompt);
 
     /**
+     * 按 Prompt 启动结构化流式生成。
+     *
+     * <p>默认实现保留旧 runtime 的纯文本能力；支持推理 metadata 的实现覆盖该方法。</p>
+     */
+    default Flux<AiChatDelta> streamDeltas(Prompt prompt) {
+        return stream(prompt).map(AiChatDelta::text);
+    }
+
+    /**
      * 使用 ChatClient advisor 链启动流式生成。
      *
      * @param systemPrompt 系统提示词
@@ -33,6 +42,20 @@ public interface AiChatRuntime {
      * @return 文本增量流
      */
     Flux<String> stream(String systemPrompt, String userMessage, List<Advisor> advisors, Map<String, Object> advisorParams);
+
+    /**
+     * 使用 advisor 和工具启动结构化流式生成。
+     */
+    default Flux<AiChatDelta> streamDeltas(
+            String systemPrompt,
+            String userMessage,
+            List<Advisor> advisors,
+            Map<String, Object> advisorParams,
+            List<Object> tools,
+            Map<String, Object> toolContext
+    ) {
+        return stream(systemPrompt, userMessage, advisors, advisorParams, tools, toolContext).map(AiChatDelta::text);
+    }
 
     /**
      * 使用 ChatClient advisor 链和可选工具启动流式生成。

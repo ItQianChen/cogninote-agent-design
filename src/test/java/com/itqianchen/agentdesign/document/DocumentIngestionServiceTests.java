@@ -473,9 +473,9 @@ class DocumentIngestionServiceTests {
     private static ModelConfigRequest visionRequest(String apiKey) {
         return new ModelConfigRequest(
                 ModelConfigRole.VISION.name(),
-                "DASHSCOPE",
+                "OPENAI_COMPATIBLE",
                 "Vision Test",
-                "https://dashscope.aliyuncs.com/api/v1",
+                "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 apiKey,
                 "qwen3-vl-plus",
                 "qwen3-vl-plus",

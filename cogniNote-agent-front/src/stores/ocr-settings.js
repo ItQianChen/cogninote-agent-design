@@ -12,9 +12,9 @@ const DEFAULT_SETTINGS = {
   available: false,
   visionModel: {
     id: '',
-    provider: 'DASHSCOPE',
-    displayName: 'DashScope Vision',
-    baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
+    provider: 'OPENAI_COMPATIBLE',
+    displayName: 'OpenAI-compatible Vision',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     apiKeyConfigured: false,
     modelName: 'qwen3-vl-plus'
   },

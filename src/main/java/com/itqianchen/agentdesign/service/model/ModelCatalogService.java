@@ -101,14 +101,11 @@ public class ModelCatalogService {
      * @return /models URI
      */
     private static java.net.URI modelsUri(ModelConfig config) {
-        return switch (config.provider()) {
-            case DASHSCOPE -> DashScopeBaseUrls.modelsUri(config.baseUrl());
-            case OPENAI_COMPATIBLE -> OpenAiCompatibleUrls.modelsUri(config.baseUrl());
-        };
+        return OpenAiCompatibleUrls.modelsUri(config.baseUrl());
     }
 
     /**
-     * 解析 OpenAI/DashScope 兼容的 data[] 模型列表。
+     * 解析 OpenAI-compatible 的 data[] 模型列表。
      *
      * @param response /models JSON 响应
      * @return 模型选项列表

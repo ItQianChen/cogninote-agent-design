@@ -56,9 +56,9 @@ class ModelConfigControllerTests {
                         .content("""
                                 {
                                   "role": "CHAT",
-                                  "provider": "DASHSCOPE",
-                                  "displayName": "DashScope",
-                                  "baseUrl": "https://dashscope.aliyuncs.com/api/v1",
+                                  "provider": "OPENAI_COMPATIBLE",
+                                  "displayName": "OpenAI-compatible",
+                                  "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                                   "apiKey": "",
                                   "modelName": "qwen-plus",
                                   "chatModel": "qwen-plus",
@@ -155,9 +155,9 @@ class ModelConfigControllerTests {
                         .content("""
                                 {
                                   "role": "EMBEDDING",
-                                  "provider": "DASHSCOPE",
+                                  "provider": "OPENAI_COMPATIBLE",
                                   "displayName": "Embedding Settings",
-                                  "baseUrl": "https://dashscope.aliyuncs.com/api/v1",
+                                  "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                                   "apiKey": "",
                                   "modelName": "text-embedding-v4",
                                   "embeddingDimensions": 1024
@@ -192,9 +192,9 @@ class ModelConfigControllerTests {
                         .content("""
                                 {
                                   "role": "EMBEDDING",
-                                  "provider": "DASHSCOPE",
-                                  "displayName": "DashScope Embedding",
-                                  "baseUrl": "https://dashscope.aliyuncs.com/api/v1",
+                                  "provider": "OPENAI_COMPATIBLE",
+                                  "displayName": "OpenAI-compatible Embedding",
+                                  "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                                   "apiKey": "sk-test",
                                   "modelName": "text-embedding-v4",
                                   "embeddingDimensions": 1024

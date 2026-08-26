@@ -5,6 +5,8 @@ import com.itqianchen.agentdesign.domain.interfaces.ai.AiEmbeddingRuntime;
 import com.itqianchen.agentdesign.domain.entity.model.ModelConfig;
 import com.itqianchen.agentdesign.service.model.OpenAiCompatibleUrls;
 import io.micrometer.observation.ObservationRegistry;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.model.tool.ToolCallingManager;
@@ -59,7 +61,7 @@ public class OpenAiCompatibleRuntimeFactory {
     /**
      * 获取或创建 OpenAI-compatible Chat 运行时。
      *
-     * <p>缓存 key 覆盖 URL、密钥、模型和温度；任一字段变化都会构建新客户端。</p>
+     * <p>缓存 key 覆盖 URL、密钥、模型、温度和推理等级；任一字段变化都会构建新客户端。</p>
      *
      * @param config 已归一化的 Chat 配置
      * @return Chat 运行时
@@ -119,14 +121,19 @@ public class OpenAiCompatibleRuntimeFactory {
      * @return 可调用的 ChatModel
      */
     private OpenAiChatModel buildChatModel(ModelConfig config) {
-        OpenAiChatOptions options = OpenAiChatOptions.builder()
+        OpenAiChatOptions.Builder options = OpenAiChatOptions.builder()
                 .model(config.modelName())
-                .temperature(config.resolvedTemperature())
-                .build();
+                .temperature(config.resolvedTemperature());
+        if ("NONE".equals(config.resolvedReasoningEffort())) {
+            options.extraBody(Map.of("enable_thinking", false));
+        } else {
+            options.reasoningEffort(config.resolvedReasoningEffort().toLowerCase(Locale.ROOT));
+            options.extraBody(Map.of("enable_thinking", true));
+        }
 
         return OpenAiChatModel.builder()
                 .openAiApi(openAiApi(config))
-                .defaultOptions(options)
+                .defaultOptions(options.build())
                 .toolCallingManager(ToolCallingManager.builder()
                         .observationRegistry(observationRegistry)
                         .build())
@@ -183,7 +190,8 @@ public class OpenAiCompatibleRuntimeFactory {
             String baseUrl,
             String apiKey,
             String modelName,
-            double temperature
+            double temperature,
+            String reasoningEffort
     ) {
         /**
          * 从模型配置提取 Chat 运行时缓存维度。
@@ -196,7 +204,8 @@ public class OpenAiCompatibleRuntimeFactory {
                     OpenAiCompatibleUrls.normalizeBaseUrl(config.baseUrl()),
                     config.apiKey(),
                     config.modelName(),
-                    config.resolvedTemperature()
+                    config.resolvedTemperature(),
+                    config.resolvedReasoningEffort()
             );
         }
     }

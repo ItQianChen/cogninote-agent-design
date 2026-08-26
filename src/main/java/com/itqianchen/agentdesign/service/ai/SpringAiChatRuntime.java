@@ -2,6 +2,7 @@ package com.itqianchen.agentdesign.service.ai;
 
 
 import com.itqianchen.agentdesign.domain.interfaces.ai.AiChatRuntime;
+import com.itqianchen.agentdesign.domain.interfaces.ai.AiChatDelta;
 import com.itqianchen.agentdesign.domain.exception.model.ModelConfigurationException;
 import java.util.List;
 import java.util.Locale;
@@ -48,8 +49,15 @@ final class SpringAiChatRuntime implements AiChatRuntime {
      */
     @Override
     public Flux<String> stream(Prompt prompt) {
+        return streamDeltas(prompt)
+                .filter(delta -> delta.text() != null && !delta.text().isEmpty())
+                .map(AiChatDelta::text);
+    }
+
+    @Override
+    public Flux<AiChatDelta> streamDeltas(Prompt prompt) {
         return chatModel.stream(prompt)
-                .concatMap(SpringAiChatRuntime::toTextStream);
+                .concatMap(SpringAiChatRuntime::toDeltaStream);
     }
 
     /**
@@ -96,7 +104,20 @@ final class SpringAiChatRuntime implements AiChatRuntime {
             List<Object> tools,
             Map<String, Object> toolContext
     ) {
-        // ChatClient 才支持 advisors；直接调用 ChatModel 会丢失记忆和 RAG advisor 参数。
+        return streamDeltas(systemPrompt, userMessage, advisors, advisorParams, tools, toolContext)
+                .filter(delta -> delta.text() != null && !delta.text().isEmpty())
+                .map(AiChatDelta::text);
+    }
+
+    @Override
+    public Flux<AiChatDelta> streamDeltas(
+            String systemPrompt,
+            String userMessage,
+            List<Advisor> advisors,
+            Map<String, Object> advisorParams,
+            List<Object> tools,
+            Map<String, Object> toolContext
+    ) {
         ChatClient.ChatClientRequestSpec spec = ChatClient.builder(chatModel)
                 .build()
                 .prompt()
@@ -120,7 +141,7 @@ final class SpringAiChatRuntime implements AiChatRuntime {
         }
         return spec.stream()
                 .chatResponse()
-                .concatMap(SpringAiChatRuntime::toTextStream);
+                .concatMap(SpringAiChatRuntime::toDeltaStream);
     }
 
     /**
@@ -216,22 +237,40 @@ final class SpringAiChatRuntime implements AiChatRuntime {
      * @param response Spring AI 响应
      * @return 文本片段或截断错误
      */
-    private static Flux<String> toTextStream(ChatResponse response) {
+    private static Flux<AiChatDelta> toDeltaStream(ChatResponse response) {
         String text = extractText(response);
+        String reasoning = extractReasoning(response);
         String finishReason = finishReason(response);
         if (!isIncompleteFinishReason(finishReason)) {
-            return text == null || text.isEmpty() ? Flux.empty() : Flux.just(text);
+            return text == null || text.isEmpty()
+                    ? reasoning == null || reasoning.isEmpty() ? Flux.empty() : Flux.just(new AiChatDelta(null, reasoning))
+                    : Flux.just(new AiChatDelta(text, reasoning));
         }
 
         ChatCompletionIncompleteException exception = new ChatCompletionIncompleteException(
                 "模型回答被提前截断，finishReason=" + finishReason + "。请提高模型输出长度上限，或让模型继续回答。"
         );
-        if (text == null || text.isEmpty()) {
+        if ((text == null || text.isEmpty()) && (reasoning == null || reasoning.isEmpty())) {
             return Flux.error(exception);
         }
         // 某些 Provider 会把最后一点内容和截断原因放在同一个 chunk。
         // 先交付已收到的文字，再把本轮流标记为未完成，避免吞掉最后一段。
-        return Flux.just(text).concatWith(Flux.error(exception));
+        return Flux.just(new AiChatDelta(text, reasoning)).concatWith(Flux.error(exception));
+    }
+
+    private static String extractReasoning(ChatResponse response) {
+        if (response == null || response.getResult() == null || response.getResult().getOutput() == null) {
+            return null;
+        }
+        Map<String, Object> metadata = response.getResult().getOutput().getMetadata();
+        Object value = metadata.get("reasoningContent");
+        if (value == null) {
+            value = metadata.get("reasoning_content");
+        }
+        if (value == null) {
+            value = metadata.get("reasoning");
+        }
+        return value == null ? null : value.toString();
     }
 
     /**
