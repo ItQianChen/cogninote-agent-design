@@ -1,11 +1,15 @@
 {
   "version": "0.2.0",
-  "notes": "## 知记空间 0.2.0 更新内容\n\n### 新增与改进\n\n- Chat：增加引用交互与聊天宽度设置。\n- 支持推理等级配置与思考过程展示，并移除 DashScope 提供方。\n- Model：新增模型概览与本地创建草稿。\n- Chat：新增居中对话流与消息时间轴导航。\n- 数据库：建立持续历史数据库迁移与恢复模式。\n- Task：引入耐久任务核心并恢复知识维护队列。\n- Storage：新增数据迁移与备份恢复机制。\n- Ocr：新增 PDF 页级检查点与断点续传。\n- Ingestion：新增结构化文档处理失败诊断。\n- Ocr：改用视觉模型识别扫描型 PDF。\n- Ocr：接入百度 OCR 并支持 PDF 重新解析。\n- Ingestion：新增 PDF 需 OCR 诊断状态。\n- Ingestion：支持 Word 97-2003 DOC 导入。\n- Ingestion：支持 HTML 本地文档导入。\n- Ingestion：支持文档格式多扩展名识别。\n\n### 问题修复\n\n- 修复推理配置兼容性与思考流收尾问题。\n- Desktop：修复外部链接无法在默认浏览器打开。\n- Frontend：修复移除不稳定测试。\n- Ci：修复 WebMvc 测试上下文。\n- Ci：修复 macOS DMG 挂载状态判断。\n- Ci：修复 Windows 和 macOS 桌面包 smoke。\n- Ocr：修复提高单页识别超时上限至 10 分钟。",
+  "notes": "## 知记空间 0.2.0 更新内容\r\n\r\n### 新增与改进\r\n\r\n- Chat：增加引用交互与聊天宽度设置。\r\n- 支持推理等级配置与思考过程展示，并移除 DashScope 提供方。\r\n- Model：新增模型概览与本地创建草稿。\r\n- Chat：新增居中对话流与消息时间轴导航。\r\n- 数据库：建立持续历史数据库迁移与恢复模式。\r\n- Task：引入耐久任务核心并恢复知识维护队列。\r\n- Storage：新增数据迁移与备份恢复机制。\r\n- Ocr：新增 PDF 页级检查点与断点续传。\r\n- Ingestion：新增结构化文档处理失败诊断。\r\n- Ocr：改用视觉模型识别扫描型 PDF。\r\n- Ocr：接入百度 OCR 并支持 PDF 重新解析。\r\n- Ingestion：新增 PDF 需 OCR 诊断状态。\r\n- Ingestion：支持 Word 97-2003 DOC 导入。\r\n- Ingestion：支持 HTML 本地文档导入。\r\n- Ingestion：支持文档格式多扩展名识别。\r\n\r\n### 问题修复\r\n\r\n- 修复推理配置兼容性与思考流收尾问题。\r\n- Desktop：修复外部链接无法在默认浏览器打开。\r\n- Frontend：修复移除不稳定测试。\r\n- Ci：修复 WebMvc 测试上下文。\r\n- Ci：修复 macOS DMG 挂载状态判断。\r\n- Ci：修复 Windows 和 macOS 桌面包 smoke。\r\n- Ocr：修复提高单页识别超时上限至 10 分钟。",
   "pub_date": "2026-08-27T14:16:40.614Z",
   "platforms": {
     "darwin-aarch64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRUZWM0VDREpFSXdobjRJenFuUmIvdTZpeTNod0JZYVgremZXRCtPWVlTeWtRSXVDa1BkNUxNbVIyWndCSTBETGhiQnBPb3JxZjMvOGZtT3MzcnRIRWd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3ODQwMTk4CWZpbGU6Q29nbmlOb3RlLTAuMi4wLW1hY29zLWFybTY0LXVuc2lnbmVkLmFwcC50YXIuZ3oKbXUvUUtFZFUzR1J2cklvR0E3TFBORWpZTUZrc1p1eURJdE84U2d4Q1hTV3IySUIwQ0krN0I3WTZqVkhKQWlLcDhLVlltdmRlbW1Tb2l0eU5yMFdVQ1E9PQo=",
       "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.2.0/CogniNote-0.2.0-macos-arm64-unsigned.app.tar.gz"
+    },
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSN1dPRVc0YkdmRU9NdkhpbHdaQzBZZ3VvU21Rc3JaRWIyYUxRSU85bVlIN1NVK1hNTmkzVTkybWtodFhPYXg1YUVERDJFR1ArVzZnSko4UzQxUExZbGF0ajUwVnkwaHdFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3ODQwODMxCWZpbGU6Q29nbmlOb3RlLTAuMi4wLXdpbmRvd3MteDY0LXVuc2lnbmVkLWluc3RhbGxlci5leGUKTkZ1bmpURTZUZUNLWWZYQ3BFdWdLVURkZE9vOTFBeDI2djJBL0JYNE1ocHllaHlUSi9rM1RoeFhhR3RoVjN2SThVY0NHaE9HVER1UG5aN3lkUTlZQWc9PQo=",
+      "url": "https://github.com/ItQianChen/cogninote-agent-design/releases/download/v0.2.0/CogniNote-0.2.0-windows-x64-unsigned-installer.exe"
     }
   }
 }
