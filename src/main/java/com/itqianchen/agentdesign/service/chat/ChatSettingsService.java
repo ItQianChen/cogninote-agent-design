@@ -5,6 +5,7 @@ import com.itqianchen.agentdesign.domain.properties.chat.QueryContextualizerProp
 import com.itqianchen.agentdesign.domain.dto.chat.ChatSettingsRequest;
 import com.itqianchen.agentdesign.domain.dto.chat.ChatSettingsResponse;
 import com.itqianchen.agentdesign.repository.settings.AppSettingRepository;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +17,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChatSettingsService {
 
     private static final String QUERY_CONTEXTUALIZER_MODE_KEY = "chat.query-contextualizer.mode";
+    private static final String ASSISTANT_MESSAGE_WIDTH_KEY = "chat.assistant-message-width";
+    private static final String USER_MESSAGE_WIDTH_KEY = "chat.user-message-width";
+    private static final String COMPOSER_WIDTH_KEY = "chat.composer-width";
+    private static final int DEFAULT_ASSISTANT_MESSAGE_WIDTH = 100;
+    private static final int DEFAULT_USER_MESSAGE_WIDTH = 72;
+    private static final int DEFAULT_COMPOSER_WIDTH = 100;
+    private static final int MIN_MESSAGE_WIDTH = 50;
+    private static final int MAX_MESSAGE_WIDTH = 100;
 
     private final AppSettingRepository appSettingRepository;
     private final QueryContextualizerProperties queryContextualizerProperties;
@@ -43,7 +52,11 @@ public class ChatSettingsService {
      */
     @Transactional
     public ChatSettingsResponse settings() {
-        return new ChatSettingsResponse(queryContextualizerMode());
+        QueryContextualizerMode mode = queryContextualizerMode();
+        int assistantWidth = messageWidth(ASSISTANT_MESSAGE_WIDTH_KEY, DEFAULT_ASSISTANT_MESSAGE_WIDTH);
+        int userWidth = messageWidth(USER_MESSAGE_WIDTH_KEY, DEFAULT_USER_MESSAGE_WIDTH);
+        int composerWidth = messageWidth(COMPOSER_WIDTH_KEY, DEFAULT_COMPOSER_WIDTH);
+        return new ChatSettingsResponse(mode, assistantWidth, userWidth, composerWidth);
     }
 
     /**
@@ -70,7 +83,16 @@ public class ChatSettingsService {
     public ChatSettingsResponse update(ChatSettingsRequest request) {
         QueryContextualizerMode mode = request.queryContextualizerMode();
         appSettingRepository.save(QUERY_CONTEXTUALIZER_MODE_KEY, mode.name());
-        return new ChatSettingsResponse(mode);
+        if (request.assistantMessageWidth() != null) {
+            appSettingRepository.save(ASSISTANT_MESSAGE_WIDTH_KEY, String.valueOf(request.assistantMessageWidth()));
+        }
+        if (request.userMessageWidth() != null) {
+            appSettingRepository.save(USER_MESSAGE_WIDTH_KEY, String.valueOf(request.userMessageWidth()));
+        }
+        if (request.composerWidth() != null) {
+            appSettingRepository.save(COMPOSER_WIDTH_KEY, String.valueOf(request.composerWidth()));
+        }
+        return settings();
     }
 
     /**
@@ -83,5 +105,30 @@ public class ChatSettingsService {
         QueryContextualizerMode mode = queryContextualizerProperties.resolvedMode();
         appSettingRepository.save(QUERY_CONTEXTUALIZER_MODE_KEY, mode.name());
         return mode;
+    }
+
+    /**
+     * 读取并初始化消息宽度，避免历史数据库缺少新字段时改变现有布局。
+     */
+    private int messageWidth(String key, int defaultValue) {
+        Optional<String> storedValue = appSettingRepository.findValue(key);
+        if (storedValue.isEmpty()) {
+            appSettingRepository.save(key, String.valueOf(defaultValue));
+            return defaultValue;
+        }
+        int width = parseMessageWidth(storedValue.get(), defaultValue);
+        if (!String.valueOf(width).equals(storedValue.get().trim())) {
+            appSettingRepository.save(key, String.valueOf(width));
+        }
+        return width;
+    }
+
+    private int parseMessageWidth(String value, int defaultValue) {
+        try {
+            int parsed = Integer.parseInt(value.trim());
+            return Math.clamp(parsed, MIN_MESSAGE_WIDTH, MAX_MESSAGE_WIDTH);
+        } catch (NumberFormatException ex) {
+            return defaultValue;
+        }
     }
 }

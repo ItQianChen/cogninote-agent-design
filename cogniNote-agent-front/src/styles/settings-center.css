@@ -117,6 +117,41 @@
   margin: 0;
 }
 
+.settings-chat-width-card {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.settings-chat-width-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.settings-chat-width-card__header {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-chat-width-card__header h4 {
+  margin: 0 0 6px;
+  color: var(--color-text-strong);
+  font-size: 18px;
+}
+
+.settings-chat-width-card__header p {
+  margin: 0;
+}
+
+.settings-chat-width-card__header strong {
+  flex: 0 0 auto;
+  color: var(--color-action-strong);
+  font-size: 18px;
+}
+
 .desktop-update-card {
   display: grid;
   gap: 18px;
@@ -533,6 +568,16 @@
   .settings-theme-card {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .settings-chat-width-card__header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .settings-chat-width-grid {
+    grid-template-columns: 1fr;
   }
 
   .desktop-update-row {

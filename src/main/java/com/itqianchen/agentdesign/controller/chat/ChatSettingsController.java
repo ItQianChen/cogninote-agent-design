@@ -41,7 +41,7 @@ public class ChatSettingsController {
 
     /**
      * 保存聊天设置。
-     * <p>当前支持追问补全策略，保存后立即影响知识库模式下的检索 query 补全。</p>
+     * <p>支持追问补全策略、消息宽度和输入框宽度，保存后立即写入本地 SQLite。</p>
      */
     @PutMapping
     public ApiResponse<ChatSettingsResponse> update(@Valid @RequestBody ChatSettingsRequest request) {

@@ -1023,7 +1023,7 @@ DELETE /api/chat/sessions/{conversationId}/messages
 
 ## 聊天设置
 
-第 23 阶段新增全局聊天设置 API。该设置保存在 SQLite `app_settings` 中，优先级高于环境变量；当前用于控制知识库模式下的追问补全策略。
+全局聊天设置保存在 SQLite `app_settings` 中，包含知识库追问补全策略、聊天消息宽度和输入框宽度。
 
 ### 查询聊天设置
 
@@ -1035,7 +1035,10 @@ GET /api/chat/settings
 
 ```json
 {
-  "queryContextualizerMode": "AUTO"
+  "queryContextualizerMode": "AUTO",
+  "assistantMessageWidth": 100,
+  "userMessageWidth": 72,
+  "composerWidth": 100
 }
 ```
 
@@ -1049,7 +1052,10 @@ PUT /api/chat/settings
 
 ```json
 {
-  "queryContextualizerMode": "OFF"
+  "queryContextualizerMode": "OFF",
+  "assistantMessageWidth": 84,
+  "userMessageWidth": 68,
+  "composerWidth": 86
 }
 ```
 
@@ -1058,6 +1064,9 @@ PUT /api/chat/settings
 | 字段 | 说明 |
 | --- | --- |
 | `queryContextualizerMode` | `AUTO`、`ALWAYS` 或 `OFF`。默认 `AUTO`。 |
+| `assistantMessageWidth` | 模型回答宽度百分比，范围 `50` 到 `100`，默认 `100`。可选，缺失时保留已保存值。 |
+| `userMessageWidth` | 用户消息宽度百分比，范围 `50` 到 `100`，默认 `72`。可选，缺失时保留已保存值。 |
+| `composerWidth` | 聊天内容轨道（模型消息、用户消息和输入框）的共同宽度百分比，范围 `50` 到 `100`，默认 `100`；不包含侧栏和来源面板。可选，缺失时保留已保存值。 |
 
 模式语义：
 

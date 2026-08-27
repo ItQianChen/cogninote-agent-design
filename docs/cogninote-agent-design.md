@@ -325,7 +325,7 @@ POST   /api/model-configs/settings/configs/{id}/activate
 
 第 22 阶段为 Chat 配置新增 `contextWindowTokens`。默认 Chat 配置为 `128000`，Embedding 配置保持 `null`；保存时校验范围为 `1024` 到 `2000000`。该字段不会作为通用上下文参数发送给模型 API，只用于 `ConversationMemorySnapshotService` 的历史预算、压缩策略和前端上下文占用展示。
 
-第 23 阶段新增全局聊天设置 `queryContextualizerMode`，取值为 `AUTO`、`ALWAYS`、`OFF`，保存在 SQLite `app_settings`。该设置在“设置 -> 知识库 -> 知识库追问补全策略”中展示，不属于单个 `model_configs` 记录；它只控制知识库模式下是否调用追问补全 Agent。
+全局聊天设置 `queryContextualizerMode` 取值为 `AUTO`、`ALWAYS`、`OFF`，并包含 `assistantMessageWidth`（默认 `100`）、`userMessageWidth`（默认 `72`）和 `composerWidth`（默认 `100`），统一保存在 SQLite `app_settings`。宽度设置在“设置 -> 外观”中展示，其中 `composerWidth` 控制模型消息、用户消息和输入框共同使用的聊天内容轨道宽度，相对于排除侧栏和来源面板后的主区域；前两个宽度设置继续分别限制各自消息气泡。它们不属于单个 `model_configs` 记录。追问策略只控制知识库模式下是否调用追问补全 Agent。
 
 第 35 阶段新增全局联网搜索设置，保存在 `app_settings` 的 `web-search.settings` JSON 快照中。MVP provider 固定为 `EXA`，配置项包括 `enabled`、`apiKey`、`maxResults`、`maxCallsPerTurn`、`timeoutMs` 和 `searchMode`。保存响应只返回 `apiKeyConfigured`，不会回显明文 Key；如果没有已保存或本次提交的新 Key，`enabled=true` 会被归一化为 `false`。
 
@@ -1097,7 +1097,7 @@ POST   /api/chat/stream/{requestId}/cancel
 
 普通 JSON API 统一返回 `ApiResponse<T>`。`POST /api/chat/stream` 使用 SSE 流式返回，不做 JSON 响应包装；`POST /api/chat/stream/{requestId}/cancel` 和 `/api/chat/sessions...` 都是普通 JSON API；`DELETE /api/documents/{id}`、`PATCH /api/knowledge-folders/{id}/enabled` 和 `DELETE /api/knowledge-folders/{id}` 成功时返回 `204 No Content`。桌面模式下，所有 `/api/**` 请求还必须带 `X-CogniNote-Desktop-Session`；缺失或错误返回 `401` 和 `UNAUTHORIZED`。
 
-`GET /api/chat/settings` 和 `PUT /api/chat/settings` 用于读取和保存全局聊天设置。当前请求/响应字段为 `queryContextualizerMode`，合法值为 `AUTO`、`ALWAYS`、`OFF`；它只影响知识库检索 query 的补全策略，不改变用户原文和普通对话。
+`GET /api/chat/settings` 和 `PUT /api/chat/settings` 用于读取和保存全局聊天设置。请求/响应字段包括 `queryContextualizerMode`、`assistantMessageWidth`、`userMessageWidth` 和 `composerWidth`；宽度范围为 `50` 到 `100`，缺失宽度字段时保留数据库已有值。`composerWidth` 同时约束消息行和输入框的共同内容轨道，前两个宽度字段再分别约束模型回答和用户消息气泡。追问策略只影响知识库检索 query 的补全，不改变用户原文和普通对话。
 
 `GET /api/web-search/settings`、`PUT /api/web-search/settings` 和 `POST /api/web-search/test` 用于联网搜索全局配置。MVP provider 固定为 `EXA`；保存接口允许写入 API Key，但响应只返回 `apiKeyConfigured`。聊天请求只有显式传 `useWebSearch=true` 且全局设置可用时，后端才会挂载 `WebSearchTools`。
 

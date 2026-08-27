@@ -10,7 +10,7 @@ export function getChatSettings() {
 
 /**
  * 更新聊天设置。
- * <p>当前用于保存知识库追问补全策略，保存后立即影响后端检索 query 补全。</p>
+ * <p>用于保存知识库追问补全策略及聊天区域宽度，保存后立即影响后端设置和当前界面。</p>
  */
 export function updateChatSettings(payload) {
   return requestJson('/api/chat/settings', jsonOptions('PUT', payload))

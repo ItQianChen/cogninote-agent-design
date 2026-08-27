@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { ChevronUp } from 'lucide-vue-next'
 import DesktopUpdateSettingsPanel from '../components/desktop-update-settings-panel.vue'
@@ -119,6 +120,11 @@ async function loadActiveItemData(item) {
     return
   }
 
+  if (item === 'appearance') {
+    await chatSettingsStore.fetchSettings()
+    return
+  }
+
   if (item === 'chat-retrieval') {
     await chatSettingsStore.fetchSettings({ force: true })
     return
@@ -152,6 +158,19 @@ async function loadActiveItemData(item) {
   if (item === 'model-vision') {
     await modelConfigStore.switchRole(modelConfigStore.ROLES.VISION)
   }
+}
+
+async function handleMessageWidthChange() {
+  // 仅在 slider 松开后保存，避免拖动过程产生连续请求；失败时 store 保留当前可用值。
+  if (chatSettingsStore.loading || chatSettingsStore.saving) {
+    return
+  }
+  await chatSettingsStore.saveSettings()
+  if (chatSettingsStore.error) {
+    ElMessage.error(chatSettingsStore.error)
+    return
+  }
+  ElMessage.success('聊天宽度已保存')
 }
 
 function readRouteItem(item = route.query.item) {
@@ -192,6 +211,69 @@ function readRouteItem(item = route.query.item) {
             </el-radio-button>
           </el-radio-group>
         </div>
+
+        <div class="settings-chat-width-grid">
+        <div class="settings-card settings-chat-width-card">
+          <div class="settings-chat-width-card__header">
+            <div>
+              <h4>模型回答宽度</h4>
+              <p class="hint-message">调整模型输出消息的最大显示宽度。</p>
+            </div>
+            <strong>{{ chatSettingsStore.assistantMessageWidth }}%</strong>
+          </div>
+          <el-slider
+            :model-value="chatSettingsStore.assistantMessageWidth"
+            :min="50"
+            :max="100"
+            :step="2"
+            :disabled="chatSettingsStore.loading || chatSettingsStore.saving"
+            aria-label="模型回答宽度"
+            @update:model-value="chatSettingsStore.setAssistantMessageWidth"
+            @change="handleMessageWidthChange"
+          />
+        </div>
+
+        <div class="settings-card settings-chat-width-card">
+          <div class="settings-chat-width-card__header">
+            <div>
+              <h4>我的消息宽度</h4>
+              <p class="hint-message">调整你发送的消息气泡宽度。</p>
+            </div>
+            <strong>{{ chatSettingsStore.userMessageWidth }}%</strong>
+          </div>
+          <el-slider
+            :model-value="chatSettingsStore.userMessageWidth"
+            :min="50"
+            :max="100"
+            :step="2"
+            :disabled="chatSettingsStore.loading || chatSettingsStore.saving"
+            aria-label="我的消息宽度"
+            @update:model-value="chatSettingsStore.setUserMessageWidth"
+            @change="handleMessageWidthChange"
+          />
+        </div>
+
+        <div class="settings-card settings-chat-width-card">
+          <div class="settings-chat-width-card__header">
+            <div>
+              <h4>输入框宽度</h4>
+              <p class="hint-message">同时调整模型消息、用户消息和输入框的共同区域，不包含侧栏和来源面板。</p>
+            </div>
+            <strong>{{ chatSettingsStore.composerWidth }}%</strong>
+          </div>
+          <el-slider
+            :model-value="chatSettingsStore.composerWidth"
+            :min="50"
+            :max="100"
+            :step="2"
+            :disabled="chatSettingsStore.loading || chatSettingsStore.saving"
+            aria-label="输入框宽度"
+            @update:model-value="chatSettingsStore.setComposerWidth"
+            @change="handleMessageWidthChange"
+          />
+        </div>
+        </div>
+        <p v-if="chatSettingsStore.error" class="error-message">{{ chatSettingsStore.error }}</p>
       </section>
 
       <section v-else-if="activeItem === 'system-info'" class="settings-panel">

@@ -5,6 +5,7 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn.mjs'
 import AppShell from './components/app-shell.vue'
 import MarkdownRenderer from './components/markdown-renderer.vue'
 import { useChatStore } from './stores/chat'
+import { useChatSettingsStore } from './stores/chat-settings'
 import { useDesktopUpdateStore } from './stores/desktop-update'
 import { useKnowledgeFoldersStore } from './stores/knowledge-folders'
 import { useModelConfigStore } from './stores/model-config'
@@ -15,6 +16,7 @@ import { APP_DISPLAY_NAME } from './config/brand'
 
 const systemStore = useSystemStore()
 const chatStore = useChatStore()
+const chatSettingsStore = useChatSettingsStore()
 const knowledgeFoldersStore = useKnowledgeFoldersStore()
 const searchStore = useSearchStore()
 const modelConfigStore = useModelConfigStore()
@@ -32,6 +34,7 @@ onMounted(() => {
   themeStore.applyTheme()
   initializeDesktopUpdateCheck()
   chatStore.initializeSessions()
+  chatSettingsStore.fetchSettings()
   systemStore.fetchStatus()
   knowledgeFoldersStore.fetchFolders()
   searchStore.fetchIndexStatus()

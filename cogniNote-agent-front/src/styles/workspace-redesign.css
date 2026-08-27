@@ -512,8 +512,14 @@
 .message-row {
   position: relative;
   display: flex;
-  width: 100%;
+  width: min(100%, var(--composer-width, 100%));
+  margin-inline: auto;
   min-width: 0;
+}
+
+.empty-chat {
+  width: min(100%, var(--composer-width, 100%));
+  margin-inline: auto;
 }
 
 .message-row--user {
@@ -644,7 +650,11 @@
 
 .message-bubble--user {
   width: fit-content;
-  max-width: min(72%, 640px);
+  max-width: min(var(--user-message-width, 72%), 640px);
+}
+
+.message-bubble--assistant {
+  width: min(100%, var(--assistant-message-width, 100%));
 }
 
 .message-bubble--user .message-label {
@@ -925,6 +935,13 @@
   padding: 10px max(18px, calc((100% - var(--conversation-track-width)) / 2)) 18px;
   border-top: 0;
   background: transparent;
+}
+
+.composer-input-row {
+  /* 与消息流共享同一内容轨道，宽度百分比只相对聊天主区域计算。 */
+  width: min(100%, var(--composer-width, 100%));
+  max-width: 100%;
+  margin-inline: auto;
 }
 
 .composer-input-row textarea {

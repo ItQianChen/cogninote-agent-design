@@ -214,6 +214,8 @@
   .composer-input-row {
     flex-direction: column;
     align-items: stretch;
+    width: 100%;
+    max-width: 100%;
   }
 
   .composer-settings-popover {
@@ -306,8 +308,17 @@
     padding: 18px 14px 132px;
   }
 
+  .message-row,
+  .empty-chat {
+    width: 100%;
+  }
+
   .message-bubble--user {
-    max-width: 88%;
+    max-width: min(88%, max(72%, var(--user-message-width, 72%)));
+  }
+
+  .message-bubble--assistant {
+    width: 100%;
   }
 
   .conversation-timeline-marker__preview {

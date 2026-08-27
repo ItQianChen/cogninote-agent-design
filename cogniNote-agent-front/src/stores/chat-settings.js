@@ -8,12 +8,21 @@ const MODES = {
   OFF: 'OFF'
 }
 
+const DEFAULT_ASSISTANT_MESSAGE_WIDTH = 100
+const DEFAULT_USER_MESSAGE_WIDTH = 72
+const DEFAULT_COMPOSER_WIDTH = 100
+const MIN_MESSAGE_WIDTH = 50
+const MAX_MESSAGE_WIDTH = 100
+
 /**
  * 定义聊天设置 Pinia Store。
  * <p>设置持久化在后端 SQLite，前端只维护当前页面编辑态和异步状态。</p>
  */
 export const useChatSettingsStore = defineStore('chatSettings', () => {
   const queryContextualizerMode = ref(MODES.AUTO)
+  const assistantMessageWidth = ref(DEFAULT_ASSISTANT_MESSAGE_WIDTH)
+  const userMessageWidth = ref(DEFAULT_USER_MESSAGE_WIDTH)
+  const composerWidth = ref(DEFAULT_COMPOSER_WIDTH)
   const loaded = ref(false)
   const loading = ref(false)
   const saving = ref(false)
@@ -49,7 +58,12 @@ export const useChatSettingsStore = defineStore('chatSettings', () => {
    */
   async function fetchSettings({ force = false } = {}) {
     if (loaded.value && !force) {
-      return { queryContextualizerMode: queryContextualizerMode.value }
+      return {
+        queryContextualizerMode: queryContextualizerMode.value,
+        assistantMessageWidth: assistantMessageWidth.value,
+        userMessageWidth: userMessageWidth.value,
+        composerWidth: composerWidth.value
+      }
     }
     loading.value = true
     error.value = ''
@@ -57,6 +71,18 @@ export const useChatSettingsStore = defineStore('chatSettings', () => {
     try {
       const settings = await getChatSettings()
       queryContextualizerMode.value = normalizeMode(settings?.queryContextualizerMode)
+      assistantMessageWidth.value = normalizeMessageWidth(
+        settings?.assistantMessageWidth,
+        DEFAULT_ASSISTANT_MESSAGE_WIDTH
+      )
+      userMessageWidth.value = normalizeMessageWidth(
+        settings?.userMessageWidth,
+        DEFAULT_USER_MESSAGE_WIDTH
+      )
+      composerWidth.value = normalizeMessageWidth(
+        settings?.composerWidth,
+        DEFAULT_COMPOSER_WIDTH
+      )
       loaded.value = true
       return settings
     } catch (err) {
@@ -77,6 +103,24 @@ export const useChatSettingsStore = defineStore('chatSettings', () => {
     message.value = ''
   }
 
+  function setAssistantMessageWidth(width) {
+    assistantMessageWidth.value = normalizeMessageWidth(width, DEFAULT_ASSISTANT_MESSAGE_WIDTH)
+    error.value = ''
+    message.value = ''
+  }
+
+  function setUserMessageWidth(width) {
+    userMessageWidth.value = normalizeMessageWidth(width, DEFAULT_USER_MESSAGE_WIDTH)
+    error.value = ''
+    message.value = ''
+  }
+
+  function setComposerWidth(width) {
+    composerWidth.value = normalizeMessageWidth(width, DEFAULT_COMPOSER_WIDTH)
+    error.value = ''
+    message.value = ''
+  }
+
   /**
    * 保存聊天设置。
    * <p>保存成功后后端立即使用新模式控制知识库检索 query 补全。</p>
@@ -87,11 +131,26 @@ export const useChatSettingsStore = defineStore('chatSettings', () => {
     message.value = ''
     try {
       const settings = await updateChatSettings({
-        queryContextualizerMode: queryContextualizerMode.value
+        queryContextualizerMode: queryContextualizerMode.value,
+        assistantMessageWidth: assistantMessageWidth.value,
+        userMessageWidth: userMessageWidth.value,
+        composerWidth: composerWidth.value
       })
       queryContextualizerMode.value = normalizeMode(settings?.queryContextualizerMode)
+      assistantMessageWidth.value = normalizeMessageWidth(
+        settings?.assistantMessageWidth,
+        DEFAULT_ASSISTANT_MESSAGE_WIDTH
+      )
+      userMessageWidth.value = normalizeMessageWidth(
+        settings?.userMessageWidth,
+        DEFAULT_USER_MESSAGE_WIDTH
+      )
+      composerWidth.value = normalizeMessageWidth(
+        settings?.composerWidth,
+        DEFAULT_COMPOSER_WIDTH
+      )
       loaded.value = true
-      message.value = '追问补全策略已保存'
+      message.value = '聊天设置已保存'
       return settings
     } catch (err) {
       error.value = `保存失败：${err.message}`
@@ -104,6 +163,9 @@ export const useChatSettingsStore = defineStore('chatSettings', () => {
   return {
     MODES,
     queryContextualizerMode,
+    assistantMessageWidth,
+    userMessageWidth,
+    composerWidth,
     queryContextualizerModeOptions,
     activeModeOption,
     loaded,
@@ -113,7 +175,10 @@ export const useChatSettingsStore = defineStore('chatSettings', () => {
     message,
     fetchSettings,
     saveSettings,
-    setQueryContextualizerMode
+    setQueryContextualizerMode,
+    setAssistantMessageWidth,
+    setUserMessageWidth,
+    setComposerWidth
   }
 })
 
@@ -124,4 +189,12 @@ export const useChatSettingsStore = defineStore('chatSettings', () => {
 function normalizeMode(mode) {
   const normalized = String(mode || '').trim().toUpperCase()
   return Object.values(MODES).includes(normalized) ? normalized : MODES.AUTO
+}
+
+function normalizeMessageWidth(width, defaultValue) {
+  const parsed = Number(width)
+  if (!Number.isFinite(parsed)) {
+    return defaultValue
+  }
+  return Math.min(MAX_MESSAGE_WIDTH, Math.max(MIN_MESSAGE_WIDTH, Math.round(parsed)))
 }

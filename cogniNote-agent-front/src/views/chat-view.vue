@@ -16,12 +16,14 @@ import ChatSettingsPopover from '../components/chat-settings-popover.vue'
 import SourceInspector from '../components/source-inspector.vue'
 import { APP_DISPLAY_NAME } from '../config/brand'
 import { useChatStore } from '../stores/chat'
+import { useChatSettingsStore } from '../stores/chat-settings'
 import { useLayoutStore } from '../stores/layout'
 import { useModelConfigStore } from '../stores/model-config'
 import { SEARCH_MODES } from '../stores/search'
 import { useWebSearchSettingsStore } from '../stores/web-search-settings'
 
 const chatStore = useChatStore()
+const chatSettingsStore = useChatSettingsStore()
 const layoutStore = useLayoutStore()
 const modelConfigStore = useModelConfigStore()
 const webSearchSettingsStore = useWebSearchSettingsStore()
@@ -67,6 +69,11 @@ const activeModelSummary = computed(() => {
   return [chat, embedding].filter(Boolean).join(' / ')
 })
 const activeRetrievalModeLabel = computed(() => formatRetrievalModeLabel(chatStore.mode))
+const conversationStyle = computed(() => ({
+  '--assistant-message-width': `${chatSettingsStore.assistantMessageWidth}%`,
+  '--user-message-width': `${chatSettingsStore.userMessageWidth}%`,
+  '--composer-width': `${chatSettingsStore.composerWidth}%`
+}))
 
 // Header 只展示已经真实可用的运行状态；未配置模型的引导留给输入区提示。
 const conversationMetaItems = computed(() => {
@@ -892,7 +899,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="conversation-page" :class="{ 'conversation-page--inspector-open': layoutStore.isSourceInspectorOpen }">
+  <section
+    class="conversation-page"
+    :class="{ 'conversation-page--inspector-open': layoutStore.isSourceInspectorOpen }"
+    :style="conversationStyle"
+  >
     <header class="conversation-header">
       <div class="conversation-title-group">
         <button
@@ -1028,8 +1039,10 @@ onBeforeUnmount(() => {
                 <AiMarkdownRenderer
                   class="message-content"
                   :content="message.content"
+                  :sources="message.sources"
                   empty-text="正在等待模型返回..."
                   :final="message.status !== 'streaming'"
+                  @citation-click="openMessageSources(message, $event)"
                 />
               </template>
               <template v-else>

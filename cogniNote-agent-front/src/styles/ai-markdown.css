@@ -31,7 +31,8 @@
   font-size: 15px;
   line-height: 1.78;
   white-space: normal;
-  overflow-x: auto;
+  /* 引用预览是绝对定位浮层，根节点不能把浮层宽度纳入消息滚动区域；代码块自身仍保留横向滚动。 */
+  overflow-x: hidden;
   overflow-wrap: anywhere;
 }
 
@@ -115,6 +116,58 @@
 .ai-markdown-content a:hover,
 .ai-markdown-content a:focus-visible {
   text-decoration: underline;
+}
+
+.ai-markdown-content a[href^='#citation-'] {
+  display: inline-block;
+  margin-inline: 2px;
+  padding-inline: 3px;
+  border-radius: 4px;
+  color: var(--color-action-strong);
+  background: var(--color-action-soft);
+  font-size: 0.82em;
+  font-weight: 700;
+  line-height: 1.35;
+  vertical-align: super;
+}
+
+.ai-markdown-content a[href^='#citation-']:hover,
+.ai-markdown-content a[href^='#citation-']:focus-visible {
+  background: var(--color-action-border);
+  text-decoration: none;
+}
+
+.ai-markdown-content a[href^='#citation-'][title] {
+  position: relative;
+}
+
+.ai-markdown-content a[href^='#citation-'][title]::after {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: min(360px, 42vw);
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-panel);
+  content: attr(title);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  white-space: normal;
+}
+
+.ai-markdown-content a[href^='#citation-'][title]:hover::after,
+.ai-markdown-content a[href^='#citation-'][title]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .ai-markdown-content code {
