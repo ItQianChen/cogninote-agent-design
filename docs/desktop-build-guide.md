@@ -9,13 +9,13 @@
 使用白名单脚本更新项目自身版本：
 
 ```powershell
-.\scripts\update-release-version.ps1 0.1.78
+.\scripts\update-release-version.ps1 0.2.0
 ```
 
 脚本会更新 Maven、前端 package、Tauri、Cargo、桌面 GitHub Actions 和主要分发文档中的项目版本，并保护 `powershell-utils`、`windows-threading`、`vswhom` 等第三方锁文件版本不被误改。预览改动可先运行：
 
 ```powershell
-.\scripts\update-release-version.ps1 0.1.78 -WhatIf
+.\scripts\update-release-version.ps1 0.2.0 -WhatIf
 ```
 
 脚本默认要求工作区干净；如果确实要在已有改动上预览或更新，可加 `-AllowDirty`。
@@ -51,7 +51,7 @@ $ErrorActionPreference = 'Stop'
 
 ```text
 cogniNote-agent-front/src-tauri/target/release/cogninote-agent.exe
-cogniNote-agent-front/src-tauri/target/release/bundle/nsis/CogniNote_0.1.78_x64-setup.exe
+cogniNote-agent-front/src-tauri/target/release/bundle/nsis/CogniNote_0.2.0_x64-setup.exe
 ```
 
 `target/desktop/backend/CogniNoteBackend/CogniNoteBackend.exe` 只是后端启动器，不是最终入口。直接双击它不会打开桌面界面，也可能因为端口冲突或运行目录不完整而失败。
@@ -64,7 +64,7 @@ cogniNote-agent-front/src-tauri/target/release/bundle/nsis/CogniNote_0.1.78_x64-
 
 ```text
 cogniNote-agent-front/src-tauri/target/release/bundle/macos/CogniNote.app
-cogniNote-agent-front/src-tauri/target/release/bundle/dmg/CogniNote_0.1.78_aarch64.dmg
+cogniNote-agent-front/src-tauri/target/release/bundle/dmg/CogniNote_0.2.0_aarch64.dmg
 ```
 
 `target/desktop-macos/backend/CogniNoteBackend.app` 只是 macOS 后端 app-image，不是最终入口。本地脚本默认生成未签名开发包；GitHub Actions 未配置证书时也会生成 unsigned 测试包。普通用户分发请使用 GitHub Actions 签名、公证后的 `.dmg` 和 `.app.zip`。
@@ -295,10 +295,10 @@ WINDOWS_CERTIFICATE_PASSWORD
 Windows artifacts：
 
 ```text
-CogniNote-0.1.78-windows-x64-unsigned-portable
-CogniNote-0.1.78-windows-x64-unsigned-installer
-CogniNote-0.1.78-windows-x64-signed-portable
-CogniNote-0.1.78-windows-x64-signed-installer
+CogniNote-0.2.0-windows-x64-unsigned-portable
+CogniNote-0.2.0-windows-x64-unsigned-installer
+CogniNote-0.2.0-windows-x64-signed-portable
+CogniNote-0.2.0-windows-x64-signed-installer
 ```
 
 macOS workflow 使用 Apple Silicon runner。未配置签名 Secrets 时执行：
@@ -332,11 +332,11 @@ unsigned macOS 包仅用于技术测试。即使从 GitHub Release、浏览器�
 macOS artifacts：
 
 ```text
-CogniNote-0.1.78-macos-arm64-unsigned-app
-CogniNote-0.1.78-macos-arm64-unsigned-dmg
-CogniNote-0.1.78-macos-arm64-signed-app
-CogniNote-0.1.78-macos-arm64-signed-dmg
-CogniNote-0.1.78-macos-notarization-logs
+CogniNote-0.2.0-macos-arm64-unsigned-app
+CogniNote-0.2.0-macos-arm64-unsigned-dmg
+CogniNote-0.2.0-macos-arm64-signed-app
+CogniNote-0.2.0-macos-arm64-signed-dmg
+CogniNote-0.2.0-macos-notarization-logs
 ```
 
 两个 workflow 不共享 Tauri bundle 配置，不共享后端 app-image 输出目录，也不把平台差异塞进同一个脚本。
@@ -375,15 +375,15 @@ https://itqianchen.github.io/cogninote-agent-design/updater/preview/latest.json
 Windows updater 指向最终 NSIS installer：
 
 ```text
-CogniNote-0.1.78-windows-x64-signed-installer.exe
-CogniNote-0.1.78-windows-x64-unsigned-installer.exe
+CogniNote-0.2.0-windows-x64-signed-installer.exe
+CogniNote-0.2.0-windows-x64-unsigned-installer.exe
 ```
 
 macOS updater 指向 `.app.tar.gz`：
 
 ```text
-CogniNote-0.1.78-macos-arm64-signed.app.tar.gz
-CogniNote-0.1.78-macos-arm64-unsigned.app.tar.gz
+CogniNote-0.2.0-macos-arm64-signed.app.tar.gz
+CogniNote-0.2.0-macos-arm64-unsigned.app.tar.gz
 ```
 
 DMG 只作为手动下载安装资产，不给 updater 使用。所有 updater `.sig` 都必须在最终文件稳定后生成：Windows 应在 Authenticode 签名后签 updater；macOS 应在 `.app` 签名、公证、staple 后重新打 `.app.tar.gz`，再签 updater。后处理会改变文件内容，先签 updater 再改文件会导致安装校验失败。
@@ -402,19 +402,19 @@ node scripts/build-updater-manifest.test.mjs
 
 ```text
 publish_release = true
-release_tag = v0.1.78-test.1
+release_tag = v0.2.0-test.1
 ```
 
-`release_tag` 留空时，unsigned 构建默认发布到 `v0.1.78-test.1`，signed 构建默认发布到 `v0.1.78`。unsigned Release 会标记为 pre-release。Windows 和 macOS 可以分别运行 workflow，并使用同一个 `release_tag`，后运行的平台会把自己的资产追加到同一个 Release 中。
+`release_tag` 留空时，unsigned 构建默认发布到 `v0.2.0-test.1`，signed 构建默认发布到 `v0.2.0`。unsigned Release 会标记为 pre-release。Windows 和 macOS 可以分别运行 workflow，并使用同一个 `release_tag`，后运行的平台会把自己的资产追加到同一个 Release 中。
 
 Release 上传的是真实安装文件，不是 Actions artifact 外层 zip。普通用户优先下载 signed 资产；unsigned 资产只给开发者做技术测试：
 
 ```text
-CogniNote-0.1.78-windows-x64-unsigned-installer.exe
-CogniNote-0.1.78-windows-x64-unsigned-portable.zip
-CogniNote-0.1.78-macos-arm64-signed.dmg
-CogniNote-0.1.78-macos-arm64-signed.app.zip
-CogniNote-0.1.78-macos-arm64-signed.app.tar.gz
+CogniNote-0.2.0-windows-x64-unsigned-installer.exe
+CogniNote-0.2.0-windows-x64-unsigned-portable.zip
+CogniNote-0.2.0-macos-arm64-signed.dmg
+CogniNote-0.2.0-macos-arm64-signed.app.zip
+CogniNote-0.2.0-macos-arm64-signed.app.tar.gz
 ```
 
 给测试用户分发时，优先发送 Release 页面里的 `.exe` 或 signed `.dmg` 下载链接。macOS `.app.tar.gz` 是 updater 资产，不建议作为普通用户手动安装入口；macOS unsigned DMG 不适合普通用户分发。
@@ -430,7 +430,7 @@ CogniNote-0.1.78-macos-arm64-signed.app.tar.gz
 模拟用户安装：
 
 ```powershell
-.\cogniNote-agent-front\src-tauri\target\release\bundle\nsis\CogniNote_0.1.78_x64-setup.exe
+.\cogniNote-agent-front\src-tauri\target\release\bundle\nsis\CogniNote_0.2.0_x64-setup.exe
 ```
 
 正常行为：
@@ -502,7 +502,7 @@ open ./cogniNote-agent-front/src-tauri/target/release/bundle/macos/CogniNote.app
 模拟用户安装：
 
 ```bash
-open ./cogniNote-agent-front/src-tauri/target/release/bundle/dmg/CogniNote_0.1.78_aarch64.dmg
+open ./cogniNote-agent-front/src-tauri/target/release/bundle/dmg/CogniNote_0.2.0_aarch64.dmg
 ```
 
 正常行为：
@@ -545,7 +545,7 @@ sudo xattr -dr com.apple.quarantine /Applications/CogniNote.app
 open /Applications/CogniNote.app
 ```
 
-如果 signed DMG 仍提示“已损坏，无法打开”，优先检查 workflow 的 `CogniNote-0.1.78-macos-notarization-logs`、`spctl` 输出，以及 `desktop-backend.log` 中的实际 app 路径。重点确认 `CogniNote.app/Contents/Resources/backend/CogniNoteBackend.app` 已用同一 Developer ID 证书签名，且发布用 DMG 是由已 staple 的 `CogniNote.app` 重新生成的。
+如果 signed DMG 仍提示“已损坏，无法打开”，优先检查 workflow 的 `CogniNote-0.2.0-macos-notarization-logs`、`spctl` 输出，以及 `desktop-backend.log` 中的实际 app 路径。重点确认 `CogniNote.app/Contents/Resources/backend/CogniNoteBackend.app` 已用同一 Developer ID 证书签名，且发布用 DMG 是由已 staple 的 `CogniNote.app` 重新生成的。
 
 ## 图标更新
 
@@ -662,7 +662,7 @@ release 版本的 Tauri 主程序应使用 Windows GUI 子系统，后端子进�
 
 ### Windows 只运行了 CogniNoteBackend.exe
 
-`CogniNoteBackend.exe` 是后端 app-image 的一部分，负责启动 Spring Boot 服务。它不是桌面应用入口。请运行 `cogninote-agent.exe` 或安装 `CogniNote_0.1.78_x64-setup.exe`。
+`CogniNoteBackend.exe` 是后端 app-image 的一部分，负责启动 Spring Boot 服务。它不是桌面应用入口。请运行 `cogninote-agent.exe` 或安装 `CogniNote_0.2.0_x64-setup.exe`。
 
 ### Windows 打包时 npm ci 提示 EPERM unlink
 
@@ -741,7 +741,7 @@ SPRING_PROFILES_ACTIVE=diagnostic /Applications/CogniNote.app/Contents/MacOS/Cog
 
 macOS 的 `.dmg` 拖拽安装过程不会执行 CogniNote 代码，因此不能像 Windows NSIS 一样在安装阶段清理 WKWebView 缓存。项目把 macOS 缓存处理放在启动阶段：版本变化时写入 `desktop-webview-version.txt`，清理 `~/Library/Caches`、`~/Library/WebKit` 和沙盒容器下已知的 CogniNote WebView 缓存路径；macOS 14+ 通过 Tauri `data_store_identifier` 使用版本相关的数据仓库，避免旧版本缓存继续影响新版本。业务数据仍保存在 `~/Library/Application Support/CogniNote/`，不会随缓存清理删除。
 
-如果本地未签名 `.app` 被 Gatekeeper 拦截，可在系统设置中允许运行，仅用于开发验证。若 GitHub Actions 分发产物仍提示“已损坏，无法打开”，通常说明嵌套后端 app 签名、公证或 staple 没成功，或发布用 DMG 不是由已 staple 的 `CogniNote.app` 重新生成。先检查 `CogniNote-0.1.78-macos-notarization-logs` artifact、workflow 中的 `spctl` 输出，以及嵌套路径 `CogniNote.app/Contents/Resources/backend/CogniNoteBackend.app` 的签名状态。
+如果本地未签名 `.app` 被 Gatekeeper 拦截，可在系统设置中允许运行，仅用于开发验证。若 GitHub Actions 分发产物仍提示“已损坏，无法打开”，通常说明嵌套后端 app 签名、公证或 staple 没成功，或发布用 DMG 不是由已 staple 的 `CogniNote.app` 重新生成。先检查 `CogniNote-0.2.0-macos-notarization-logs` artifact、workflow 中的 `spctl` 输出，以及嵌套路径 `CogniNote.app/Contents/Resources/backend/CogniNoteBackend.app` 的签名状态。
 
 ### VS Code 中 lib.rs 提示 OUT_DIR 不存在
 

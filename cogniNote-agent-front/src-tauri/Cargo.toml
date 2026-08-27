@@ -1,6 +1,6 @@
 [package]
 name = "cogninote-agent"
-version = "0.1.78"
+version = "0.2.0"
 description = "CogniNote Agent desktop shell"
 authors = ["CogniNote Agent"]
 edition = "2021"
